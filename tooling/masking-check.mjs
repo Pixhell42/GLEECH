@@ -339,7 +339,7 @@ try {
   async function catalogClosed() {
     await page.getByRole('dialog').waitFor({ state: 'detached' });
     await page.waitForFunction(
-      () => document.activeElement?.classList.contains('add-effect'),
+      () => document.activeElement?.matches('button[aria-label="Add effect"]'),
       undefined,
       { timeout: 5000 },
     );
