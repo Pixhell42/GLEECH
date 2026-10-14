@@ -65,11 +65,8 @@ HTTP transport and hosted/cloud integrations are deferred.
 
 - [Discord Community](https://discord.gg/b7Mq8fjvk)
 - [Bug reports](https://github.com/Pixhell42/GLEECH/issues) and feature requests through GitHub or the native Feedback panel.
-- [Contributing](CONTRIBUTING.md), [security reporting](SECURITY.md) and [community conduct](CODE_OF_CONDUCT.md).
+- [Contributing](CONTRIBUTING.md), and [security reporting](SECURITY.md).
 - [Shared product roadmap](docs/ROADMAP.md) for Windows, Linux and macOS.
-
-The Support GLEECH panel includes donation and social links, music profiles and
-[slopcannon](https://slop.cc).
 
 ## License and credits
 
