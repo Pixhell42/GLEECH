@@ -1,3 +1,4 @@
+import { deleteFirstEffect } from './stack-action.mjs';
 import { fileAction } from './file-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -205,8 +206,7 @@ async function inspectStatue() {
   await fileAction(page, 'Open image Ctrl+Shift+O');
   await status('Opened statue.png');
   await page.getByRole('button', { name: 'Fit', exact: true }).click();
-  while (await page.locator('.effect-delete').count())
-    await page.locator('.effect-delete').first().click();
+  while (await page.locator('.effect-row').count()) await deleteFirstEffect(page);
   await add('Recursive Space', 'recursive-space');
   for (const style of ['tunnel', 'spiral', 'lattice']) {
     await choose('Style', style);

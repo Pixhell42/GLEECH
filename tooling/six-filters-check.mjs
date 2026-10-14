@@ -1,3 +1,4 @@
+import { deleteFirstEffect } from './stack-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -464,8 +465,8 @@ try {
     final.effects.map((e) => e.paintedMask),
   );
   await exportExact();
-  while (await page.locator('.effect-delete').count()) {
-    await page.locator('.effect-delete').first().click();
+  while (await page.locator('.effect-row').count()) {
+    await deleteFirstEffect(page);
     await settle();
   }
   width = 1024;
@@ -492,7 +493,7 @@ try {
             : 0.1 + i / 50,
     );
     drags[type] = await drag(control, values);
-    await page.locator('.effect-delete').first().click();
+    await deleteFirstEffect(page);
     await settle();
   }
   assert.deepEqual(errors, []);

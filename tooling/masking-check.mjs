@@ -1,4 +1,5 @@
 import { fileAction } from './file-action.mjs';
+import { deleteFirstEffect } from './stack-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -339,7 +340,7 @@ try {
   async function catalogClosed() {
     await page.getByRole('dialog').waitFor({ state: 'detached' });
     await page.waitForFunction(
-      () => document.activeElement?.classList.contains('add-effect'),
+      () => document.activeElement?.matches('button[aria-label="Add effect"]'),
       undefined,
       { timeout: 5000 },
     );
@@ -370,8 +371,18 @@ try {
     BrowserWindow.getAllWindows()[0].setContentSize(960, 640),
   );
   await settle();
-  for (let extra = 0; extra < 5; extra++) await add('RGB split');
   const stackBody = page.locator('.stack-body');
+  let extraEffects = 0;
+  // Row height and the supported minimum window size can change with the UI.
+  // Create a genuinely overflowing stack rather than assuming eight rows fit.
+  while (
+    extraEffects < 24 &&
+    (extraEffects < 5 ||
+      !(await stackBody.evaluate((body) => body.scrollHeight > body.clientHeight)))
+  ) {
+    await add('RGB split');
+    extraEffects++;
+  }
   assert.ok(
     await stackBody.evaluate((body) => body.scrollHeight > body.clientHeight),
     'Fixture did not overflow the stack panel',
@@ -397,11 +408,15 @@ try {
   await openCatalog();
   await writeFile(resolve(output, `${label}-picker-compact.png`), await capture());
   await page.keyboard.press('Escape');
-  for (let extra = 0; extra < 5; extra++) {
+  for (let extra = 0; extra < extraEffects; extra++) {
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await settle();
   }
   assert.deepEqual(await recipe(), originalOrder);
+  await deleteFirstEffect(page);
+  assert.deepEqual((await recipe()).effects, originalOrder.effects.slice(0, -1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  assert.deepEqual(await recipe(), originalOrder, 'Undo did not restore the deleted top effect');
   await page.getByRole('button', { name: 'Spatial crush', exact: true }).click();
   assert.ok(
     await page

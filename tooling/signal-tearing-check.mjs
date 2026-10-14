@@ -1,3 +1,4 @@
+import { deleteFirstEffect } from './stack-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -364,8 +365,8 @@ try {
   );
   await exportExact();
   console.log(`${label}: project restart and portable preset transfer passed`);
-  while (await page.locator('.effect-delete').count()) {
-    await page.locator('.effect-delete').first().click();
+  while (await page.locator('.effect-row').count()) {
+    await deleteFirstEffect(page);
     await settle();
   }
   width = 1024;
