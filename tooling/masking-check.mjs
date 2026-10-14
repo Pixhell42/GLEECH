@@ -1,4 +1,5 @@
 import { fileAction } from './file-action.mjs';
+import { deleteFirstEffect } from './stack-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -412,6 +413,10 @@ try {
     await settle();
   }
   assert.deepEqual(await recipe(), originalOrder);
+  await deleteFirstEffect(page);
+  assert.deepEqual((await recipe()).effects, originalOrder.effects.slice(0, -1));
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  assert.deepEqual(await recipe(), originalOrder, 'Undo did not restore the deleted top effect');
   await page.getByRole('button', { name: 'Spatial crush', exact: true }).click();
   assert.ok(
     await page

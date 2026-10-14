@@ -1,3 +1,4 @@
+import { deleteFirstEffect } from './stack-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -437,8 +438,8 @@ try {
   await page.getByRole('button', { name: 'Replace All', exact: true }).click();
   await exportExact();
   // Exercise the final worker's draft/refinement path with an actually large source.
-  while (await page.locator('.effect-delete').count()) {
-    await page.locator('.effect-delete').first().click();
+  while (await page.locator('.effect-row').count()) {
+    await deleteFirstEffect(page);
     await settle();
   }
   const largeWidth = 1024,
@@ -515,7 +516,7 @@ try {
       ).pixels,
     );
     assert.ok(actual.equals(expected), `${title} draft refinement changed the full-size export`);
-    await page.locator('.effect-delete').first().click();
+    await deleteFirstEffect(page);
     await settle();
   }
   assert.deepEqual(errors, []);

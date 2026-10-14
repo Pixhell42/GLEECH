@@ -1,3 +1,4 @@
+import { deleteFirstEffect } from './stack-action.mjs';
 import { fileAction } from './file-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -255,8 +256,7 @@ async function inspectStatueFilters() {
     await status('Opened ' + basename(photoPath));
     await settle();
     await page.getByRole('button', { name: 'Edited', exact: true }).click();
-    while (await page.locator('.effect-delete').count())
-      await page.locator('.effect-delete').first().click();
+    while (await page.locator('.effect-row').count()) await deleteFirstEffect(page);
     await add(title, type);
     assert.equal((await state()).effects.length, 1);
     await settle();
@@ -358,8 +358,7 @@ async function inspectColorTintControls() {
     ['Halftone', 'halftone', ['Ink color', 'Paper color']],
     ['Scanlines', 'scanlines', ['Line color']],
   ]) {
-    while (await page.locator('.effect-delete').count())
-      await page.locator('.effect-delete').first().click();
+    while (await page.locator('.effect-row').count()) await deleteFirstEffect(page);
     await add(title, type);
     const tint = page.getByRole('switch', { name: 'Tint', exact: true });
     if (type !== 'halftone' && type !== 'scanlines') {
@@ -485,8 +484,7 @@ try {
     console.log(JSON.stringify({ mode: label, filters: 3, visualOnly: true, result: 'passed' }));
   } else {
     await inspectColorTintControls();
-    while (await page.locator('.effect-delete').count())
-      await page.locator('.effect-delete').first().click();
+    while (await page.locator('.effect-row').count()) await deleteFirstEffect(page);
     await chooseOpen(imagePath);
     await fileAction(page, 'Open image Ctrl+Shift+O');
     await status('Opened ' + basename(imagePath));

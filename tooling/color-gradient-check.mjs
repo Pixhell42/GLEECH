@@ -1,3 +1,4 @@
+import { deleteFirstEffect } from './stack-action.mjs';
 import { fileAction } from './file-action.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -229,15 +230,13 @@ async function resetImage() {
   await chooseOpen(imagePath);
   await fileAction(page, 'Open image Ctrl+Shift+O');
   await status('Opened ' + basename(imagePath));
-  while (await page.locator('.effect-delete').count())
-    await page.locator('.effect-delete').first().click();
+  while (await page.locator('.effect-row').count()) await deleteFirstEffect(page);
 }
 async function inspectStatue() {
   await chooseOpen(resolve(root, 'apps/desktop/resources/presets/statue.png'));
   await fileAction(page, 'Open image Ctrl+Shift+O');
   await status('Opened statue.png');
-  while (await page.locator('.effect-delete').count())
-    await page.locator('.effect-delete').first().click();
+  while (await page.locator('.effect-row').count()) await deleteFirstEffect(page);
   await add('Shapes', 'shapes');
   await choose('Operation', 'overlay');
   await choose('Layout', 'tiled');
