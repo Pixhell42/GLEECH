@@ -27,5 +27,4 @@ in the public checkout. Disclose new assets/dependencies and retain license noti
 
 Project-owned changes are contributed under [MIT](LICENSE). You must have the
 rights to contribute your code/assets; third-party content keeps its own terms.
-Report security issues privately through [SECURITY.md](SECURITY.md), and follow
-the [code of conduct](CODE_OF_CONDUCT.md).
+Report security issues privately through [SECURITY.md](SECURITY.md).
