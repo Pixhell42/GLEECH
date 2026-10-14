@@ -50,7 +50,6 @@ const rootFiles = new Set([
   '.prettierrc.json',
   'README.md',
   'CONTRIBUTING.md',
-  'CODE_OF_CONDUCT.md',
   'SECURITY.md',
   'LICENSE',
   'THIRD_PARTY_NOTICES.md',
