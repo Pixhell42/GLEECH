@@ -8,11 +8,12 @@ confirmed installation and uninstallation on 2026-10-14. The refreshed support
 panel has also passed packaged link/layout checks. These are development checks,
 not a public release announcement.
 
-Release preparation includes a local one-commit source candidate, a fresh frozen
-dependency install, 1,715 passing tests, a Windows package, and passing packaged
-startup, CPU image/export and all eight MCP-profile checks. Redacted history and
-public-content checks passed. GitHub history/visibility/publication are pending
-the repository transition decision; the current development repository stays private.
+Release validation uses the intended source commit, a frozen dependency install,
+code checks, hosted Windows CI and packaged startup, image/export and MCP checks.
+Keep the source manifest, secret-scan results, artifact checksums and native
+source/notice review together in the maintainer's release record. Repository
+visibility and release publication require a separate final maintainer decision.
+Passing development checks does not publish a release.
 
 ## Before publication
 
