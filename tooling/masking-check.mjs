@@ -370,8 +370,18 @@ try {
     BrowserWindow.getAllWindows()[0].setContentSize(960, 640),
   );
   await settle();
-  for (let extra = 0; extra < 5; extra++) await add('RGB split');
   const stackBody = page.locator('.stack-body');
+  let extraEffects = 0;
+  // Row height and the supported minimum window size can change with the UI.
+  // Create a genuinely overflowing stack rather than assuming eight rows fit.
+  while (
+    extraEffects < 24 &&
+    (extraEffects < 5 ||
+      !(await stackBody.evaluate((body) => body.scrollHeight > body.clientHeight)))
+  ) {
+    await add('RGB split');
+    extraEffects++;
+  }
   assert.ok(
     await stackBody.evaluate((body) => body.scrollHeight > body.clientHeight),
     'Fixture did not overflow the stack panel',
@@ -397,7 +407,7 @@ try {
   await openCatalog();
   await writeFile(resolve(output, `${label}-picker-compact.png`), await capture());
   await page.keyboard.press('Escape');
-  for (let extra = 0; extra < 5; extra++) {
+  for (let extra = 0; extra < extraEffects; extra++) {
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await settle();
   }
