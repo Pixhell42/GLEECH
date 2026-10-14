@@ -33,13 +33,12 @@ and verify installation scope on the actual public destination before release.
 
 If the release uses a new GitHub repository, recheck app installation and issue
 access; retaining a repository name alone does not transfer app permissions.
-For an app installed on a personal account, open GitHub Settings > Applications
-
-> Installed GitHub Apps, choose Configure next to the reporting app, and add the
-> actual destination under Repository access. Save the selection and verify Issues
-> read/write access before testing a real report. See GitHub's
-> [installed-app instructions](https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps).
-> Configure forks to their own reporting destination and GitHub App.
+For an app installed on a personal account, open GitHub Settings, then Applications,
+then Installed GitHub Apps. Choose Configure next to the reporting app and add the
+actual destination under Repository access. Save the selection and verify Issues
+read/write access before testing a real report. See GitHub's
+[installed-app instructions](https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps).
+Configure forks to their own reporting destination and GitHub App.
 
 GitHub documents [app registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
 and [device authorization](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app).
