@@ -1,0 +1,4 @@
+objc-foundation v0.1.1
+└── locale_config v0.3.0
+    └── librsvg v2.63.2 (/review/librsvg/rsvg)
+        └── librsvg-c v2.63.2 (/review/librsvg/librsvg-c)

@@ -1,0 +1,8 @@
+node_modules/
+out/
+release/
+coverage/
+test-results/
+pnpm-lock.yaml
+LICENSES/
+public-release/

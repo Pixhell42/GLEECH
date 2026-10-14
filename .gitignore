@@ -1,0 +1,23 @@
+node_modules/
+out/
+dist/
+release/
+coverage/
+test-results/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# Source reviews belong outside the repository; never publish local archives.
+private-references/
+source-references/
+reference-materials/
+*-thumbnail-prompt.txt
+public-release/
+!LICENSES/**

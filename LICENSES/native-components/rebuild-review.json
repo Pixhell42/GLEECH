@@ -1,0 +1,35 @@
+{
+  "startedAt": "2026-10-14T15:14:53.6399256Z",
+  "status": "passed",
+  "phase": "complete",
+  "independentSourceRebuild": true,
+  "inputsSHA256": "7d048a0e76c5dff402a3f060b76dfaf763fd373fd1b4924af4794170f102699a",
+  "baseImage": "sha256:b575e48212168a82481fe30702ecfde8a9e3c69a2c2021b8f1da4c57d79e3d97",
+  "nativeImage": "sha256:bec9fb974d1ed209e71635d836446f6e9c62b3a5d94721f636f871098707df8e",
+  "sdkSHA256": "a7ad0342f7f490dca5dbc7108d4e32cb28709bf9cf979b7c2f717b1fc9537cb3",
+  "rebuiltDLLSHA256": "4da1ef2fbf6d3fab69d6e0384220a212890c831df3c919ecac3df8cd537ac796",
+  "originalDLLSHA256": "06dab07cc386748513337a31672b1d5269fbc770a14ff403080575665bf0813f",
+  "finishedAt": "2026-10-14T16:26:05.2719462Z",
+  "reviewedOn": "2026-10-14",
+  "scope": "Independent libvips source rebuild and isolated replacement compatibility; original production DLLs remain pinned separately.",
+  "target": "x86_64-w64-mingw32.static",
+  "variant": "web, mozjpeg, zlib-ng, no FFI, no HEVC",
+  "testEvidence": [
+    {
+      "name": "rebuilt-startup",
+      "sha256": "efa174a6caaf20a76a1b276314e1897f6cb137a2ed7e66ed1435f1e8def2d4c6",
+      "passed": true
+    },
+    {
+      "name": "rebuilt-image",
+      "sha256": "2502f2916845e6ee09b0a34e93dc2258af5b498cb63a4a87c1d22db9f1d520e1",
+      "passed": true
+    },
+    {
+      "name": "rebuilt-exports",
+      "sha256": "2d2ad97aa780645120f32d0aabbd81d70de984d1063e83056e5c37460e4a8c07",
+      "passed": true
+    }
+  ],
+  "reproducibility": "SOURCE_DATE_EPOCH=0, four build jobs; compatibility rebuild, not a byte-identical reproduction of upstream."
+}

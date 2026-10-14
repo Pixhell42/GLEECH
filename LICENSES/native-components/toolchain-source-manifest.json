@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-10-14",
+  "complete": true,
+  "archives": [
+    {
+      "component": "cargo-c",
+      "version": "0.10.25",
+      "file": "cargo-c-0.10.25.tar.gz",
+      "sha256": "8054b12ae8b64259e7b63e40368406dd6b6510d5d92b658152b361c5d816a5de",
+      "bytes": 41486,
+      "url": "https://github.com/lu-zero/cargo-c/archive/v0.10.25.tar.gz",
+      "recipe": "plugins/llvm-mingw/cargo-c.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "ccache",
+      "version": "3.6",
+      "file": "ccache-3.6.tar.xz",
+      "sha256": "a6b129576328fcefad00cb72035bc87bc98b6a76aec0f4b59bed76d67a399b1f",
+      "bytes": 340608,
+      "url": "https://www.samba.org/ftp/ccache/ccache-3.6.tar.xz",
+      "recipe": "src/ccache.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "cmake",
+      "version": "3.31.12",
+      "file": "cmake-3.31.12.tar.gz",
+      "sha256": "5f3fd5a54dfa65602bdbed64f981a72673cc19f2d304cc2955cf0dfa0cfd8272",
+      "bytes": 11715065,
+      "url": "https://www.cmake.org/files/v3.31/cmake-3.31.12.tar.gz",
+      "recipe": "src/cmake.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "libtool",
+      "version": "2.6.2",
+      "file": "libtool-2.6.2.tar.xz",
+      "sha256": "2ef1067c16c97db930fd740cc9bc3d3ba9a583804ae5ac42cc3e8719e49e191e",
+      "bytes": 1093564,
+      "url": "https://ftp.gnu.org/gnu/libtool/libtool-2.6.2.tar.xz",
+      "recipe": "src/libtool.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "llvm-mingw",
+      "version": "20260922",
+      "file": "llvm-mingw-20260922.tar.gz",
+      "sha256": "9e430702df67673bb9632253d3f63868e1c13d15ef21deb350b953282b767627",
+      "bytes": 71036,
+      "url": "https://github.com/mstorsjo/llvm-mingw/archive/20260922.tar.gz",
+      "recipe": "plugins/llvm-mingw/llvm-mingw.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "llvm",
+      "version": "23.1.2",
+      "file": "llvm-project-23.1.2.src.tar.xz",
+      "sha256": "c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a",
+      "bytes": 179200068,
+      "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.2/llvm-project-23.1.2.src.tar.xz",
+      "recipe": "src/llvm.mk",
+      "role": "runtime-source-and-build-tool"
+    },
+    {
+      "component": "meson",
+      "version": "1.12.0",
+      "file": "meson-1.12.0.tar.gz",
+      "sha256": "88afe0c20e52030218924ac37d0c81c59b4b5f3ae3752c8c6d7470c7d365886c",
+      "bytes": 2518280,
+      "url": "https://github.com/mesonbuild/meson/releases/download/1.12.0/meson-1.12.0.tar.gz",
+      "recipe": "src/meson.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "mingw-w64",
+      "version": "57b5950",
+      "file": "mingw-w64-mingw-w64-57b5950.tar.gz",
+      "sha256": "7362a2dc2d289dde4617e21e5d7a006c87c19e80793c8928a794b654ed6e2bcd",
+      "bytes": 15802415,
+      "url": "https://github.com/mingw-w64/mingw-w64/tarball/57b5950/mingw-w64-mingw-w64-57b5950.tar.gz",
+      "recipe": "src/mingw-w64.mk",
+      "role": "runtime-source-and-build-tool"
+    },
+    {
+      "component": "nasm",
+      "version": "3.02",
+      "file": "nasm-3.02.tar.xz",
+      "sha256": "87336eba53b4acfe917424ab5d500d2b0054d9f5148d35c2273ccf2cfb712f0d",
+      "bytes": 1531636,
+      "url": "https://www.nasm.us/pub/nasm/releasebuilds/3.02/nasm-3.02.tar.xz",
+      "recipe": "src/nasm.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "ninja",
+      "version": "1.13.2",
+      "file": "ninja-1.13.2.tar.gz",
+      "sha256": "974d6b2f4eeefa25625d34da3cb36bdcebe7fbce40f4c16ac0835fd1c0cbae17",
+      "bytes": 292385,
+      "url": "https://github.com/ninja-build/ninja/archive/v1.13.2.tar.gz",
+      "recipe": "src/ninja.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "pe-parse",
+      "version": "2.1.1",
+      "file": "pe-parse-2.1.1.tar.gz",
+      "sha256": "74c4012274e6e15128a8cf4453f63bb11155bcc14ad56ca7594a259ae8ae0202",
+      "bytes": 129804,
+      "url": "https://github.com/trailofbits/pe-parse/archive/v2.1.1.tar.gz",
+      "recipe": "src/pe-parse.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "pe-util",
+      "version": "dc5dda5",
+      "file": "pe-util-dc5dda5.tar.gz",
+      "sha256": "c3b926d8367154fb65a2d49f88cf1389e06a5ce0cc44c7b3526d901ecaba7e1d",
+      "bytes": 6187,
+      "url": "https://github.com/gsauthof/pe-util/tarball/dc5dda5/pe-util-dc5dda5.tar.gz",
+      "recipe": "src/pe-util.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "pkgconf",
+      "version": "da179fd",
+      "file": "pkgconf-da179fd.tar.gz",
+      "sha256": "91b2e5d7ce06583d5920c373b61d7d6554cd085cbd61ed176c7ff7ff3032523d",
+      "bytes": 62154,
+      "url": "https://github.com/pkgconf/pkgconf/tarball/da179fd/pkgconf-da179fd.tar.gz",
+      "recipe": "src/pkgconf.mk",
+      "role": "build-tool-only"
+    },
+    {
+      "component": "rust",
+      "version": "nightly",
+      "file": "rustc-nightly-src.tar.xz",
+      "sha256": "f2c139528ba025f1141935df4f634e18db614b9b3b1cf2ea59e3675a6ade89f3",
+      "bytes": 263102648,
+      "url": "https://static.rust-lang.org/dist/2026-09-24/rustc-nightly-src.tar.xz",
+      "recipe": "plugins/llvm-mingw/rust.mk",
+      "role": "runtime-source-and-build-tool"
+    }
+  ],
+  "scope": "Exact recipe-verified source archives from the independent rebuild cache. Compiler runtime source is retained in full; general build-tool archives are additional convenience sources, not a claim that their binaries ship in GLEECH."
+}

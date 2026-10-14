@@ -1,0 +1,376 @@
+librsvg-c v2.63.2 (/review/librsvg/librsvg-c) capi
+cairo-rs v0.22.9 default,glib,pdf,png,ps,svg,use_glib,v1_16
+bitflags v2.13.2 
+cairo-sys-rs v0.22.9 glib-sys,pdf,png,ps,svg,use_glib,v1_16
+glib-sys v0.22.9 
+libc v0.2.189 default,std
+system-deps v9.0.0 default
+cfg-expr v0.20.9 default,target-lexicon,targets
+smallvec v1.16.1 
+target-lexicon v0.13.5 default
+heck v0.5.0 
+pkg-config v0.3.34 
+toml v1.1.6+spec-1.1.0 parse,std
+serde_spanned v1.1.1 alloc,std
+toml_datetime v1.1.1+spec-1.1.0 alloc,std
+toml_parser v1.1.3+spec-1.1.0 alloc,std
+winnow v1.0.4 
+winnow v1.0.4 
+version-compare v0.2.1 
+libc v0.2.189 default,std
+system-deps v9.0.0 default (*)
+glib v0.22.9 default,futures,futures-channel,futures-core,futures-executor,futures-task,futures-util,gio,gio-sys
+bitflags v2.13.2 
+futures-channel v0.3.34 alloc,default,std
+futures-core v0.3.34 alloc,std
+futures-core v0.3.34 alloc,std
+futures-executor v0.3.34 default,std
+futures-core v0.3.34 alloc,std
+futures-task v0.3.34 alloc,std
+futures-util v0.3.34 alloc,async-await,async-await-macro,default,futures-macro,slab,std
+futures-core v0.3.34 alloc,std
+futures-macro v0.3.34 (proc-macro) 
+proc-macro2 v1.0.107 default,proc-macro
+unicode-ident v1.0.26 
+quote v1.0.47 default,proc-macro
+proc-macro2 v1.0.107 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+unicode-ident v1.0.26 
+futures-task v0.3.34 alloc,std
+pin-project-lite v0.2.17 
+slab v0.4.12 std
+futures-task v0.3.34 alloc,std
+futures-util v0.3.34 alloc,async-await,async-await-macro,default,futures-macro,slab,std (*)
+gio-sys v0.22.9 
+glib-sys v0.22.9  (*)
+gobject-sys v0.22.9 
+glib-sys v0.22.9  (*)
+libc v0.2.189 default,std
+system-deps v9.0.0 default (*)
+libc v0.2.189 default,std
+windows-sys v0.61.2 Win32,Win32_Foundation,Win32_Networking,Win32_Networking_WinSock,default
+windows-link v0.2.1 
+system-deps v9.0.0 default (*)
+glib-macros v0.22.9 (proc-macro) 
+heck v0.5.0 
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+glib-sys v0.22.9  (*)
+gobject-sys v0.22.9  (*)
+libc v0.2.189 default,std
+memchr v2.8.3 alloc,default,std
+smallvec v1.16.1 const_generics,const_new,union
+libc v0.2.189 default,std
+cast v0.3.0 
+float-cmp v0.10.0 default,num-traits,ratio
+num-traits v0.2.19 default,i128,std
+autocfg v1.5.1 
+gio v0.22.9 
+futures-channel v0.3.34 alloc,default,std (*)
+futures-core v0.3.34 alloc,std
+futures-io v0.3.34 default,std
+futures-util v0.3.34 alloc,async-await,async-await-macro,default,futures-macro,slab,std (*)
+gio-sys v0.22.9  (*)
+glib v0.22.9 default,futures,futures-channel,futures-core,futures-executor,futures-task,futures-util,gio,gio-sys (*)
+libc v0.2.189 default,std
+pin-project-lite v0.2.17 
+smallvec v1.16.1 const_generics,const_new,union
+glib v0.22.9 default,futures,futures-channel,futures-core,futures-executor,futures-task,futures-util,gio,gio-sys (*)
+libc v0.2.189 default,std
+librsvg v2.63.2 (/review/librsvg/rsvg) capi
+cairo-rs v0.22.9 default,glib,pdf,png,ps,svg,use_glib,v1_16 (*)
+cast v0.3.0 
+cssparser v0.37.0 default,fast_match_byte,fast_match_color
+cssparser-macros v0.7.1 (proc-macro) 
+quote v1.0.47 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+dtoa-short v0.3.5 
+dtoa v1.0.11 
+itoa v1.0.18 
+phf v0.13.1 default,macros,phf_macros,std
+phf_macros v0.13.1 (proc-macro) 
+phf_generator v0.13.1 
+fastrand v2.5.0 
+phf_shared v0.13.1 default,std
+siphasher v1.0.3 default,std
+phf_shared v0.13.1 default,std (*)
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v2.0.119 clone-impls,default,derive,extra-traits,full,parsing,printing,proc-macro,visit
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+unicode-ident v1.0.26 
+phf_shared v0.13.1 default,std
+siphasher v1.0.3 default,std
+smallvec v1.16.1 const_generics,const_new,union
+cssparser-color v0.5.0 default
+cssparser v0.37.0 default,fast_match_byte,fast_match_color (*)
+data-url v0.3.2 alloc,default,std
+encoding_rs v0.8.41 alloc,default
+cfg-if v1.0.5 
+core_detect v1.0.0 default
+multiversion v0.9.0 
+multiversion-macros v0.9.0 (proc-macro) 
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+rustversion v1.0.23 (proc-macro) 
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+multiversion_no_op v1.0.0 (proc-macro) 
+scopeguard v1.2.0 
+simdutf8 v0.1.5 aarch64_neon,public_imp
+rustversion v1.0.23 (proc-macro) 
+float-cmp v0.10.0 default,num-traits,ratio (*)
+gio v0.22.9  (*)
+glib v0.22.9 default,futures,futures-channel,futures-core,futures-executor,futures-task,futures-util,gio,gio-sys (*)
+image v0.25.10 gif,jpeg,png,webp
+bytemuck v1.25.2 extern_crate_alloc
+byteorder-lite v0.1.0 default,std
+color_quant v1.1.0 
+gif v0.14.2 color_quant,default,raii_no_panic,std
+color_quant v1.1.0 
+weezl v0.1.12 alloc,default,std
+image-webp v0.2.4 
+byteorder-lite v0.1.0 default,std
+quick-error v2.0.1 
+moxcms v0.8.1 avx,avx_luts,avx_shaper_fixed_point_paths,avx_shaper_paths,default,lut,neon,neon_luts,neon_shaper_fixed_point_paths,neon_shaper_paths,sse,sse_luts,sse_shaper_fixed_point_paths,sse_shaper_paths
+num-traits v0.2.19 default,i128,std (*)
+pxfm v0.1.30 
+num-traits v0.2.19 default,i128,std (*)
+png v0.18.1 
+bitflags v2.13.2 
+crc32fast v1.5.2 default,std
+cfg-if v1.0.5 
+fdeflate v0.3.7 
+simd-adler32 v0.3.10 const-generics,default,std
+flate2 v1.1.10 any_impl,default,miniz_oxide,runtime_detection,rust_backend
+crc32fast v1.5.2 default,std (*)
+miniz_oxide v0.9.1 default,simd,simd-adler32,with-alloc
+adler2 v2.0.1 
+simd-adler32 v0.3.10 const-generics,default,std
+miniz_oxide v0.8.9 default,simd,simd-adler32,with-alloc
+adler2 v2.0.1 
+simd-adler32 v0.3.10 const-generics,default,std
+zune-core v0.5.3 std
+zune-jpeg v0.5.15 default,neon,std,x86
+zune-core v0.5.3 std
+itertools v0.15.0 default,use_alloc,use_std
+either v1.18.0 std,use_std
+language-tags v0.3.2 
+libc v0.2.189 default,std
+locale_config v0.3.0 
+lazy_static v1.5.0 
+regex v1.13.1 default,perf,perf-backtrack,perf-cache,perf-dfa,perf-inline,perf-literal,perf-onepass,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+aho-corasick v1.1.5 perf-literal,std
+memchr v2.8.3 alloc,default,std
+memchr v2.8.3 alloc,default,std
+regex-automata v0.4.18 alloc,dfa-onepass,hybrid,meta,nfa-backtrack,nfa-pikevm,nfa-thompson,perf-inline,perf-literal,perf-literal-multisubstring,perf-literal-substring,std,syntax,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment,unicode-word-boundary
+aho-corasick v1.1.5 perf-literal,std (*)
+memchr v2.8.3 alloc,default,std
+regex-syntax v0.8.11 default,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+regex-syntax v0.8.11 default,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+winapi v0.3.9 winnls
+markup5ever v0.39.0 
+log v0.4.34 
+tendril v0.5.1 
+new_debug_unreachable v1.0.6 
+web_atoms v0.2.6 
+phf v0.13.1 default,macros,phf_macros,std (*)
+string_cache v0.9.0 
+new_debug_unreachable v1.0.6 
+parking_lot v0.12.5 default
+lock_api v0.4.14 atomic_usize,default
+scopeguard v1.2.0 
+parking_lot_core v0.9.12 
+cfg-if v1.0.5 
+smallvec v1.16.1 const_generics,const_new,union
+windows-link v0.2.1 
+phf_shared v0.13.1 default,std (*)
+precomputed-hash v0.1.1 
+phf_codegen v0.13.1 
+phf_generator v0.13.1  (*)
+phf_shared v0.13.1 default,std (*)
+string_cache_codegen v0.6.1 
+phf_generator v0.13.1  (*)
+phf_shared v0.13.1 default,std (*)
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+mutants v0.0.4 (proc-macro) 
+nalgebra v0.35.0 default,macros,matrixmultiply,nalgebra-macros,std
+approx v0.5.1 std
+num-traits v0.2.19 default,i128,std (*)
+matrixmultiply v0.3.11 avx512,default,std
+rawpointer v0.2.1 
+autocfg v1.5.1 
+nalgebra-macros v0.3.0 (proc-macro) 
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v2.0.119 clone-impls,default,derive,extra-traits,full,parsing,printing,proc-macro,visit (*)
+num-complex v0.4.6 std
+num-traits v0.2.19 default,i128,std (*)
+num-rational v0.4.2 std
+num-integer v0.1.47 i128,std
+num-traits v0.2.19 default,i128,std (*)
+num-traits v0.2.19 default,i128,std (*)
+num-traits v0.2.19 default,i128,std (*)
+simba v0.10.2 std,wide
+approx v0.5.1 std (*)
+num-complex v0.4.6 std (*)
+num-traits v0.2.19 default,i128,std (*)
+wide v1.7.1 std
+bytemuck v1.25.2 extern_crate_alloc
+safe_arch v1.2.0 bytemuck,default
+bytemuck v1.25.2 extern_crate_alloc
+typenum v1.20.1 
+num-traits v0.2.19 default,i128,std (*)
+pango v0.22.9 v1_42,v1_44,v1_46
+gio v0.22.9  (*)
+glib v0.22.9 default,futures,futures-channel,futures-core,futures-executor,futures-task,futures-util,gio,gio-sys (*)
+pango-sys v0.22.9 v1_42,v1_44,v1_46
+glib-sys v0.22.9  (*)
+gobject-sys v0.22.9  (*)
+libc v0.2.189 default,std
+system-deps v9.0.0 default (*)
+pangocairo v0.22.9 
+cairo-rs v0.22.9 default,glib,pdf,png,ps,svg,use_glib,v1_16 (*)
+glib v0.22.9 default,futures,futures-channel,futures-core,futures-executor,futures-task,futures-util,gio,gio-sys (*)
+pango v0.22.9 v1_42,v1_44,v1_46 (*)
+pangocairo-sys v0.22.9 
+cairo-sys-rs v0.22.9 glib-sys,pdf,png,ps,svg,use_glib,v1_16 (*)
+glib-sys v0.22.9  (*)
+libc v0.2.189 default,std
+pango-sys v0.22.9 v1_42,v1_44,v1_46 (*)
+system-deps v9.0.0 default (*)
+precomputed-hash v0.1.1 
+rayon v1.12.0 
+either v1.18.0 std,use_std
+rayon-core v1.13.0 
+crossbeam-deque v0.8.8 default,std
+crossbeam-epoch v0.9.21 alloc,std
+crossbeam-utils v0.8.23 default,std
+crossbeam-utils v0.8.23 default,std
+crossbeam-utils v0.8.23 default,std
+rctree v0.6.0 
+regex v1.13.1 default,perf,perf-backtrack,perf-cache,perf-dfa,perf-inline,perf-literal,perf-onepass,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment (*)
+rgb v0.8.53 argb,as-bytes,bytemuck,default,grb
+bytemuck v1.25.2 extern_crate_alloc
+selectors v0.40.0 
+bitflags v2.13.2 
+cssparser v0.37.0 default,fast_match_byte,fast_match_color (*)
+derive_more v2.1.1 add,add_assign,default,std
+derive_more-impl v2.1.1 (proc-macro) add,add_assign,default
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v2.0.119 clone-impls,default,derive,extra-traits,full,parsing,printing,proc-macro,visit (*)
+rustc_version v0.4.1 
+semver v1.0.28 default,std
+log v0.4.34 
+new_debug_unreachable v1.0.6 
+phf v0.13.1 default,macros,phf_macros,std (*)
+precomputed-hash v0.1.1 
+rustc-hash v2.1.3 default,std
+servo_arc v0.4.3 default,track_alloc_size
+stable_deref_trait v1.2.1 alloc,default,std
+smallvec v1.16.1 const_generics,const_new,union
+phf_codegen v0.13.1  (*)
+string_cache v0.10.0 default,serde,serde_support
+new_debug_unreachable v1.0.6 
+parking_lot v0.12.5 default (*)
+phf_shared v0.14.0 default,std
+siphasher v1.0.3 default,std
+precomputed-hash v0.1.1 
+serde v1.0.229 default,std
+serde_core v1.0.229 result,std
+tinyvec v1.13.3 alloc,default,rustc_1_55
+url v2.5.8 default,std
+form_urlencoded v1.2.2 alloc,std
+percent-encoding v2.3.2 alloc,std
+idna v1.1.0 alloc,compiled_data,std
+idna_adapter v1.2.2 compiled_data
+icu_normalizer v2.3.0 compiled_data
+icu_collections v2.3.0 
+displaydoc v0.2.7 (proc-macro) 
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+potential_utf v0.1.6 zerovec
+zerovec v0.11.8 derive,yoke
+yoke v0.8.3 derive,zerofrom
+stable_deref_trait v1.2.1 alloc,default,std
+yoke-derive v0.8.3 (proc-macro) 
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+synstructure v0.14.0 default,proc-macro
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+zerofrom v0.1.8 derive
+zerofrom-derive v0.1.8 (proc-macro) 
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+synstructure v0.14.0 default,proc-macro (*)
+zerofrom v0.1.8 derive (*)
+zerovec-derive v0.11.6 (proc-macro) 
+proc-macro2 v1.0.107 default,proc-macro (*)
+quote v1.0.47 default,proc-macro (*)
+syn v3.0.6 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+utf8_iter v1.0.4 
+yoke v0.8.3 derive,zerofrom (*)
+zerofrom v0.1.8 derive (*)
+zerovec v0.11.8 derive,yoke (*)
+icu_normalizer_data v2.3.0 
+icu_provider v2.3.1 baked
+displaydoc v0.2.7 (proc-macro)  (*)
+icu_locale_core v2.3.0 zerovec
+displaydoc v0.2.7 (proc-macro)  (*)
+litemap v0.8.3 
+tinystr v0.8.4 zerovec
+displaydoc v0.2.7 (proc-macro)  (*)
+zerovec v0.11.8 derive,yoke (*)
+writeable v0.6.4 
+zerovec v0.11.8 derive,yoke (*)
+writeable v0.6.4 
+yoke v0.8.3 derive,zerofrom (*)
+zerofrom v0.1.8 derive (*)
+zerotrie v0.2.5 yoke,zerofrom
+displaydoc v0.2.7 (proc-macro)  (*)
+yoke v0.8.3 derive,zerofrom (*)
+zerofrom v0.1.8 derive (*)
+zerovec v0.11.8 derive,yoke (*)
+smallvec v1.16.1 const_generics,const_new,union
+zerovec v0.11.8 derive,yoke (*)
+icu_properties v2.3.0 compiled_data
+displaydoc v0.2.7 (proc-macro)  (*)
+icu_collections v2.3.0  (*)
+icu_locale_core v2.3.0 zerovec (*)
+icu_properties_data v2.3.0 
+icu_provider v2.3.1 baked (*)
+zerotrie v0.2.5 yoke,zerofrom (*)
+zerovec v0.11.8 derive,yoke (*)
+smallvec v1.16.1 const_generics,const_new,union
+utf8_iter v1.0.4 
+percent-encoding v2.3.2 alloc,std
+xml5ever v0.39.0 
+log v0.4.34 
+markup5ever v0.39.0  (*)
+system-deps v7.0.8 
+cfg-expr v0.20.9 default,target-lexicon,targets (*)
+heck v0.5.0 
+pkg-config v0.3.34 
+toml v1.1.6+spec-1.1.0 parse,std (*)
+version-compare v0.2.1 
+rgb v0.8.53 argb,as-bytes,bytemuck,default,grb (*)
+url v2.5.8 default,std (*)
+regex v1.13.1 default,perf,perf-backtrack,perf-cache,perf-dfa,perf-inline,perf-literal,perf-onepass,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+aho-corasick v1.1.5 perf-literal,std
+memchr v2.8.3 alloc,std
+memchr v2.8.3 alloc,std
+regex-automata v0.4.18 alloc,dfa-onepass,hybrid,meta,nfa-backtrack,nfa-pikevm,nfa-thompson,perf-inline,perf-literal,perf-literal-multisubstring,perf-literal-substring,std,syntax,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment,unicode-word-boundary
+aho-corasick v1.1.5 perf-literal,std (*)
+memchr v2.8.3 alloc,std
+regex-syntax v0.8.11 default,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+regex-syntax v0.8.11 default,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment

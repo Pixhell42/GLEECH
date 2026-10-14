@@ -1,0 +1,15 @@
+{
+  "name": "@gleech/project-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./effect-catalog": "./src/effect-catalog.ts",
+    "./shader-package": "./src/shader-package.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "license": "MIT"
+}

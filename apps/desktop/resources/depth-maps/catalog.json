@@ -1,0 +1,366 @@
+{
+  "version": 1,
+  "convention": "White is high/near; black is low/far.",
+  "maps": [
+    {
+      "id": "horizontal-ramp",
+      "name": "Horizontal Ramp",
+      "category": "Simple",
+      "description": "Linear depth from left to right; displacement and depth focus.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "7211c8a21caa1ab1688c31701441310a53dddef29a6d82f92af90ecb81a22692"
+    },
+    {
+      "id": "vertical-ramp",
+      "name": "Vertical Ramp",
+      "category": "Simple",
+      "description": "Linear depth from top to bottom; focus and contour bands.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "6db26c0405f8121bce0a12efb8a8411f3be9ff61bce8bb6ecc6dec79aa8493c6"
+    },
+    {
+      "id": "radial-dome",
+      "name": "Radial Dome",
+      "category": "Soft",
+      "description": "Smooth raised center; rounded relief and lens-like displacement.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "b056af6528ff06ed3dd7f6cf2089b4eb58fb39afdd6d50c13955a22f140d4f1d"
+    },
+    {
+      "id": "soft-basin",
+      "name": "Soft Basin",
+      "category": "Soft",
+      "description": "Smooth recessed center; invertible hollow and soft focus.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "1e0f251747e7c8ebde45cda9a13371b4e3180579aff38ca752972ccc715c3b5c"
+    },
+    {
+      "id": "saddle",
+      "name": "Saddle",
+      "category": "Soft",
+      "description": "Opposing curved slopes; flowing displacement and relief.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "3db20de780bd60c80aa8e87c7713ca5f95221001bd1d053a6481e303772c7681"
+    },
+    {
+      "id": "folded-ribbon",
+      "name": "Folded Ribbon",
+      "category": "Soft",
+      "description": "A curved raised ribbon with soft edges.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "c09eb7ea7b3845736ac3d0fa72241f89772fba07f0f5b351f005bf1ab611920b"
+    },
+    {
+      "id": "soft-clouds",
+      "name": "Soft Clouds",
+      "category": "Noise",
+      "description": "Broad layered Perlin clouds; gentle organic warping.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "1efe1714984079e237ab90a90b41ef5716c5342babd520e271bc02385e5bff63"
+    },
+    {
+      "id": "storm-clouds",
+      "name": "Storm Clouds",
+      "category": "Noise",
+      "description": "Dense simplex clouds; detailed organic relief.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "33559c05518925aba685efe06b807ce36c3cb7f404cceb1096be8c3e9166f4d0"
+    },
+    {
+      "id": "ridged-terrain",
+      "name": "Ridged Terrain",
+      "category": "Noise",
+      "description": "Mountain-like noise ridges; strong contour and displacement detail.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "2d7665b16799fc86cbc404db57fcfce02136604e6d9bf942ab8726b552818ebe"
+    },
+    {
+      "id": "cellular-stone",
+      "name": "Cellular Stone",
+      "category": "Noise",
+      "description": "Worley cell valleys; cellular embossing and recursive surfaces.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "d6a10d275225c5d5779b10b5ea0884f6d3dea570e2a1a016697cc492c3f9dc26"
+    },
+    {
+      "id": "flowing-marble",
+      "name": "Flowing Marble",
+      "category": "Noise",
+      "description": "Warped flowing veins; layered contour slicing.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "49b1f4b3cc31d5c557ebc2927f95690eeb5cfec9ddd70ccd3c5da62ac1e984d5"
+    },
+    {
+      "id": "concentric-rings",
+      "name": "Concentric Rings",
+      "category": "Geometry",
+      "description": "Repeated smooth circular elevations; rings and radial slicing.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "932509c8c62452f210105e52864f1e69e672f8138c975a654fc0210d8f218a9e"
+    },
+    {
+      "id": "stepped-pyramid",
+      "name": "Stepped Pyramid",
+      "category": "Geometry",
+      "description": "Eight nested square terraces; discrete structural displacement.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "abba03a42749634d7ff2fc3e3abb29a2799d3763f3d5c330135a6fd6a65e4d41"
+    },
+    {
+      "id": "hexagonal-tiles",
+      "name": "Hexagonal Tiles",
+      "category": "Geometry",
+      "description": "Beveled hexagonal cells at varied heights; tiled structural relief.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "bbdd9c69f404f4611e14f5dae743b8aa750149b45e7f9b7b52abd040506afa91"
+    },
+    {
+      "id": "sphere-array",
+      "name": "Sphere Array",
+      "category": "Structure",
+      "description": "Rows of true hemisphere heights; repeated rounded structures.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "b74b5c5fcd2737c0345d462c642d66cd21ccc5cc8e3714b570e89d118b10273f"
+    },
+    {
+      "id": "torus",
+      "name": "Torus",
+      "category": "Structure",
+      "description": "Analytic torus height with a clear central hole; curved ring relief.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "12478e3c9a78b4c25e9548693f3838a14d3f3622b32d9e5d60b6f566cc8e216c"
+    },
+    {
+      "id": "arched-vault",
+      "name": "Arched Vault",
+      "category": "Structure",
+      "description": "A barrel-vault depth surface with receding architectural ribs.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "793bcbd305c6835d62579a8f80ce251db1d5ed7adf864b9dbc8810374b9f7c15"
+    },
+    {
+      "id": "receding-corridor",
+      "name": "Receding Corridor",
+      "category": "Structure",
+      "description": "Perspective square tunnel; depth is distance, without surface lighting.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "dcbfe656597dbc968c221528f1542d52ff383ca92f851d706f1c2b3c6570e025"
+    },
+    {
+      "id": "city-blocks",
+      "name": "City Blocks",
+      "category": "Structure",
+      "description": "Varied flat-topped towers with beveled edges; stepped urban heights.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "4cf03649f77801d51e09fab77d4679a830594d329ad4d17aa5b10a577b29fd35"
+    },
+    {
+      "id": "recursive-terraces",
+      "name": "Recursive Terraces",
+      "category": "Complex",
+      "description": "Nested square subdivisions and soft terraces; layered recursive geometry.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "b54a6ac9ce5fe2c28c3487a26651c73fc1d7476a25bb721d5aa19db1f2110e46"
+    },
+    {
+      "id": "diagonal-ramp",
+      "name": "Diagonal Ramp",
+      "category": "Simple",
+      "description": "An even diagonal slope from far to near; oblique depth focus and displacement.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "2d54393f06235851a99bb392fea61568433e48f47209e4935e4349e1f996bd5c"
+    },
+    {
+      "id": "split-ramps",
+      "name": "Split Ramps",
+      "category": "Simple",
+      "description": "Four quadrants with alternating horizontal and vertical slopes; directional slicing.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "2b0cfd925ef6204888a31d19aed5ceeb71740cb58e223a4be95b4cd597876065"
+    },
+    {
+      "id": "soft-pillows",
+      "name": "Soft Pillows",
+      "category": "Soft",
+      "description": "A quilt of smooth square pillows with recessed seams; rounded local warping.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "f94fd5bf8a42a3c820e67558cf883c15859187349db50678353f82932b7c8e28"
+    },
+    {
+      "id": "draped-fabric",
+      "name": "Draped Fabric",
+      "category": "Soft",
+      "description": "Broad hanging folds bent across a soft drape; cloth-like relief without baked lighting.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "5797fe33d287cf9d3c27b6d3af3da2f1a64a8bf06e9efdff2c672b8dea98d966"
+    },
+    {
+      "id": "braided-ribbons",
+      "name": "Braided Ribbons",
+      "category": "Soft",
+      "description": "Three interwoven rounded ribbons; smooth crossings for layered displacement.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "589002dc5d1ed8821a48eabdfc5c90e2587663291c47b0530d44a44eb4d286be"
+    },
+    {
+      "id": "spiral-folds",
+      "name": "Spiral Folds",
+      "category": "Soft",
+      "description": "Smooth spiral ridges with a softened center; circular depth slicing and warping.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "c6e5b2722fd3c7e78a27a131c953c581a428ac62e7f4b8faf1999fc2120f7abb"
+    },
+    {
+      "id": "warped-cumulus",
+      "name": "Warped Cumulus",
+      "category": "Noise",
+      "description": "Domain-warped layered clouds; broad organic depth with finer surface variation.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "11f1fe75ec60ff31c5aa860ff0fa3489cfb3cf0e6f9289874ebf63144e9986c8"
+    },
+    {
+      "id": "billow-banks",
+      "name": "Billow Banks",
+      "category": "Noise",
+      "description": "Clustered billowing cloud banks with soft valleys; rounded organic relief.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "aff0241eb4ddbeada49b61cd41901beb0fdc9c9259831ed17148cf50c3c5a68e"
+    },
+    {
+      "id": "eroded-canyon",
+      "name": "Eroded Canyon",
+      "category": "Noise",
+      "description": "Branching recessed channels through rough high ground; terrain and contour cuts.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "67cdfedbd9c23c8a403300b3dc399480cc7420513e026740f8e85ffa9544e0a6"
+    },
+    {
+      "id": "crater-field",
+      "name": "Crater Field",
+      "category": "Noise",
+      "description": "Seeded bowl depressions with raised rims; craters, pits and concentric contours.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "f3419d95a58a8b301357ec856b34099d1e85c52efbf222cbb6ecc771075a1b6d"
+    },
+    {
+      "id": "wind-carved-dunes",
+      "name": "Wind-carved Dunes",
+      "category": "Noise",
+      "description": "Asymmetric wind-bent ridges over low rolling terrain; sweeping sand-like depth.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "213438787e70db040d941e9cf997d4c491fa794f2afb0cdec4c2c749aab5caa2"
+    },
+    {
+      "id": "diamond-facets",
+      "name": "Diamond Facets",
+      "category": "Geometry",
+      "description": "A diamond-shaped peaked surface with four planar faces; crisp angular relief.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "dfa2e438a1c7a654e54775110e31e4766612654ca66940f0b1e91b1cb2f68a1f"
+    },
+    {
+      "id": "radial-fan",
+      "name": "Radial Fan",
+      "category": "Geometry",
+      "description": "Twelve angular wedges at alternating heights with radial slopes; segmented depth.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "c96ae8f1c02ba63a3add60e96634321a46d634f2657c1edd3b4baac1ff9cfb0c"
+    },
+    {
+      "id": "interlocking-chevrons",
+      "name": "Interlocking Chevrons",
+      "category": "Geometry",
+      "description": "Repeated zigzag ridges with alternating elevations; angular contour patterns.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "3922d033890854adf70b46a86c820f04e3eac5fbfee8db9b2252aa768ba688ac"
+    },
+    {
+      "id": "triangular-panels",
+      "name": "Triangular Panels",
+      "category": "Geometry",
+      "description": "Independent beveled triangular plates at seeded heights; fragmented structural depth.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "307e6f26dce2e90c3c96588188f9408db295fdc61b30885306ddf505b57a2332"
+    },
+    {
+      "id": "ribbed-capsule",
+      "name": "Ribbed Capsule",
+      "category": "Structure",
+      "description": "A rounded diagonal capsule with recessed ribs; analytic curved surface heights.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "8bee6aeff3e4ce793e53f40d7e688f78249b7647359560bade2e0f0173a04bc6"
+    },
+    {
+      "id": "crossed-vaults",
+      "name": "Crossed Vaults",
+      "category": "Structure",
+      "description": "Intersecting barrel surfaces at two heights; architectural crossings without surface lighting.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "1693bcd4896855957d0c1efa04a6b527e17ff9ad04e18395871f3fc019f66f55"
+    },
+    {
+      "id": "switchback-stairs",
+      "name": "Switchback Stairs",
+      "category": "Structure",
+      "description": "Six connected stair flights alternating direction; stepped receding architecture.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "61051daa13a0c3eccbe68b87f39d377cb2b1fdb1ff3483d8913c4b9a38db6f56"
+    },
+    {
+      "id": "terraced-islands",
+      "name": "Terraced Islands",
+      "category": "Complex",
+      "description": "Layered organic islands with stepped plateaus and softened terrace edges.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "bc3f50d42cff7edc100a2b190c1eb721bac0395dce28f51055bc44c6b6ef782b"
+    },
+    {
+      "id": "truchet-channels",
+      "name": "Truchet Channels",
+      "category": "Complex",
+      "description": "Connected quarter-circle channels forming seeded loops and maze-like depth paths.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "cf33a683f2e558ebba4360352e68ecb9c2c78ec43de0fcd33eb556b7f59865a1"
+    }
+  ]
+}

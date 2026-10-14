@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "lib": ["ES2022", "DOM"], "types": ["node"], "resolveJsonModule": true },
+  "include": [
+    "electron.vite.config.ts",
+    "mcp.vite.config.ts",
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts"
+  ]
+}

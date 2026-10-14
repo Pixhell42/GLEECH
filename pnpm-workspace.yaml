@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# esbuild installs its platform binary. Electron is allowed for older runtime installers.
+onlyBuiltDependencies:
+  - electron
+  - esbuild

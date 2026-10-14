@@ -1,0 +1,83 @@
+{
+  "format": "gleech-shader",
+  "schemaVersion": 1,
+  "id": "gleech.prism-weave",
+  "version": "1.0.0",
+  "name": "Prism Weave",
+  "description": "Woven refraction with golden or prismatic light.",
+  "authors": [
+    {
+      "name": "GLEECH",
+      "url": "https://github.com/Pixhell42/GLEECH"
+    }
+  ],
+  "sourceUrl": "https://github.com/Pixhell42/GLEECH",
+  "license": {
+    "expression": "MIT"
+  },
+  "kind": "image",
+  "language": "wgsl",
+  "entryPoint": "gleechShade",
+  "controls": [
+    {
+      "key": "density",
+      "kind": "number",
+      "label": "Weave density",
+      "description": "Number of woven folds across the shorter image side.",
+      "min": 1,
+      "max": 24,
+      "step": 0.1,
+      "default": 5,
+      "unit": "multiplier"
+    },
+    {
+      "key": "bend",
+      "kind": "number",
+      "label": "Bend",
+      "description": "Refraction distance relative to the shorter image side. Zero removes the spatial warp.",
+      "min": 0,
+      "max": 0.12,
+      "step": 0.001,
+      "default": 0.035,
+      "unit": "percent"
+    },
+    {
+      "key": "style",
+      "kind": "choice",
+      "label": "Light style",
+      "description": "Use the chosen light color or a spectral prism palette.",
+      "default": "gold",
+      "options": [
+        {
+          "value": "gold",
+          "label": "Chosen color",
+          "shaderValue": 0
+        },
+        {
+          "value": "prism",
+          "label": "Prismatic",
+          "shaderValue": 1
+        }
+      ]
+    },
+    {
+      "key": "ink",
+      "kind": "color",
+      "label": "Light color",
+      "description": "Light color used by Chosen color mode.",
+      "default": "#f1cc6b"
+    },
+    {
+      "key": "light",
+      "kind": "number",
+      "label": "Light strength",
+      "description": "Blend luminous woven shading into the refracted source image.",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.5,
+      "unit": "percent"
+    }
+  ],
+  "source": "fn gleechShade(context: GleechShaderContext) -> vec4f {\n  let density = gleechControl(0u).x;\n  let bend = gleechControl(1u).x;\n  let style = gleechControl(2u).x;\n  let ink = gleechControl(3u).rgb;\n  let intensity = gleechControl(4u).x;\n  let aspect = context.reference / min(context.reference.x, context.reference.y);\n  let p = (context.uv - 0.5) * aspect;\n  let phase = context.phase * 6.2831853;\n  let seed = context.seed * 6.2831853;\n  let a = p.x * density * 6.2831853 + phase + seed;\n  let b = p.y * density * 6.2831853 - phase;\n  let weave = sin(a) * cos(b);\n  let warp = vec2f(weave, cos(a) * sin(b)) * bend / aspect;\n  let image = gleechSample(context.uv + warp);\n  let spectral = 0.5 + 0.5 * cos(vec3f(weave * 3.0 + seed) + vec3f(0.0, 2.0943951, 4.1887902));\n  let material = mix(ink, spectral, style);\n  let light = 0.35 + 0.65 * (0.5 + 0.5 * cos(a + b));\n  let color = mix(image.rgb, image.rgb * 0.65 + material * light * 0.45, intensity);\n  return vec4f(color, image.a);\n}\n"
+}

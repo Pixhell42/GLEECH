@@ -1,0 +1,22 @@
+{
+  "name": "@gleech/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./protocol": "./src/protocol.ts",
+    "./commands": "./src/commands.ts",
+    "./server": "./src/server.ts",
+    "./connection": "./src/connection.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@gleech/command-service": "workspace:*",
+    "@gleech/project-model": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "4.6.6"
+  },
+  "license": "MIT"
+}

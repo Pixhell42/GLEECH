@@ -1,0 +1,51 @@
+appId: com.gleech.desktop
+productName: GLEECH
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+  - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
+  - '!**/onnxruntime-node/bin/napi-v6/linux/**'
+  - '!**/onnxruntime-node/bin/napi-v6/win32/arm64/**'
+asar: true
+asarUnpack:
+  - node_modules/onnxruntime-node/bin/**
+extraResources:
+  - from: ../../LICENSE
+    to: LICENSE.GLEECH.txt
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: ../../LICENSES
+    to: licenses
+  - from: out/mcp
+    to: mcp
+  - from: resources/shaders
+    to: shaders
+  - from: resources/vector-maps
+    to: vector-maps
+  - from: resources/depth-maps
+    to: depth-maps
+  - from: resources/models
+    to: models
+  - from: resources/branding
+    to: branding
+  - from: resources/presets
+    to: presets
+# Shared workspace packages are bundled by Vite into the renderer.
+npmRebuild: false
+win:
+  icon: resources/branding/icon-beta.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Apply icon/metadata resources; signing credentials come before public release.
+  signExecutable: false
+nsis:
+  installerIcon: resources/branding/icon-beta.ico
+  uninstallerIcon: resources/branding/icon-beta.ico
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+artifactName: GLEECH-${version}-${arch}-setup.${ext}

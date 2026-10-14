@@ -1,0 +1,6 @@
+*
+!mxe/
+!mxe/**
+!pkg/
+!pkg/**
+!base.Dockerfile

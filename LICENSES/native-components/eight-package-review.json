@@ -1,0 +1,147 @@
+{
+  "reviewedOn": "2026-10-14",
+  "scope": "Resolved source dependency graph; independent build and compatibility result recorded separately in rebuild-review.json.",
+  "library": "librsvg-c 2.63.2, capi, normal/build dependencies, tests/pixbuf/rsvg-convert disabled",
+  "target": "x86_64-pc-windows-gnullvm",
+  "rustImage": "rust@sha256:81015672d6939b0265f09adf96d5de125482bb1330106076956b0518e74edc90",
+  "cargoLockSHA256": "e79e2a2735a0b5b151bb4133becd3008223fabedd34a8b787a872edab9854941",
+  "evidence": [
+    {
+      "file": "LICENSES/native-components/target-review/difflib-tests.txt",
+      "sha256": "55df69d2adf4fc7aa34a1e3f30e6d5776fac4583410ceba0d34053546a836262"
+    },
+    {
+      "file": "LICENSES/native-components/target-review/objc-apple.txt",
+      "sha256": "e2d32ab7b83535aa82a3f6571a06803a13f419c09fffbfe1f77e3b4ee74563a5"
+    },
+    {
+      "file": "LICENSES/native-components/target-review/toolchain.txt",
+      "sha256": "f03803033d735de9181cda6bc77a8b0690b78e2b7e7878ae3e3ebb715f6cb05d"
+    },
+    {
+      "file": "LICENSES/native-components/target-review/winapi-gnu.txt",
+      "sha256": "ef03a5e61b1110183ddac70b36172c60a3cb11b1bb7975779b7c32f0cbaa9230"
+    },
+    {
+      "file": "LICENSES/native-components/target-review/windows-library.txt",
+      "sha256": "44a62f2695eb82b9a80553c2423db0822578f8efa344ca1a0134f202b89f5086"
+    }
+  ],
+  "packages": [
+    {
+      "name": "block",
+      "version": "0.1.6",
+      "sourceSHA256": "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a",
+      "includedInResolvedWindowsGraph": false,
+      "reason": "Objective-C subtree reached only through locale_config cfg(target_os = \"macos\").",
+      "attribution": "Excluded from the Windows library target. Publisher declares MIT but supplies no copyright notice or standalone license. Original author declarations and complete source are preserved; the canonical MIT template is identified separately, without inventing a holder or year."
+    },
+    {
+      "name": "difflib",
+      "version": "0.4.0",
+      "sourceSHA256": "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8",
+      "includedInResolvedWindowsGraph": false,
+      "reason": "predicates dependency reached through librsvg dev-dependencies; library tests are disabled.",
+      "attribution": "Excluded from the Windows library target. Publisher declares MIT but supplies no copyright notice or standalone license. Original author declarations and complete source are preserved; the canonical MIT template is identified separately, without inventing a holder or year."
+    },
+    {
+      "name": "malloc_buf",
+      "version": "0.0.6",
+      "sourceSHA256": "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb",
+      "includedInResolvedWindowsGraph": false,
+      "reason": "Objective-C subtree reached only through locale_config cfg(target_os = \"macos\").",
+      "attribution": "Excluded from the Windows library target. Publisher declares MIT but supplies no copyright notice or standalone license. Original author declarations and complete source are preserved; the canonical MIT template is identified separately, without inventing a holder or year."
+    },
+    {
+      "name": "objc_id",
+      "version": "0.1.1",
+      "sourceSHA256": "c92d4ddb4bd7b50d730c215ff871754d0da6b2178849f8a2a2ab69712d0c073b",
+      "includedInResolvedWindowsGraph": false,
+      "reason": "Objective-C subtree reached only through locale_config cfg(target_os = \"macos\").",
+      "attribution": "Excluded from the Windows library target. Publisher declares MIT but supplies no copyright notice or standalone license. Original author declarations and complete source are preserved; the canonical MIT template is identified separately, without inventing a holder or year."
+    },
+    {
+      "name": "objc-foundation",
+      "version": "0.1.1",
+      "sourceSHA256": "1add1b659e36c9607c7aab864a76c7a4c2760cd0cd2e120f3fb8b952c7e22bf9",
+      "includedInResolvedWindowsGraph": false,
+      "reason": "locale_config cfg(target_os = \"macos\") dependency.",
+      "attribution": "Excluded from the Windows library target. Publisher declares MIT but supplies no copyright notice or standalone license. Original author declarations and complete source are preserved; the canonical MIT template is identified separately, without inventing a holder or year."
+    },
+    {
+      "name": "selectors",
+      "version": "0.40.0",
+      "sourceSHA256": "eeee001a77567bb05e71652718d3ff76d8697c151ac523e68e9513194eb2b75a",
+      "includedInResolvedWindowsGraph": true,
+      "reason": "Normal dependency of librsvg. Original MPL source header, canonical MPL terms and complete source retained.",
+      "attribution": "Original MPL-2.0 file header, published author/license declaration, canonical MPL terms and checksum-pinned complete source retained."
+    },
+    {
+      "name": "winapi-i686-pc-windows-gnu",
+      "version": "0.4.0",
+      "sourceSHA256": "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6",
+      "includedInResolvedWindowsGraph": false,
+      "reason": "Exact i686-pc-windows-gnu target dependency; not the x64 LLVM target.",
+      "attribution": "Repository root licenses from pinned 2018 release commit; Cargo.toml.orig, source and build script match the published crate byte for byte."
+    },
+    {
+      "name": "winapi-x86_64-pc-windows-gnu",
+      "version": "0.4.0",
+      "sourceSHA256": "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f",
+      "includedInResolvedWindowsGraph": false,
+      "reason": "Exact x86_64-pc-windows-gnu target dependency; not x86_64-pc-windows-gnullvm.",
+      "attribution": "Repository root licenses from pinned 2018 release commit; Cargo.toml.orig, source and build script match the published crate byte for byte."
+    }
+  ],
+  "winapiSourceAssociation": [
+    {
+      "package": "winapi-i686-pc-windows-gnu",
+      "file": "Cargo.toml",
+      "url": "https://raw.githubusercontent.com/retep998/winapi-rs/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/i686/Cargo.toml",
+      "sha256": "5257d6f5283ab052b6af51f578a8c74e14c31deb53a7c6cd9e6fa16135d57eb3",
+      "publishedSHA256": "5257d6f5283ab052b6af51f578a8c74e14c31deb53a7c6cd9e6fa16135d57eb3",
+      "matchesPublishedSource": true
+    },
+    {
+      "package": "winapi-i686-pc-windows-gnu",
+      "file": "src/lib.rs",
+      "url": "https://raw.githubusercontent.com/retep998/winapi-rs/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/i686/src/lib.rs",
+      "sha256": "79212a91f610f8a77aa6ed4cc77212c2531eeb35630388bf07323cc328fcca42",
+      "publishedSHA256": "79212a91f610f8a77aa6ed4cc77212c2531eeb35630388bf07323cc328fcca42",
+      "matchesPublishedSource": true
+    },
+    {
+      "package": "winapi-i686-pc-windows-gnu",
+      "file": "build.rs",
+      "url": "https://raw.githubusercontent.com/retep998/winapi-rs/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/i686/build.rs",
+      "sha256": "4344ce95f51197e1377429cd9ef7a8e3f97d39546776705857991f2f9416f545",
+      "publishedSHA256": "4344ce95f51197e1377429cd9ef7a8e3f97d39546776705857991f2f9416f545",
+      "matchesPublishedSource": true
+    },
+    {
+      "package": "winapi-x86_64-pc-windows-gnu",
+      "file": "Cargo.toml",
+      "url": "https://raw.githubusercontent.com/retep998/winapi-rs/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/x86_64/Cargo.toml",
+      "sha256": "d158846cdb1259d606bfbeb050e386484cb18f14db41478568114eddb76ec43e",
+      "publishedSHA256": "d158846cdb1259d606bfbeb050e386484cb18f14db41478568114eddb76ec43e",
+      "matchesPublishedSource": true
+    },
+    {
+      "package": "winapi-x86_64-pc-windows-gnu",
+      "file": "src/lib.rs",
+      "url": "https://raw.githubusercontent.com/retep998/winapi-rs/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/x86_64/src/lib.rs",
+      "sha256": "79212a91f610f8a77aa6ed4cc77212c2531eeb35630388bf07323cc328fcca42",
+      "publishedSHA256": "79212a91f610f8a77aa6ed4cc77212c2531eeb35630388bf07323cc328fcca42",
+      "matchesPublishedSource": true
+    },
+    {
+      "package": "winapi-x86_64-pc-windows-gnu",
+      "file": "build.rs",
+      "url": "https://raw.githubusercontent.com/retep998/winapi-rs/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/x86_64/build.rs",
+      "sha256": "b4ab421e1dc98159dd4440813cdaf7d9ea98278324bc6118d0f7cf378933f371",
+      "publishedSHA256": "b4ab421e1dc98159dd4440813cdaf7d9ea98278324bc6118d0f7cf378933f371",
+      "matchesPublishedSource": true
+    }
+  ],
+  "sourceBundleOmissions": "Five excluded MIT crates have publisher license/author declarations but no original standalone notice. Canonical templates remain marked as canonical; no copyright holders or years were invented."
+}

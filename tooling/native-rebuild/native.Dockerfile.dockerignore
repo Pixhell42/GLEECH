@@ -1,0 +1,10 @@
+*
+!upstream/build/
+!upstream/build/**
+!pkg/
+!pkg/**
+!vendor/
+!vendor/**
+!vendor-config.toml
+!build-inputs.json
+!native.Dockerfile

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discord Community
+    url: https://discord.gg/b7Mq8fjvk
+    about: Discuss art, presets, development and support.
+  - name: Private security reporting
+    url: https://github.com/Pixhell42/GLEECH/blob/main/SECURITY.md
+    about: Read the private reporting instructions before sharing vulnerability details.

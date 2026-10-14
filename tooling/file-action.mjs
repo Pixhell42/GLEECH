@@ -1,0 +1,25 @@
+// Native menu clicks blur active text fields, just like the former toolbar actions.
+export async function fileAction(page, name) {
+  const toggle = page.getByRole('button', { name: 'File menu', exact: true });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  const groups = {
+    Save: ['Save project Ctrl+S', 'Save project as… Ctrl+Shift+S'],
+    Edit: ['Copy Ctrl+C', 'Paste Ctrl+V'],
+    Export: ['Export image…', 'Quick PNG Export Ctrl+Shift+E'],
+    Library: [
+      'Filters and Presets',
+      'Open sample image',
+      'Save Stack as Preset',
+      'Import Preset',
+      'Add Shader',
+    ],
+    Community: ['Support GLEECH', 'Discord Community', 'Bug Report', 'Feature Request'],
+  };
+  const group = Object.entries(groups).find(([, actions]) => actions.includes(name))?.[0];
+  if (group)
+    await page
+      .locator('.file-menu-items')
+      .getByRole('button', { name: group, exact: true })
+      .click();
+  await page.locator('.file-menu-items').getByRole('button', { name, exact: true }).click();
+}

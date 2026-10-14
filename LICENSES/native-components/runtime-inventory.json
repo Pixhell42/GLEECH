@@ -1,0 +1,660 @@
+[
+  {
+    "component": "llvm",
+    "version": "23.1.2",
+    "sourceArchive": "llvm-project-23.1.2.src.tar.xz",
+    "sourceSHA256": "c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a",
+    "scope": "Compiler/runtime source notice superset; test/other-target notices may be included. The compiler executable itself is not shipped.",
+    "notices": [
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/LICENSE.TXT",
+        "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+        "bytes": 15141,
+        "archivePath": "llvm-project-23.1.2.src/LICENSE.TXT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/compiler-rt/LICENSE.TXT",
+        "sha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+        "bytes": 16708,
+        "archivePath": "llvm-project-23.1.2.src/compiler-rt/LICENSE.TXT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/libcxx/LICENSE.TXT",
+        "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+        "bytes": 16703,
+        "archivePath": "llvm-project-23.1.2.src/libcxx/LICENSE.TXT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/libcxxabi/LICENSE.TXT",
+        "sha256": "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c",
+        "bytes": 16706,
+        "archivePath": "llvm-project-23.1.2.src/libcxxabi/LICENSE.TXT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/libunwind/LICENSE.TXT",
+        "sha256": "b5efebcaca80879234098e52d1725e6d9eb8fb96a19fce625d39184b705f7b6d",
+        "bytes": 16706,
+        "archivePath": "llvm-project-23.1.2.src/libunwind/LICENSE.TXT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/compiler-rt/CREDITS.TXT",
+        "bytes": 1049,
+        "sha256": "a9901f47a089da41e4690682d00ce4cedaa2baf41fedbe79beee366d43ac2461",
+        "archivePath": "llvm-project-23.1.2.src/compiler-rt/CREDITS.TXT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/libcxx/CREDITS.TXT",
+        "bytes": 4175,
+        "sha256": "f39081875d1c5c35aab256b676e94003b453ecb2a1cae14026dfd23804dc97b2",
+        "archivePath": "llvm-project-23.1.2.src/libcxx/CREDITS.TXT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/llvm/23.1.2/libcxxabi/CREDITS.TXT",
+        "bytes": 1660,
+        "sha256": "a259fff28a51623f14917dd68f97f3af7804984087ddc1bfd8196d08ebb75b83",
+        "archivePath": "llvm-project-23.1.2.src/libcxxabi/CREDITS.TXT"
+      }
+    ]
+  },
+  {
+    "component": "rust",
+    "version": "nightly",
+    "sourceArchive": "rustc-nightly-src.tar.xz",
+    "sourceSHA256": "f2c139528ba025f1141935df4f634e18db614b9b3b1cf2ea59e3675a6ade89f3",
+    "scope": "Compiler/runtime source notice superset; test/other-target notices may be included. The compiler executable itself is not shipped.",
+    "notices": [
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/adler2-2.0.1/LICENSE-0BSD",
+        "sha256": "861399f8c21c042b110517e76dc6b63a2b334276c8cf17412fc3c8908ca8dc17",
+        "bytes": 665,
+        "archivePath": "rustc-nightly-src/library/vendor/adler2-2.0.1/LICENSE-0BSD"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wit-bindgen-0.62.0/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/wit-bindgen-0.62.0/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wasip3-0.9.0+wasi-0.3.0/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/wasip3-0.9.0+wasi-0.3.0/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand_xorshift-0.4.0/LICENSE-APACHE",
+        "sha256": "35242e7a83f69875e6edeff02291e688c97caafe2f8902e4e19b49d3e78b4cab",
+        "bytes": 9724,
+        "archivePath": "rustc-nightly-src/library/vendor/rand_xorshift-0.4.0/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/gimli-0.34.0/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/gimli-0.34.0/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/unwinding-0.2.10/LICENSE-APACHE",
+        "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+        "bytes": 9723,
+        "archivePath": "rustc-nightly-src/library/vendor/unwinding-0.2.10/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/adler2-2.0.1/LICENSE-APACHE",
+        "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb",
+        "bytes": 10860,
+        "archivePath": "rustc-nightly-src/library/vendor/adler2-2.0.1/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/shlex-2.0.1/LICENSE-APACHE",
+        "sha256": "553fffcd9b1cb158bc3e9edc35da85ca5c3b3d7d2e61c883ebcfa8a65814b583",
+        "bytes": 566,
+        "archivePath": "rustc-nightly-src/library/vendor/shlex-2.0.1/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/hashbrown-0.17.1/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/hashbrown-0.17.1/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/addr2line-0.27.1/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/addr2line-0.27.1/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/object-0.39.1/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/object-0.39.1/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/find-msvc-tools-0.1.11/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/find-msvc-tools-0.1.11/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wasip2-2.0.1+wasi-0.2.12/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/wasip2-2.0.1+wasi-0.2.12/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/cc-1.4.3/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/cc-1.4.3/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/hermit-abi-0.5.3/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/hermit-abi-0.5.3/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/cfg-if-1.0.4/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/cfg-if-1.0.4/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/moto-rt-0.17.4/LICENSE-APACHE",
+        "sha256": "69fef7b0f322a65554156141f2bc6256ed0bb78cba7e49f0d8829d7ec4ee62cd",
+        "bytes": 10851,
+        "archivePath": "rustc-nightly-src/library/vendor/moto-rt-0.17.4/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/dlmalloc-0.2.14/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/dlmalloc-0.2.14/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/getopts-0.2.24/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/getopts-0.2.24/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand-0.9.5/LICENSE-APACHE",
+        "sha256": "35242e7a83f69875e6edeff02291e688c97caafe2f8902e4e19b49d3e78b4cab",
+        "bytes": 9724,
+        "archivePath": "rustc-nightly-src/library/vendor/rand-0.9.5/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand_core-0.9.5/LICENSE-APACHE",
+        "sha256": "6df43f6f4b5d4587f3d8d71e45532c688fd168afa5fe89d571cb32fa09c4ef51",
+        "bytes": 10282,
+        "archivePath": "rustc-nightly-src/library/vendor/rand_core-0.9.5/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rustc-literal-escaper-0.0.8/LICENSE-APACHE",
+        "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+        "bytes": 9723,
+        "archivePath": "rustc-nightly-src/library/vendor/rustc-literal-escaper-0.0.8/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rustc-demangle-0.1.28/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/vendor/rustc-demangle-0.1.28/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/libc-0.2.189/LICENSE-APACHE",
+        "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+        "bytes": 9723,
+        "archivePath": "rustc-nightly-src/library/vendor/libc-0.2.189/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/LICENSE-APACHE",
+        "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+        "bytes": 9723,
+        "archivePath": "rustc-nightly-src/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/portable-simd/LICENSE-APACHE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "bytes": 11358,
+        "archivePath": "rustc-nightly-src/library/portable-simd/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/portable-simd/crates/core_simd/LICENSE-APACHE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "bytes": 11358,
+        "archivePath": "rustc-nightly-src/library/portable-simd/crates/core_simd/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/backtrace/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/backtrace/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/stdarch/crates/core_arch/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/stdarch/crates/core_arch/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/stdarch/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/stdarch/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/stdarch/crates/intrinsic-test/LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847,
+        "archivePath": "rustc-nightly-src/library/stdarch/crates/intrinsic-test/LICENSE-APACHE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/foldhash-0.2.0/LICENSE",
+        "sha256": "b1181a40b2a7b25cf66fd01481713bc1005df082c53ef73e851e55071b102744",
+        "bytes": 856,
+        "archivePath": "rustc-nightly-src/library/vendor/foldhash-0.2.0/LICENSE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/miniz_oxide-0.9.1/LICENSE",
+        "sha256": "4108245a1f2df9d4e94df8abed5b4ba0759bb2f9b40a6b939f1be141077ae50b",
+        "bytes": 1213,
+        "archivePath": "rustc-nightly-src/library/vendor/miniz_oxide-0.9.1/LICENSE"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/memchr-2.8.3/COPYING",
+        "sha256": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f",
+        "bytes": 126,
+        "archivePath": "rustc-nightly-src/library/vendor/memchr-2.8.3/COPYING"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand_xorshift-0.4.0/COPYRIGHT",
+        "sha256": "90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5",
+        "bytes": 569,
+        "archivePath": "rustc-nightly-src/library/vendor/rand_xorshift-0.4.0/COPYRIGHT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand-0.9.5/COPYRIGHT",
+        "sha256": "90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5",
+        "bytes": 569,
+        "archivePath": "rustc-nightly-src/library/vendor/rand-0.9.5/COPYRIGHT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand_core-0.9.5/COPYRIGHT",
+        "sha256": "90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5",
+        "bytes": 569,
+        "archivePath": "rustc-nightly-src/library/vendor/rand_core-0.9.5/COPYRIGHT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/COPYRIGHT",
+        "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+        "bytes": 1571,
+        "archivePath": "rustc-nightly-src/COPYRIGHT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wit-bindgen-0.62.0/LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023,
+        "archivePath": "rustc-nightly-src/library/vendor/wit-bindgen-0.62.0/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wasip3-0.9.0+wasi-0.3.0/LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023,
+        "archivePath": "rustc-nightly-src/library/vendor/wasip3-0.9.0+wasi-0.3.0/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand_xorshift-0.4.0/LICENSE-MIT",
+        "sha256": "209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b",
+        "bytes": 1117,
+        "archivePath": "rustc-nightly-src/library/vendor/rand_xorshift-0.4.0/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/gimli-0.34.0/LICENSE-MIT",
+        "sha256": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
+        "bytes": 1071,
+        "archivePath": "rustc-nightly-src/library/vendor/gimli-0.34.0/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/unwinding-0.2.10/LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023,
+        "archivePath": "rustc-nightly-src/library/vendor/unwinding-0.2.10/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/adler2-2.0.1/LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023,
+        "archivePath": "rustc-nightly-src/library/vendor/adler2-2.0.1/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/shlex-2.0.1/LICENSE-MIT",
+        "sha256": "4455bf75a91154108304cb283e0fea9948c14f13e20d60887cf2552449dea3b1",
+        "bytes": 1092,
+        "archivePath": "rustc-nightly-src/library/vendor/shlex-2.0.1/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/hashbrown-0.17.1/LICENSE-MIT",
+        "sha256": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2",
+        "bytes": 1060,
+        "archivePath": "rustc-nightly-src/library/vendor/hashbrown-0.17.1/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/addr2line-0.27.1/LICENSE-MIT",
+        "sha256": "e99d88d232bf57d70f0fb87f6b496d44b6653f99f8a63d250a54c61ea4bcde40",
+        "bytes": 1069,
+        "archivePath": "rustc-nightly-src/library/vendor/addr2line-0.27.1/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/object-0.39.1/LICENSE-MIT",
+        "sha256": "0b74dfa0bcee5c420c6b7f67b4b2658f9ab8388c97b8e733975f2cecbdd668a6",
+        "bytes": 1064,
+        "archivePath": "rustc-nightly-src/library/vendor/object-0.39.1/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/find-msvc-tools-0.1.11/LICENSE-MIT",
+        "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+        "bytes": 1057,
+        "archivePath": "rustc-nightly-src/library/vendor/find-msvc-tools-0.1.11/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wasip2-2.0.1+wasi-0.2.12/LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023,
+        "archivePath": "rustc-nightly-src/library/vendor/wasip2-2.0.1+wasi-0.2.12/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/cc-1.4.3/LICENSE-MIT",
+        "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+        "bytes": 1057,
+        "archivePath": "rustc-nightly-src/library/vendor/cc-1.4.3/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/hermit-abi-0.5.3/LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023,
+        "archivePath": "rustc-nightly-src/library/vendor/hermit-abi-0.5.3/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/memchr-2.8.3/LICENSE-MIT",
+        "sha256": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f",
+        "bytes": 1081,
+        "archivePath": "rustc-nightly-src/library/vendor/memchr-2.8.3/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/cfg-if-1.0.4/LICENSE-MIT",
+        "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+        "bytes": 1057,
+        "archivePath": "rustc-nightly-src/library/vendor/cfg-if-1.0.4/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/moto-rt-0.17.4/LICENSE-MIT",
+        "sha256": "a7c936ff1ed8fa340172d42a98185afee078f818e907da69f3a8e336b1623b4b",
+        "bytes": 1075,
+        "archivePath": "rustc-nightly-src/library/vendor/moto-rt-0.17.4/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/dlmalloc-0.2.14/LICENSE-MIT",
+        "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+        "bytes": 1057,
+        "archivePath": "rustc-nightly-src/library/vendor/dlmalloc-0.2.14/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/getopts-0.2.24/LICENSE-MIT",
+        "sha256": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+        "bytes": 1071,
+        "archivePath": "rustc-nightly-src/library/vendor/getopts-0.2.24/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand-0.9.5/LICENSE-MIT",
+        "sha256": "209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b",
+        "bytes": 1117,
+        "archivePath": "rustc-nightly-src/library/vendor/rand-0.9.5/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rand_core-0.9.5/LICENSE-MIT",
+        "sha256": "209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b",
+        "bytes": 1117,
+        "archivePath": "rustc-nightly-src/library/vendor/rand_core-0.9.5/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rustc-literal-escaper-0.0.8/LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023,
+        "archivePath": "rustc-nightly-src/library/vendor/rustc-literal-escaper-0.0.8/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/rustc-demangle-0.1.28/LICENSE-MIT",
+        "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+        "bytes": 1057,
+        "archivePath": "rustc-nightly-src/library/vendor/rustc-demangle-0.1.28/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/libc-0.2.189/LICENSE-MIT",
+        "sha256": "123a331b5dbf04c30097fa43b8f858bc85df671fe776de498d01f3d6b7c1f69e",
+        "bytes": 1066,
+        "archivePath": "rustc-nightly-src/library/vendor/libc-0.2.189/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/LICENSE-MIT",
+        "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+        "bytes": 1068,
+        "archivePath": "rustc-nightly-src/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/portable-simd/LICENSE-MIT",
+        "sha256": "eb07d497d26e6d68fbc76e793f5e5c9cfa197df2a580e47383569c287a55edf9",
+        "bytes": 1071,
+        "archivePath": "rustc-nightly-src/library/portable-simd/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/portable-simd/crates/core_simd/LICENSE-MIT",
+        "sha256": "eb07d497d26e6d68fbc76e793f5e5c9cfa197df2a580e47383569c287a55edf9",
+        "bytes": 1071,
+        "archivePath": "rustc-nightly-src/library/portable-simd/crates/core_simd/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/backtrace/LICENSE-MIT",
+        "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397",
+        "bytes": 1057,
+        "archivePath": "rustc-nightly-src/library/backtrace/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/stdarch/crates/core_arch/LICENSE-MIT",
+        "sha256": "29662666b44dff84977b46e05642cdef910bc3a93a17b5fd86e632bafa59cf21",
+        "bytes": 1071,
+        "archivePath": "rustc-nightly-src/library/stdarch/crates/core_arch/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/stdarch/LICENSE-MIT",
+        "sha256": "29662666b44dff84977b46e05642cdef910bc3a93a17b5fd86e632bafa59cf21",
+        "bytes": 1071,
+        "archivePath": "rustc-nightly-src/library/stdarch/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/stdarch/crates/intrinsic-test/LICENSE-MIT",
+        "sha256": "8bc20184c0ddf3006df05e89fdf7193b33dbe4c751ae59d6bb1835f71bbe70da",
+        "bytes": 1076,
+        "archivePath": "rustc-nightly-src/library/stdarch/crates/intrinsic-test/LICENSE-MIT"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/miniz_oxide-0.9.1/LICENSE-ZLIB.md",
+        "sha256": "0a54e647fe54104658b5e563c04c6f9edf251710e47bce692e0bd990a4ddaa39",
+        "bytes": 984,
+        "archivePath": "rustc-nightly-src/library/vendor/miniz_oxide-0.9.1/LICENSE-ZLIB.md"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/miniz_oxide-0.9.1/LICENSE-APACHE.md",
+        "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+        "bytes": 10174,
+        "archivePath": "rustc-nightly-src/library/vendor/miniz_oxide-0.9.1/LICENSE-APACHE.md"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/miniz_oxide-0.9.1/LICENSE-MIT.md",
+        "sha256": "799e9ca9d179295ef372f25d3769cdda7d25bb2668add6a6a1e22d1e4c678b8d",
+        "bytes": 1212,
+        "archivePath": "rustc-nightly-src/library/vendor/miniz_oxide-0.9.1/LICENSE-MIT.md"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/REUSE.toml",
+        "sha256": "bc1e72e255bbd9ac52491e99c61f5110dee151a3ccada2f8e0d5ac94472fc14e",
+        "bytes": 6610,
+        "archivePath": "rustc-nightly-src/REUSE.toml"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wit-bindgen-0.62.0/LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+        "bytes": 12243,
+        "archivePath": "rustc-nightly-src/library/vendor/wit-bindgen-0.62.0/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wasip3-0.9.0+wasi-0.3.0/LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+        "bytes": 12243,
+        "archivePath": "rustc-nightly-src/library/vendor/wasip3-0.9.0+wasi-0.3.0/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/vendor/wasip2-2.0.1+wasi-0.2.12/LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+        "bytes": 12243,
+        "archivePath": "rustc-nightly-src/library/vendor/wasip2-2.0.1+wasi-0.2.12/LICENSE-Apache-2.0_WITH_LLVM-exception"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/license-metadata.json",
+        "sha256": "17885c98a94faa9b4d695c379636852c24fa4445ed3c86214405e9fc269a8622",
+        "bytes": 9334,
+        "archivePath": "rustc-nightly-src/license-metadata.json"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/compiler-builtins/libm/LICENSE.txt",
+        "sha256": "3823dda7cf046602f4b4e77ec8e227863dc4736037cc85bb33d9f19febe16bb7",
+        "bytes": 14088,
+        "archivePath": "rustc-nightly-src/library/compiler-builtins/libm/LICENSE.txt"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/library/compiler-builtins/LICENSE.txt",
+        "sha256": "ab6eec6caf0fa5775e411c7a8bc6a45c4ef2956b0980b157ab74fc5cd62a928b",
+        "bytes": 15078,
+        "archivePath": "rustc-nightly-src/library/compiler-builtins/LICENSE.txt"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/rust/nightly/COPYRIGHT-library.html",
+        "sha256": "fd12b997fe3611d6b08e7f1429da61c428b21a1e57163ca63299db75e69e12da",
+        "bytes": 4433,
+        "origin": "Generated by the recorded independent compiler build; retained unchanged. Supplemental, not a replacement for original source notices."
+      }
+    ]
+  },
+  {
+    "component": "mingw-w64",
+    "version": "57b5950",
+    "sourceArchive": "mingw-w64-mingw-w64-57b5950.tar.gz",
+    "sourceSHA256": "7362a2dc2d289dde4617e21e5d7a006c87c19e80793c8928a794b654ed6e2bcd",
+    "scope": "Compiler/runtime source notice superset; test/other-target notices may be included. The compiler executable itself is not shipped.",
+    "notices": [
+      {
+        "path": "LICENSES/native-components/toolchain/mingw-w64/57b5950/COPYING",
+        "sha256": "99a69660981156c21336fdb5661f89341b013c94e4bf9e1c7467b4745718397f",
+        "bytes": 2326,
+        "archivePath": "mingw-w64-mingw-w64-57b5950/COPYING"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/mingw-w64/57b5950/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt",
+        "sha256": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f",
+        "bytes": 12155,
+        "archivePath": "mingw-w64-mingw-w64-57b5950/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/mingw-w64/57b5950/COPYING.MinGW-w64/COPYING.MinGW-w64.txt",
+        "sha256": "f38e6194bd3bfa1b654f118e5acefe0aead437bbe669eee43957ccc65a7127f1",
+        "bytes": 5905,
+        "archivePath": "mingw-w64-mingw-w64-57b5950/COPYING.MinGW-w64/COPYING.MinGW-w64.txt"
+      },
+      {
+        "path": "LICENSES/native-components/toolchain/mingw-w64/57b5950/mingw-w64-crt/profile/COPYING",
+        "sha256": "dcc100d4161cc0b7177545ab6e47216f84857cda3843847c792a25289852dcaa",
+        "bytes": 18007,
+        "archivePath": "mingw-w64-mingw-w64-57b5950/mingw-w64-crt/profile/COPYING"
+      }
+    ]
+  },
+  {
+    "component": "glib-embedded",
+    "version": "2.90.0",
+    "sourceArchive": "glib-2.90.0.tar.xz",
+    "sourceSHA256": "17d15cac2af80a33271127408e0abc2748eb297c595c2a26409e81e14e7d1b8f",
+    "notices": [
+      {
+        "path": "LICENSES/native-components/embedded/glib/2.90.0/subprojects/gvdb/COPYING",
+        "sha256": "bdbcdaa7858872393e9d6b216bbdc8a23e99d98dd6cdb7cda19458025b9e19fc",
+        "bytes": 26445,
+        "archivePath": "glib-2.90.0/subprojects/gvdb/COPYING",
+        "extraction": "Original complete notice"
+      },
+      {
+        "path": "LICENSES/native-components/embedded/glib/2.90.0/subprojects/gvdb/LICENSES/LGPL-2.1-or-later.txt",
+        "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2",
+        "bytes": 26001,
+        "archivePath": "glib-2.90.0/subprojects/gvdb/LICENSES/LGPL-2.1-or-later.txt",
+        "extraction": "Original complete notice"
+      },
+      {
+        "path": "LICENSES/native-components/embedded/glib/2.90.0/subprojects/gvdb/gvdb/gvdb-builder.c.notice.txt",
+        "sha256": "a7b794bebe665597b8e63ebcaac039957818f380d86ebee67a10f528e78879c3",
+        "bytes": 809,
+        "archivePath": "glib-2.90.0/subprojects/gvdb/gvdb/gvdb-builder.c",
+        "extraction": "Verbatim leading source comment"
+      },
+      {
+        "path": "LICENSES/native-components/embedded/glib/2.90.0/subprojects/gvdb/gvdb/gvdb-reader.c.notice.txt",
+        "sha256": "a7b794bebe665597b8e63ebcaac039957818f380d86ebee67a10f528e78879c3",
+        "bytes": 809,
+        "archivePath": "glib-2.90.0/subprojects/gvdb/gvdb/gvdb-reader.c",
+        "extraction": "Verbatim leading source comment"
+      }
+    ]
+  },
+  {
+    "component": "vips-embedded",
+    "version": "8.18.7",
+    "sourceArchive": "vips-8.18.7.tar.xz",
+    "sourceSHA256": "5baaead3b0bb20ffdb9e9ff09aa9fda08620923df77b63b436654cb5e0b3bf94",
+    "notices": [
+      {
+        "path": "LICENSES/native-components/embedded/vips/8.18.7/libvips/foreign/libnsgif/COPYING",
+        "sha256": "1469b759cf18e43c6e1b4ff892307d3962cbbb337ac497620d6690a219fad10c",
+        "bytes": 1133,
+        "archivePath": "vips-8.18.7/libvips/foreign/libnsgif/COPYING",
+        "extraction": "Original complete notice"
+      },
+      {
+        "path": "LICENSES/native-components/embedded/vips/8.18.7/libvips/foreign/libnsgif/gif.c.notice.txt",
+        "sha256": "025d4f1d5d0b3b7dd710b6d2deacfda005da787c440db2eaee7f5866c7ff709c",
+        "bytes": 371,
+        "archivePath": "vips-8.18.7/libvips/foreign/libnsgif/gif.c",
+        "extraction": "Verbatim leading source comment"
+      },
+      {
+        "path": "LICENSES/native-components/embedded/vips/8.18.7/libvips/foreign/libnsgif/lzw.c.notice.txt",
+        "sha256": "bd14102c29effcccfea71fcc5e9853a20e55c65768eca2407160a8ae0636e084",
+        "bytes": 313,
+        "archivePath": "vips-8.18.7/libvips/foreign/libnsgif/lzw.c",
+        "extraction": "Verbatim leading source comment"
+      },
+      {
+        "path": "LICENSES/native-components/embedded/vips/8.18.7/libvips/foreign/libnsgif/test/cli.c.notice.txt",
+        "sha256": "3fcb646ed096480562e02faea6388a0372a6004b30964ef0bb0db1ad53945992",
+        "bytes": 110,
+        "archivePath": "vips-8.18.7/libvips/foreign/libnsgif/test/cli.c",
+        "extraction": "Verbatim leading source comment"
+      },
+      {
+        "path": "LICENSES/native-components/embedded/vips/8.18.7/libvips/foreign/libnsgif/test/nsgif.c.notice.txt",
+        "sha256": "e006e79b268cd42c345be998d16627778acc85903eaa970f95ced1366130f9b7",
+        "bytes": 354,
+        "archivePath": "vips-8.18.7/libvips/foreign/libnsgif/test/nsgif.c",
+        "extraction": "Verbatim leading source comment"
+      }
+    ]
+  }
+]

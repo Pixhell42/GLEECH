@@ -1,0 +1,366 @@
+{
+  "version": 1,
+  "convention": "R = horizontal, G = vertical, B = 128. Byte 128 is neutral; 0 is -1, 255 is +1. Positive X moves right; positive Y moves down.",
+  "maps": [
+    {
+      "id": "horizontal-flow",
+      "name": "Horizontal Flow",
+      "category": "Flow",
+      "description": "Uniform rightward drift; a simple direction and travel test.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "4f994468ba7c2eb65b36230b157c1601ee9d3a427fa6a4b690cddc8684d2eee0"
+    },
+    {
+      "id": "diagonal-flow",
+      "name": "Diagonal Flow",
+      "category": "Flow",
+      "description": "Uniform down-right drift; rotate or invert for other directions.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "b687db11312d0260f5a9ae07e178bd0847a4f463f585362e4c7357a44505f772"
+    },
+    {
+      "id": "radial-outflow",
+      "name": "Radial Outflow",
+      "category": "Flow",
+      "description": "Move outward from the center with distance-scaled strength.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "eb3c2677808c0a032938c9b60159edcd18c27c6afb8c3b24db27af94774ebbd6"
+    },
+    {
+      "id": "radial-inflow",
+      "name": "Radial Inflow",
+      "category": "Flow",
+      "description": "Pull inward toward the center with distance-scaled strength.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "aa05c6c7541d4199d9ccb0b974b37ed0632cc6e6ffe05b8e53e5d1bec9b45bf8"
+    },
+    {
+      "id": "clockwise-vortex",
+      "name": "Clockwise Vortex",
+      "category": "Swirl",
+      "description": "Clockwise circular flow, calm at the center and stronger toward the edges.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "1cc7ebc73fbe859c667f207ae4454ed0d5936f525f4dae07ee61523194f39807"
+    },
+    {
+      "id": "counterclockwise-vortex",
+      "name": "Counterclockwise Vortex",
+      "category": "Swirl",
+      "description": "Counterclockwise circular flow with a still center.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "7863839e557b9dfa5aad9a6af779d5381a986f1ca5b91655b62089dbfd46e22b"
+    },
+    {
+      "id": "inward-spiral",
+      "name": "Inward Spiral",
+      "category": "Swirl",
+      "description": "Clockwise rotation combined with an inward pull.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "04ac146d863f428cbad10a347ae1fccab44877d2d8fa9b1c1eb1892bf6a7aa1d"
+    },
+    {
+      "id": "outward-spiral",
+      "name": "Outward Spiral",
+      "category": "Swirl",
+      "description": "Clockwise rotation combined with an outward push.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "3824983d96f299456d1d1005d99c8c49e7212839442f6410c5c9d41320c6f48e"
+    },
+    {
+      "id": "horizontal-shear",
+      "name": "Horizontal Shear",
+      "category": "Geometry",
+      "description": "Opposing horizontal travel above and below the center.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "f3fa445b44b64a532492e7a936dabd18e2af73c845b0c11349069b1aa766024c"
+    },
+    {
+      "id": "vertical-shear",
+      "name": "Vertical Shear",
+      "category": "Geometry",
+      "description": "Opposing vertical travel left and right of the center.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "6da028cb9f9e96565e85323c773ecc7b0b9a82366d1b9d6b844650388b50bc7c"
+    },
+    {
+      "id": "saddle-flow",
+      "name": "Saddle Flow",
+      "category": "Geometry",
+      "description": "Expand horizontally while contracting vertically.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "807547ab3ee1c3b5fc32997bc32637cbc6c38a1fed06c5a4babb77705ee3cd90"
+    },
+    {
+      "id": "wave-flow",
+      "name": "Wave Flow",
+      "category": "Wave",
+      "description": "Alternating horizontal waves with a smaller vertical ripple.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "31ef481c3f353eb6cc15726017fb1c7205b8dfe40b09e07a962ef1c7c16f643d"
+    },
+    {
+      "id": "radial-ripples",
+      "name": "Radial Ripples",
+      "category": "Wave",
+      "description": "Concentric rings alternating inward and outward motion.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "aead6dab772b2816403b7218a3b23c13c6163f07a1ff1f424fd082db03f224c6"
+    },
+    {
+      "id": "checker-drift",
+      "name": "Checker Drift",
+      "category": "Geometry",
+      "description": "Hard checkerboard cells move in alternating diagonal directions.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "fca5f07d360db3016266ca145642d6f4819ced9123278806a41d2a82ea69e0e2"
+    },
+    {
+      "id": "tiled-vortices",
+      "name": "Tiled Vortices",
+      "category": "Swirl",
+      "description": "An array of smooth alternating eddies, with still points between cells.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "c3f398531bb5acb70168033755446866721060719e1bf8b20ff0f876defb41c6"
+    },
+    {
+      "id": "soft-turbulence",
+      "name": "Soft Turbulence",
+      "category": "Organic",
+      "description": "Smooth independent value-noise vectors; broad cloud-like drifting.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "6d4c0e593c110f3faac809b111c70f1ed650b670cc73b2d29f8cd4e11c5ef9bc"
+    },
+    {
+      "id": "curl-flow",
+      "name": "Curl Flow",
+      "category": "Organic",
+      "description": "Rotated gradients of a smooth noise potential; curved circulation.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "639ee4b2c835cd6748eaec1571f69645c76879ff87ddd3b69ec55b9f9a04780f"
+    },
+    {
+      "id": "layered-eddies",
+      "name": "Layered Eddies",
+      "category": "Organic",
+      "description": "Overlapping seeded vortex structures with varied scale and spin.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "34ce1a308479085eb58408da26c888fc3e3b77271c73939f1eb30b5155db23f9"
+    },
+    {
+      "id": "cellular-drift",
+      "name": "Cellular Drift",
+      "category": "Broken",
+      "description": "Nearest seeded cells each carry a fixed travel direction and distance.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "2d1240b6c4e778a228e7ca8c0194f46edae3398979239b52d18f064fd0192148"
+    },
+    {
+      "id": "broken-blocks",
+      "name": "Broken Blocks",
+      "category": "Broken",
+      "description": "Coarse broken bands and blocks with independent seeded vectors.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "32a9de1cc88aad7a7eaf4a4821a0c5fffc914fd39d4b21807586de082c292305"
+    },
+    {
+      "id": "pinwheel-sectors",
+      "name": "Pinwheel Sectors",
+      "category": "Geometry",
+      "description": "Twelve alternating angular sectors turn into a sharp geometric pinwheel.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "7017b8595a80bcab2595c5055074d3de8844936dc8c67f7bec9cade65a697c6a"
+    },
+    {
+      "id": "diamond-orbits",
+      "name": "Diamond Orbits",
+      "category": "Geometry",
+      "description": "Circulate around nested diamond-shaped contours with sharp corners.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "1db0d0ce8a9eadf50ceddf294e9209f1c3a640f9c669493ea3e391611cccf581"
+    },
+    {
+      "id": "square-circulation",
+      "name": "Square Circulation",
+      "category": "Geometry",
+      "description": "Follow square contours around the center, switching at diagonal corners.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "b859e78652dd9a3c74d8204b9c49e94b7c9cca96402e117bd890115d972fccb1"
+    },
+    {
+      "id": "hexagonal-channels",
+      "name": "Hexagonal Channels",
+      "category": "Geometry",
+      "description": "Six discrete directions turn a swirling field into hexagonal channels.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "2b4121d97e3356ff5fc9a28ed03448314895643c35a59226e98b69706289525e"
+    },
+    {
+      "id": "alternating-spiral-rings",
+      "name": "Alternating Spiral Rings",
+      "category": "Swirl",
+      "description": "Concentric bands alternate between inward and outward spiral motion.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "18492f2133353fdf6eb93afa14fd80375cc0ce23cedd868451f8434d41d7207c"
+    },
+    {
+      "id": "twin-vortex",
+      "name": "Twin Vortex",
+      "category": "Swirl",
+      "description": "Two opposed rotating structures meet along a central seam.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "fbf80779dde744f2794ba9d25068c8ff6ec2741e7abcfb0cf7ecd21cc8503663"
+    },
+    {
+      "id": "quadrupole",
+      "name": "Quadrupole",
+      "category": "Geometry",
+      "description": "A four-lobed saddle structure produces opposing streams and curved seams.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "bedabfad24d5a527996d27bce76972d698774b4f75ade9b05eee60f049629e44"
+    },
+    {
+      "id": "vortex-street",
+      "name": "Vortex Street",
+      "category": "Swirl",
+      "description": "Alternating rows of offset eddies carry a gentle rightward current.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "a830653f20d9e4a581f8c1b1f3eb1c644a41fedeccc829795c7c4af0327b3466"
+    },
+    {
+      "id": "sine-braid",
+      "name": "Sine Braid",
+      "category": "Wave",
+      "description": "Interwoven diagonal sine currents make smooth braided displacement.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "c4531ca04762837cfee96281bad51968c2af00fe0b323338e6c61e74353e808e"
+    },
+    {
+      "id": "crossed-ripples",
+      "name": "Crossed Ripples",
+      "category": "Wave",
+      "description": "Two off-center ripple systems intersect in an interference field.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "88a5e7308bcd0a9bac88989bde4fb455caa16de12865b17b7b3f659f87747e48"
+    },
+    {
+      "id": "chevron-current",
+      "name": "Chevron Current",
+      "category": "Geometry",
+      "description": "Alternating V-shaped bands make angular zigzag streams.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "3eb397e5d3213d68929f5a91b53c8419a0d76734cd349cfc39dfc0a10100b098"
+    },
+    {
+      "id": "stepped-columns",
+      "name": "Stepped Columns",
+      "category": "Broken",
+      "description": "Columns advance through four stepped travel directions.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "9d77b0d650842008d64c1ac2efce25b90d0019596c10a6c0735d4aeeb320b43e"
+    },
+    {
+      "id": "diagonal-shards",
+      "name": "Diagonal Shards",
+      "category": "Broken",
+      "description": "Seeded diagonal slices travel independently like broken panes.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "d338ae177c6c7669bd01aa5f888ad829ef1cdbdcfaee82e2e093c7827707e2ba"
+    },
+    {
+      "id": "barcode-slip",
+      "name": "Barcode Slip",
+      "category": "Broken",
+      "description": "Narrow vertical strips have seeded vertical slip and smaller sideways errors.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "8ab7207ce491e5c5dd9c59ae70316b2383e4d33c600d2b62fec5c341d8484508"
+    },
+    {
+      "id": "quantized-turbulence",
+      "name": "Quantized Turbulence",
+      "category": "Broken",
+      "description": "Smooth noise directions snap to eight compass directions and four strengths.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "df354f313b55737e5dbffb58701c3b09e46d871b51dc9326bf423ba0ac921688"
+    },
+    {
+      "id": "multiscale-curl",
+      "name": "Multiscale Curl",
+      "category": "Organic",
+      "description": "Broad circulating currents carry smaller curls from a second noise octave.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "751375852d20baad01154c7ee783bf66e158fa2ef1c80ab5edadc7e5e5713a49"
+    },
+    {
+      "id": "ridged-current",
+      "name": "Ridged Current",
+      "category": "Organic",
+      "description": "Noise ridges modulate a smooth rotating current into clustered folds.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "7dec76c9b101f85bdd5d33c17d07f5a7f0395929973f192f4ae71cf93bafb5f8"
+    },
+    {
+      "id": "cellular-attractors",
+      "name": "Cellular Attractors",
+      "category": "Organic",
+      "description": "Each irregular cell pulls toward its own seeded center.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "966cd95f5b193867982bf89160d08f3a8de85e4cea0d00ae6e030f51ae1cb6a2"
+    },
+    {
+      "id": "cellular-orbits",
+      "name": "Cellular Orbits",
+      "category": "Swirl",
+      "description": "Small irregular cells circulate around seeded centers with hard field seams.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "66390d1033b17f84150f199b6aae925d2ba60c27f5a64ccaa5d17fab88708e0f"
+    },
+    {
+      "id": "shockwave-front",
+      "name": "Shockwave Front",
+      "category": "Wave",
+      "description": "An off-center elliptical shock front alternates radial push with circulating motion.",
+      "width": 2048,
+      "height": 2048,
+      "sha256": "10d9b40059f9116284d5dc8360759ee3e2fdfef255714bb7f164ea4d38908954"
+    }
+  ]
+}

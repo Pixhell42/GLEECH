@@ -1,0 +1,4 @@
+difflib v0.4.0
+└── predicates v3.1.4
+    [dev-dependencies]
+    └── librsvg v2.63.2 (/review/librsvg/rsvg)

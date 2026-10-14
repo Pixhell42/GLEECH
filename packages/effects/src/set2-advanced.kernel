@@ -1,0 +1,410 @@
+// Original scalar material algorithms. Build into f32 CPU and WGSL with
+// tooling/generate-advanced-shaders.mjs; no runtime code evaluation.
+function Palette(t,ch) {
+ let spectral=0.5+0.5*COS(t*6.283185+ch*2.094395+U(7));
+ return MIX(MIX(U(28+ch),U(24+ch),CLAMP(t,0,1)),spectral,U(11));
+}
+function Hue(r,g,b,angle,ch) {
+ let c=COS(angle);let s=SIN(angle);let y=0.299*r+0.587*g+0.114*b;
+ let i=0.596*r-0.274*g-0.322*b;let q=0.211*r-0.523*g+0.312*b;
+ let ii=i*c-q*s;let qq=i*s+q*c;
+ if(ch==0)return CLAMP(y+0.956*ii+0.621*qq,0,1);
+ if(ch==1)return CLAMP(y-0.272*ii-0.647*qq,0,1);
+ return CLAMP(y-1.106*ii+1.703*qq,0,1);
+}
+function Lum(u,v) {return (T(u,v,0)*0.2126+T(u,v,1)*0.7152+T(u,v,2)*0.0722)*T(u,v,3);}
+function Segment(x,y,ax,ay,bx,by) {
+ let dx=bx-ax;let dy=by-ay;
+ let t=CLAMP(((x-ax)*dx+(y-ay)*dy)/MAX(0.000001,dx*dx+dy*dy),0,1);
+ return SQRT((x-ax-dx*t)*(x-ax-dx*t)+(y-ay-dy*t)*(y-ay-dy*t));
+}
+function Mandel(x,y,limit) {
+ return M(x,y,limit);
+}
+function Safe(x) {if(ABS(x)<0.00001){if(x<0)return -0.00001;return 0.00001;}return x;}
+// Analytic ray intersections: sphere, box, capped cylinder and capped cone.
+function Primitive(ox,oy,oz,dx,dy,dz,r,shape) {
+ if(shape==2) {
+  let xa=(-r-ox)/Safe(dx);let xb=(r-ox)/Safe(dx);
+  let ya=(-r-oy)/Safe(dy);let yb=(r-oy)/Safe(dy);
+  let za=(-r-oz)/Safe(dz);let zb=(r-oz)/Safe(dz);
+  let entry=MAX(MAX(MIN(xa,xb),MIN(ya,yb)),MIN(za,zb));
+  let exit=MIN(MIN(MAX(xa,xb),MAX(ya,yb)),MAX(za,zb));
+  if(exit<MAX(0,entry))return 100;return MAX(0,entry);
+ }
+ let a=dx*dx+dy*dy+dz*dz;let b=2*(ox*dx+oy*dy+oz*dz);let cc=ox*ox+oy*oy+oz*oz-r*r;
+ if(shape==3){a=dx*dx+dz*dz;b=2*(ox*dx+oz*dz);cc=ox*ox+oz*oz-r*r;}
+ if(shape==4){a=dx*dx+dz*dz-dy*dy*0.25;b=2*(ox*dx+oz*dz+(r-oy)*dy*0.25);cc=ox*ox+oz*oz-(r-oy)*(r-oy)*0.25;}
+ // Move the quadratic origin close to its vertex before subtracting squared
+ // terms. Distant camera origins otherwise lose precision at silhouettes.
+ let shift=0;
+ if(ABS(a)>0.00001) {
+  // Keep the sign in the denominator: some shader optimizers mis-handle
+  // negated quotients after the shape-dependent coefficient assignments.
+  shift=b/(-2*a);
+  let x=ox+dx*shift;let y=oy+dy*shift;let z=oz+dz*shift;
+  b=2*(x*dx+y*dy+z*dz);cc=x*x+y*y+z*z-r*r;
+  if(shape==3){b=2*(x*dx+z*dz);cc=x*x+z*z-r*r;}
+  if(shape==4){b=2*(x*dx+z*dz+(r-y)*dy*0.25);cc=x*x+z*z-(r-y)*(r-y)*0.25;}
+ }
+ let disc=b*b-4*a*cc;let result=100;
+ if(disc>=0&&ABS(a)>0.00001) {
+  let root=SQRT(disc);let first=shift+(b+root)/(-2*a);let second=shift+(b-root)/(-2*a);
+  for(let i=0;i<2;i++) {
+   let t=first;if(i==1)t=second;
+   if(t>=0&&(shape<3||ABS(oy+dy*t)<=r))result=MIN(result,t);
+  }
+ }
+ if(shape>=3&&ABS(dy)>0.00001) {
+  for(let i=0;i<2;i++) {
+   let cap=-r;if(i==1)cap=r;
+   let t=(cap-oy)/dy;let x=ox+dx*t;let z=oz+dz*t;
+   let capRadius=r;if(shape==4&&i==1)capRadius=0;
+   if(t>=0&&x*x+z*z<=capRadius*capRadius)result=MIN(result,t);
+  }
+ }
+ return result;
+}
+function FoilDistance(x,y,z,u,v) {
+ let yaw=P(5)*0.0174533;let pitch=P(12)*0.0174533;
+ let rx=COS(yaw)*x-SIN(yaw)*z;let rz=SIN(yaw)*x+COS(yaw)*z;
+ let ry=COS(pitch)*y-SIN(pitch)*rz;rz=SIN(pitch)*y+COS(pitch)*rz;
+ let radius=P(4);let distance=SQRT(rx*rx+ry*ry+rz*rz)-radius;
+ if(P(3)>0) {
+  let q=SQRT(rx*rx+rz*rz)-radius*0.72;
+  distance=SQRT(q*q+ry*ry)-radius*0.22;
+  if(P(3)>1) {
+   let q2=SQRT(ry*ry+rz*rz)-radius*0.72;
+   distance=MIN(distance,SQRT(q2*q2+rx*rx)-radius*0.22);
+  }
+ }
+ let phase=U(4);let materialX=(COS(U(22))*rx-SIN(U(22))*ry)*P(6)*U(2)/5;
+ let materialY=(SIN(U(22))*rx+COS(U(22))*ry)*P(6)*U(2)/5;
+ let folds=SIN(materialX*8+phase)*SIN(materialY*6-phase+U(7));
+ let relief=(H(u,v)-0.5)*P(10);
+ return distance+(folds*P(7)+relief)*radius*0.065;
+}
+// Analytic coverage of curved silhouettes. Evaluate the closest point inside
+// the capped height interval, then feather over one canvas pixel.
+function PrimitiveCoverage(ox,oy,oz,dx,dy,dz,r,shape,pixel) {
+ if(shape==2)return 1;
+ let a=dx*dx+dy*dy+dz*dz;let b=2*(ox*dx+oy*dy+oz*dz);
+ if(shape==3){a=dx*dx+dz*dz;b=2*(ox*dx+oz*dz);}
+ if(shape==4){a=dx*dx+dz*dz-dy*dy*0.25;b=2*(ox*dx+oz*dz+(r-oy)*dy*0.25);}
+ let t=b/(-2*Safe(a));
+ if(shape>=3&&ABS(dy)>0.00001) {
+  let first=(-r-oy)/dy;let last=(r-oy)/dy;
+  t=CLAMP(t,MIN(first,last),MAX(first,last));
+  if(shape==4&&a<0) {
+   let x1=ox+dx*first;let z1=oz+dz*first;let x2=ox+dx*last;let z2=oz+dz*last;
+   if(x1*x1+z1*z1-r*r<x2*x2+z2*z2)t=first;else t=last;
+  }
+ }
+ let x=ox+dx*t;let y=oy+dy*t;let z=oz+dz*t;
+ let gap=SQRT(x*x+y*y+z*z)-r;
+ if(shape>=3)gap=SQRT(x*x+z*z)-r;
+ if(shape==4) {
+  let radius=(r-y)*0.5;
+  gap=(x*x+z*z-radius*radius)/MAX(0.00001,SQRT(4*x*x+4*z*z+radius*radius));
+ }
+ if(shape>=3&&ABS(dy)<=0.00001)gap=MAX(gap,ABS(oy)-r);
+ return CLAMP(0.5-gap/MAX(0.00001,pixel),0,1);
+}
+function Shade(kind,u,v,px,py) {
+ let phase=U(4);let seed=U(7);
+ let bx=(u-U(5))*U(0);let by=(v-U(6))*U(1);
+ let angle=U(22);let rotatedX=P(52)*bx-P(53)*by;
+ let rotatedY=P(53)*bx+P(52)*by;
+ let qx=rotatedX*U(2);let qy=rotatedY*U(2);
+ let aa=MAX(0.001,AA()*U(2));
+ let tone=0;let coverage=1;let sx=u;let sy=v;let lighting=1;
+ if(kind==0) {
+  let grid=P(4);let ux=FLOOR(u/grid)*grid+grid*0.5;let uy=FLOOR(v/grid)*grid+grid*0.5;
+  let wx=SIN(qy+phase+N(qx,qy)*6)*P(3)*0.12;
+  let wy=COS(qx-phase+seed)*P(3)*0.12;
+  let height=H(ux+wx,uy+wy);
+  let bands=height*P(2)+SIN(qx+qy+phase)*P(3);
+  let wave=SIN(bands*6.283185+phase+seed);
+  coverage=CLAMP((wave-(1-P(5)*2))/MAX(0.03,aa)+0.5,0,1);
+  tone=height;if(P(1)>0)tone=FLOOR(height*P(2))/P(2);
+  sx=ux+wx;sy=uy+wy;
+ } else if(kind==1) {
+  let flowx=SIN(qy*0.7+phase+seed);let flowy=COS(qx*0.6-phase);
+  if(U(23)>0.5){flowx=MIX(flowx,D(u,v,0),U(31));flowy=MIX(flowy,D(u,v,1),U(31));}
+  let dx=flowx*P(4);let dy=flowy*P(4);
+  coverage=0;
+  for(let j=0;j<6;j++) {
+   if(j>=P(6))break;
+   let xx=qx+dx*SIN(qy+j+phase)+j*0.37;
+   let yy=qy+dy*COS(qx-j+phase)+j*0.61;
+   let cell=FLOOR(xx);let row=FLOOR(yy*0.25);
+   let r=R(cell,row,j);
+   let width=P(5);if(P(1)==1)width=MIN(0.8,width*2.5);
+   let dist=ABS(xx-FLOOR(xx)-0.5);
+   let line=CLAMP((width-dist)/aa+0.5,0,1);
+   let along=yy*0.25-FLOOR(yy*0.25);
+   let length=P(3);if(P(1)==2)length=length*0.35;
+   let taper=CLAMP(MIN(along,length-along)/MAX(0.01,length*P(7)*0.3),0,1);
+   if(P(7)==0)taper=1;
+   if(r<P(2)&&along<length)coverage=MAX(coverage,line*taper);
+  }
+  sx=u-flowx*P(3)*P(4)*0.04;sy=v-flowy*P(3)*P(4)*0.04;
+  tone=N(qx*0.15+phase*0.1,qy*0.15);
+ } else if(kind==2) {
+  let rx=bx;let ry=by;let z=Lum(u,v)*P(5);
+  if(P(2)>0) {
+   let r=P(3);let rr=(bx*bx+by*by)/(r*r);
+   coverage=CLAMP((1-rr)/MAX(0.01,AA()*4),0,1);
+   z=SQRT(MAX(0,1-rr));
+   rx=ATAN(bx/MAX(0.001,r),z)+P(8)*0.0174533;
+   ry=ATAN(by/MAX(0.001,r),z);
+   sx=0.5+rx/3.141593;sy=0.5+ry/3.141593;
+   lighting=0.3+z*0.7;
+  }
+  let materialX=COS(angle)*rx-SIN(angle)*ry;let materialY=SIN(angle)*rx+COS(angle)*ry;
+  let wave=SIN((materialY+materialX*0.35+z*P(5))*P(4)*U(2)/5*3.141593+phase+seed);
+  let jitter=(N(qx*5+phase,qy*5)-0.5)*P(7);
+  tone=CLAMP(wave*0.5+0.5+jitter,0,1);
+  if(P(1)>0)tone=FLOOR(tone*4)/3;
+  lighting=lighting*(0.3+CLAMP((0.08+P(6)*0.32-ABS(wave))/MAX(0.04,aa),0,1));
+ } else if(kind==3) {
+  let l=Lum(u,v);let nx=0;let ny=0;let nz=1;
+  if(P(2)>0) {
+   let yaw=P(8)*0.0174533;let pitch=P(9)*0.0174533;
+   let rox=COS(yaw)*bx-SIN(yaw)*(-3);
+   let rz=SIN(yaw)*bx+COS(yaw)*(-3);
+   let roy=COS(pitch)*by-SIN(pitch)*rz;let roz=SIN(pitch)*by+COS(pitch)*rz;
+   let dx=-SIN(yaw);let dz=COS(yaw);let dy=-SIN(pitch)*dz;dz=COS(pitch)*dz;
+   let nearest=100;coverage=0;
+   for(let j=0;j<12;j++) {
+    if(j>=P(4))break;
+    let cx=(R(j,0,1)-0.5)*P(6)*P(13);let cy=(R(j,0,2)-0.5)*P(6)*P(14);let cz=(R(j,0,3)-0.5)*P(6)*0.5;
+    let rot=P(7)*0.0174533+phase+R(j,0,4)*2;
+    let x=rox-cx;let y=roy-cy;let z=roz-cz;
+    let lx=COS(rot)*x-SIN(rot)*z;let lz=SIN(rot)*x+COS(rot)*z;
+    let vx=COS(rot)*dx-SIN(rot)*dz;let vz=SIN(rot)*dx+COS(rot)*dz;
+    let shape=P(3);if(shape==0)shape=1+FLOOR(R(j,0,5)*4);
+    let size=P(5)*(0.75+R(j,0,6)*0.5);
+    let t=Primitive(lx,y,lz,vx,dy,vz,size,shape);
+    let silhouette=PrimitiveCoverage(lx,y,lz,vx,dy,vz,size,shape,AA());
+    if(shape!=2&&silhouette<1&&silhouette>0) {
+     let outer=Primitive(lx,y,lz,vx,dy,vz,size+AA()*2,shape);
+     if(t<100)t=MIX(outer,t,CLAMP((silhouette-0.75)*4,0,1));else t=outer;
+    }
+    if(t<nearest&&silhouette>0) {
+     nearest=t;coverage=silhouette;
+     let hx=lx+vx*t;let hy=y+dy*t;let hz=lz+vz*t;
+     nx=hx/size;ny=hy/size;nz=hz/size;
+     if(shape==2){let m=MAX(MAX(ABS(hx),ABS(hy)),ABS(hz));nx=0;ny=0;nz=0;if(ABS(hx)>=m-0.0001)nx=SIGN(hx);else if(ABS(hy)>=m-0.0001)ny=SIGN(hy);else nz=SIGN(hz);}
+     if(shape>=3){if(ABS(ABS(hy)-size)<0.001){nx=0;nz=0;ny=SIGN(hy);}else{ny=0;if(shape==4)ny=0.5;}}
+     let normalX=COS(rot)*nx+SIN(rot)*nz;let normalZ=-SIN(rot)*nx+COS(rot)*nz;
+     nx=normalX;nz=normalZ;
+     sx=CLAMP(0.5+hx/(size*3),0,1);sy=CLAMP(0.5+hy/(size*3),0,1);
+     l=0.5+hy/(size*4);
+    }
+   }
+  } else {nx=(Lum(u+0.005,v)-Lum(u-0.005,v))*10;ny=(Lum(u,v+0.005)-Lum(u,v-0.005))*10;}
+  let light=P(12)*0.0174533;
+  lighting=MIX(1,CLAMP(0.45+nx*COS(light)*0.35-ny*SIN(light)*0.35+ABS(nz)*0.3,0.1,1),P(11));
+  let hatch=ABS(SIN(qx*6.283185+phase+seed));
+  if(P(1)>0)hatch=MIN(hatch,ABS(SIN(qy*6.283185-phase)));
+  if(P(1)>1)hatch=SQRT(hatch*ABS(SIN(qy*6.283185+phase)));
+  let ink=CLAMP((P(10)+(1-l*lighting)*0.35-hatch)/MAX(0.02,aa)+0.5,0,1);
+  tone=1-ink;lighting=lighting*(0.35+tone*0.65);
+ } else if(kind==4) {
+  // Avoid scaling then unscaling fractal coordinates: intermediate rounding
+  // otherwise gets amplified at escape boundaries on larger source images.
+  let fx=P(20)+rotatedX*3/P(7);let fy=P(21)+rotatedY*3/P(7);
+  if(P(2)>0) {
+   let ox=P(54)*bx+P(55)*3;
+   let zz=P(55)*bx-P(54)*3;
+   let oy=P(56)*by-P(57)*zz;let oz=P(57)*by+P(56)*zz;
+   let dx=-P(55);let dy=-P(57)*P(54);let dz=P(56)*P(54);
+   let red=0;let green=0;let blue=0;coverage=0;
+   for(let j=0;j<16;j++) {
+    if(j>=P(3)||coverage>0.9999)break;
+    let z=(j-(P(3)-1)*0.5)*P(5);
+    let start=(z-P(4)*0.5-oz)/Safe(dz);let end=(z+P(4)*0.5-oz)/Safe(dz);
+    let slabRed=0;let slabGreen=0;let slabBlue=0;let slabAlpha=0;
+    for(let k=0;k<4;k++) {
+     let t=MIX(start,end,k/3);let x=ox+dx*t;let y=oy+dy*t;
+     let box=CLAMP((0.56-MAX(ABS(x),ABS(y)))/MAX(0.00001,AA())+0.5,0,1);
+     if(t<0||box==0)continue;
+     let mx=P(20+j*2)+(P(52)*x-P(53)*y)*3/P(7);
+     let my=P(21+j*2)+(P(53)*x+P(52)*y)*3/P(7);
+     let m=Mandel(mx,my,P(10));
+     // Blend boundary samples and depth-ordered slabs. A binary cutoff makes
+     // tiny coordinate differences choose completely different front slices.
+     let weight=CLAMP((m-P(14)+0.1)/0.1,0,1)*box*0.25;
+     let escape=m+j*0.07+phase*0.03;
+     let band=SIN(escape*25*U(2)/2+phase+seed);
+     let tx=0.5+x+band*P(15)*0.06;let ty=0.5+y+COS(escape*31-phase)*P(15)*0.06;
+     let paletteTone=CLAMP(0.5+band*0.5,0,1);
+     let light=MIX(1,CLAMP(1-(z+(P(3)-1)*P(5)*0.5)*0.9,0.25,1),P(13));
+     for(let ch=0;ch<3;ch++) {
+      let value=T(tx,ty,ch);
+      if(P(1)==0)value=MIX(Palette(paletteTone,ch),value,P(0));
+      value=value*light*weight;
+      if(ch==0)slabRed+=value;else if(ch==1)slabGreen+=value;else slabBlue+=value;
+     }
+     slabAlpha+=weight;
+    }
+    red+=slabRed*(1-coverage);green+=slabGreen*(1-coverage);blue+=slabBlue*(1-coverage);
+    coverage+=slabAlpha*(1-coverage);
+   }
+   O(0,U(28)*(1-coverage)+red);O(1,U(29)*(1-coverage)+green);O(2,U(30)*(1-coverage)+blue);return;
+  }
+  tone=Mandel(fx,fy,P(10));
+  coverage=CLAMP((tone-P(14)+0.1)/0.1,0,1);
+  let fractalBand=SIN(tone*25*U(2)/2+phase+seed);
+  sx=sx+fractalBand*P(15)*0.06;sy=sy+COS(tone*31-phase)*P(15)*0.06;
+  tone=CLAMP(0.5+fractalBand*0.5,0,1);
+  if(P(1)>0){for(let ch=0;ch<3;ch++)O(ch,MIX(U(28+ch),T(sx,sy,ch)*lighting,coverage));return;}
+ } else if(kind==10) {
+  let size=P(2)*U(2);let nx=qx+(N(qx*3+phase,qy*3)-0.5)*P(5)*size;
+  let ny=qy+(N(qx*3,qy*3-phase)-0.5)*P(5)*size;
+  let cx=FLOOR(nx/size);let cy=FLOOR(ny/size);
+  let dropout=R(cx,cy,0)<P(6);let erosion=1;
+  if(P(1)>1)erosion=CLAMP((N(qx*12+phase,qy*12)-P(5)*0.65)*5,0,1);
+  let travelx=(R(cx,cy,1)-0.5)*P(7)*0.25;let travely=(R(cx,cy,2)-0.5)*P(7)*0.25;
+  let sx=u+travelx;let sy=v+travely;
+  let rot=P(8)*0.0174533;let stripe=SIN((qx*COS(rot)+qy*SIN(rot))*30+phase);
+  let striped=CLAMP((stripe-(1-P(4)*2))/MAX(aa,0.03),0,1);
+  for(let ch=0;ch<3;ch++) {
+   let value=T(sx,sy,ch);let quantized=FLOOR(value*P(3))/MAX(1,P(3)-1);
+   let ink=MIX(Palette(quantized+R(cx,cy,3)*0.1,ch),quantized,P(0))*(0.55+striped*0.45);
+   let coverage=erosion;if(dropout)coverage=0;
+   O(ch,MIX(U(28+ch),ink,coverage));
+  }return;
+ } else if(kind==11) {
+  let distance=SQRT(bx*bx+by*by);let theta=ATAN(qy,qx);
+  let half=P(2)*0.0174533*0.5;
+  let fan=CLAMP((half-ABS(theta))/MAX(aa,0.005),0,1);
+  let beam=0.5+0.5*COS(theta*MAX(2,U(20))+phase+seed);
+  let grating=0.6+0.4*SIN(distance*P(4)*6.283185+phase);
+  let reach=CLAMP(1-distance/P(3),0,1);
+  coverage=fan*reach*CLAMP((beam-U(10))/MAX(0.01,1-U(10)),0,1)*(0.5+grating*0.5);
+  tone=CLAMP(theta/MAX(0.01,half)*0.5+0.5+grating*0.15,0,1);
+  lighting=1.2;
+ } else if(kind==5||kind==8) {
+  let cellx=FLOOR(qx);let celly=FLOOR(qy);
+  let energy=0;let reach=P(3);let width=P(7);let glow=P(6);let jitter=P(4);
+  if(kind==8){width=P(5);glow=P(6);jitter=P(7);}
+  for(let yy=-1;yy<=1;yy++) {
+   for(let xx=-1;xx<=1;xx++) {
+    let cx=cellx+xx;let cy=celly+yy;
+    let ax=cx+0.5+SIN(phase+R(cx,cy,1)*6.283185)*jitter*0.28;
+    let ay=cy+0.5+COS(phase+R(cx,cy,2)*6.283185)*jitter*0.28;
+    let gate=P(2);let core=EXP(-(ax*ax+ay*ay)/(U(2)*U(2)*0.1+0.1));
+    if(kind==8&&P(1)==0)gate=gate*MIX(1,core,P(4));
+    if(R(cx,cy,0)>gate)continue;
+    if(kind==5&&P(1)==0&&Lum(U(5)+ax/U(2)/U(0),U(6)+ay/U(2)/U(1))<0.15)continue;
+    let nodeDistance=SQRT((qx-ax)*(qx-ax)+(qy-ay)*(qy-ay));
+    energy=MAX(energy,EXP(-nodeDistance*nodeDistance/MAX(0.0001,width*width*6)));
+    for(let branch=0;branch<4;branch++) {
+     let nx=cx+1;let ny=cy;
+     if(branch==1){nx=cx;ny=cy+1;}if(branch==2){nx=cx+1;ny=cy+1;}if(branch==3){nx=cx-1;ny=cy+1;}
+     if(R(nx,ny,0)>gate)continue;
+     let ex=nx+0.5+SIN(phase+R(nx,ny,1)*6.283185)*jitter*0.28;
+     let ey=ny+0.5+COS(phase+R(nx,ny,2)*6.283185)*jitter*0.28;
+     let len=SQRT((ex-ax)*(ex-ax)+(ey-ay)*(ey-ay));
+     if(len>reach*1.6)continue;
+     let distance=100;
+     if(kind==8)distance=Segment(qx,qy,ax,ay,ex,ey);
+     else {
+      let lastx=ax;let lasty=ay;
+      for(let segment=1;segment<=4;segment++) {
+       let t=segment/4;let bend=SIN(t*3.141593)*SIN(phase*2+R(cx,cy,segment+3)*12)*jitter*0.3;
+       let endx=MIX(ax,ex,t)+bend;let endy=MIX(ay,ey,t)-bend;
+       distance=MIN(distance,Segment(qx,qy,lastx,lasty,endx,endy));lastx=endx;lasty=endy;
+      }
+     }
+     let light=EXP(-distance*distance/MAX(0.00001,width*width))+EXP(-distance*distance/(0.008+glow*0.08))*glow*0.25;
+     if(kind==5)light=light*P(5)*(0.65+0.35*SIN(phase*2+qx*4+qy*3+R(cx,cy,7)*6));
+     energy=MAX(energy,light);
+    }
+   }
+  }
+  coverage=CLAMP(energy,0,1);tone=N(qx*0.2+phase*0.1,qy*0.2);lighting=0.7+coverage*0.6;
+ } else if(kind==6) {
+  let xx=qx+SIN(qy*0.7+phase+seed)*P(3)*0.75;let column=FLOOR(xx);
+  let yy=qy/P(2)+column*P(6)*0.5;let row=FLOOR(yy);
+  let dx=xx-column-0.5;let dy=yy-row-0.5;
+  let distance=SQRT(dx*dx+dy*dy);if(P(1)==2)distance=MAX(ABS(dx),ABS(dy));
+  let radius=P(5);let extent=radius;
+  if(P(1)==0){distance=ABS(distance-radius*0.75);extent=radius*P(7);}
+  coverage=CLAMP((extent-distance)/aa+0.5,0,1);
+  if(R(column,row,1)<P(4))coverage=0;
+  tone=R(column,row,2)*0.5+SIN(phase+column*0.35)*0.25+0.25;
+  if(P(1)==1)lighting=0.4+SQRT(MAX(0,1-(dx*dx+dy*dy)/(radius*radius)))*0.8;
+ } else if(kind==7) {
+  let r=SQRT(qx*qx+qy*qy)/3;let theta=ATAN(qy,qx);
+  let brightest=0;coverage=0;
+  for(let j=0;j<12;j++) {
+   if(j>=P(3))break;
+   let center=(j+1)/(P(3)+1)*0.45;
+   let half=(0.5/(P(3)+1))*(0.6+P(5));
+   let a=theta+phase*(0.1+j*0.025)+j*P(7)*0.0174533+seed*0.05;
+   let sector=a*P(2)/6.283185;let cell=FLOOR(sector);let local=sector-cell;
+   let radial=ABS(r-center)/MAX(0.001,half);
+   let triangular=radial+ABS(local-0.5)*1.4;
+   if(P(1)>0)triangular=radial+ABS(local-0.5);
+   let fill=CLAMP((1-triangular)/MAX(0.01,AA()*10)+0.5,0,1);
+   let facet=FLOOR(local*P(4));let edge=MIN(ABS(1-triangular),ABS(local*P(4)-FLOOR(local*P(4))));
+   let ink=CLAMP((P(6)*0.15-edge)/MAX(0.005,AA()*5)+0.5,0,1);
+   if(fill>brightest){brightest=fill;coverage=fill;tone=R(cell,j,2)*0.45+facet/P(4)*0.55;lighting=1-ink*0.65;}
+  }
+ } else {
+  let normalx=0;let normaly=0;let normalz=1;
+  if(P(2)>0) {
+   let t=1;let nearest=100;let closest=1;
+   for(let j=0;j<56;j++) {
+    let z=-1.4+t;let d=FoilDistance(bx,by,z,u,v);
+    if(d<nearest){nearest=d;closest=t;}
+    // Use the same bounded convergence count on both backends. A hard hit
+    // threshold can stop one iteration apart and change the sampled normal.
+    t+=MAX(0,d*0.65);if(t>2.8)break;
+   }
+   // Fade grazing rays at the convergence boundary rather than switching a
+   // complete pixel between a hit and a miss due to tiny arithmetic differences.
+   coverage=CLAMP((0.002-nearest)/0.001,0,1);
+   if(coverage>0) {
+    let z=-1.4+closest;let e=0.003;
+    normalx=FoilDistance(bx+e,by,z,u,v)-FoilDistance(bx-e,by,z,u,v);
+    normaly=FoilDistance(bx,by+e,z,u,v)-FoilDistance(bx,by-e,z,u,v);
+    normalz=FoilDistance(bx,by,z+e,u,v)-FoilDistance(bx,by,z-e,u,v);
+    let norm=MAX(0.0001,SQRT(normalx*normalx+normaly*normaly+normalz*normalz));
+    normalx=normalx/norm;normaly=normaly/norm;normalz=normalz/norm;
+    // Continuous normal-based projection keeps the image folded into the
+    // surface without an atan branch-cut seam across the visible hemisphere.
+    sx=CLAMP(0.5+normalx*0.5,0,1);sy=CLAMP(0.5+normaly*0.5,0,1);
+   }
+  } else {
+   let eps=0.004;
+   let foldx=COS(qx*P(6)+phase+seed)*P(7)*1.8;
+   let foldy=SIN(qy*P(6)-phase)*P(7)*1.8;
+   normalx=foldx+(H(u+eps,v)-H(u-eps,v))*P(10)*30;
+   normaly=foldy+(H(u,v+eps)-H(u,v-eps))*P(10)*30;
+   let norm=SQRT(normalx*normalx+normaly*normaly+1);normalx=normalx/norm;normaly=normaly/norm;normalz=1/norm;
+  }
+  let light=P(11)*0.0174533;
+  let reflection=normalx*COS(light)-normaly*SIN(light)+normalz*0.5;
+  let sharpness=MIX(14,1,P(8));if(P(1)>0)sharpness=sharpness*1.8;
+  let highlight=POW(CLAMP(reflection*0.5+0.5,0,1),sharpness);
+  tone=CLAMP(0.5+normalx*0.3+normaly*0.2+SIN(phase+reflection*4)*0.1,0,1);
+  lighting=MIX(0.65+normalz*0.25,0.15+highlight*1.8+ABS(SIN(reflection*5+phase))*0.2,P(9));
+ }
+ if(kind==0||kind==1) {
+  let hue=P(6)*0.0174533;if(kind==1)hue=P(8)*0.0174533;
+  if(hue!=0) {
+   let r=MIX(Palette(tone,0),T(sx,sy,0),P(0))*lighting;
+   let g=MIX(Palette(tone,1),T(sx,sy,1),P(0))*lighting;
+   let b=MIX(Palette(tone,2),T(sx,sy,2),P(0))*lighting;
+   for(let ch=0;ch<3;ch++)O(ch,MIX(U(28+ch),Hue(r,g,b,hue,ch),coverage));return;
+  }
+ }
+ for(let ch=0;ch<3;ch++) {
+  let material=MIX(Palette(tone,ch),T(sx,sy,ch),P(0))*lighting;
+  O(ch,MIX(U(28+ch),material,coverage));
+ }
+}
