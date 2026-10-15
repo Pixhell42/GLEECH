@@ -7,6 +7,7 @@ files:
   - package.json
 asar: true
 asarUnpack:
+  - node_modules/@img/**
   - node_modules/onnxruntime-node/bin/**
 extraResources:
   - from: ../../LICENSE
@@ -56,6 +57,19 @@ mac:
       arch:
         - arm64
   artifactName: GLEECH-${version}-mac-${arch}.${ext}
+linux:
+  executableName: gleech
+  category: Graphics
+  icon: resources/branding/icon-beta.png
+  files:
+    - '!**/onnxruntime-node/bin/napi-v6/win32/**'
+    - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
+    - '!**/onnxruntime-node/bin/napi-v6/linux/arm64/**'
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  artifactName: GLEECH-${version}-linux-${arch}.${ext}
 nsis:
   installerIcon: resources/branding/icon-beta.ico
   uninstallerIcon: resources/branding/icon-beta.ico

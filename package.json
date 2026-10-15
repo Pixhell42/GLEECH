@@ -106,7 +106,9 @@
     "test:mcp": "pnpm build && node tooling/mcp-check.mjs && node tooling/mcp-check.mjs --cpu",
     "test:mcp-clients": "pnpm build && node tooling/mcp-clients-check.mjs",
     "test:ui-color": "pnpm build && node tooling/ui-color-check.mjs",
-    "test:beta-ui": "pnpm build && node tooling/beta-ui-check.mjs && node tooling/beta-ui-check.mjs --cpu"
+    "test:beta-ui": "pnpm build && node tooling/beta-ui-check.mjs && node tooling/beta-ui-check.mjs --cpu",
+    "pack:linux": "pnpm build && pnpm --filter @gleech/desktop pack:linux",
+    "dist:linux": "pnpm build && pnpm --filter @gleech/desktop dist:linux"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

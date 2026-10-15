@@ -74,14 +74,17 @@ export function mcpClient(id: McpClientId, platform = 'win32') {
   let destination = client.destination.replace('%USERPROFILE%', '~').replaceAll('\\', '/');
   let instructions: string = client.instructions;
   if (id === 'claude-desktop') {
-    destination = '~/Library/Application Support/Claude/claude_desktop_config.json';
+    destination =
+      platform === 'darwin'
+        ? '~/Library/Application Support/Claude/claude_desktop_config.json'
+        : 'Your local Claude Desktop client configuration';
     instructions =
       'Merge the gleech entry into mcpServers in this file. Fully quit and reopen Claude Desktop.';
   } else if (id === 'cursor') {
     instructions = instructions.replace('local Windows agent', 'local desktop agent');
   } else if (id === 'hermes') {
     instructions =
-      'Merge gleech into mcp_servers in config.yaml. Use /reload-mcp or restart Hermes, then run hermes mcp test gleech. Run the client locally on the same Mac as GLEECH.';
+      'Merge gleech into mcp_servers in config.yaml. Use /reload-mcp or restart Hermes, then run hermes mcp test gleech. Run the client locally on the same computer as GLEECH.';
   } else if (id === 'json') {
     instructions = instructions.replace('on Windows', 'on this computer');
   }

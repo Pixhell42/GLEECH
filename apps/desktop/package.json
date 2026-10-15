@@ -13,7 +13,9 @@
     "pack:win": "electron-builder --win --dir",
     "dist:win": "electron-builder --win nsis",
     "pack:mac": "electron-builder --mac --arm64 --dir",
-    "dist:mac": "electron-builder --mac zip --arm64"
+    "dist:mac": "electron-builder --mac zip --arm64",
+    "pack:linux": "electron-builder --linux --x64 --dir",
+    "dist:linux": "electron-builder --linux AppImage --x64"
   },
   "dependencies": {
     "@gleech/command-service": "workspace:*",
