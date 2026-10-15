@@ -27,7 +27,7 @@ node tooling/image-check.mjs --cpu
 ```
 
 `check` runs publication-content and build-tool scope checks, Prettier, ESLint, all workspace types,
-Vitest and the Windows CI-plan tests. CPU-heavy unit tests use one worker in CI
+Vitest and the Windows/Mac CI-plan tests. CPU-heavy unit tests use one worker in CI
 and at most four locally. Exhaustive render/variation sweeps use independently
 timed cases. Avoid interpreting a timeout as an image correctness assertion.
 

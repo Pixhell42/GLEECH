@@ -3,11 +3,27 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { load } from 'js-yaml';
+import { retainedMacLibvipsNotices } from './mac-native-review.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const workflow = load(await readFile(resolve(root, '.github/workflows/macos.yml'), 'utf8'));
 const builder = load(await readFile(resolve(root, 'apps/desktop/electron-builder.yml'), 'utf8'));
 const workspace = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+
+test('Mac libvips missing notices require matching reviewed source versions and original hashes', async () => {
+  const versions = JSON.parse(
+    await readFile(resolve(root, 'LICENSES/img-sharp-win32-x64/0.35.5/versions.json'), 'utf8'),
+  );
+  const review = await retainedMacLibvipsNotices(versions);
+  assert.equal(review.components.length, Object.keys(versions).length);
+  assert.ok(review.retainedFiles.some((file) => file.file === 'LICENSES/gnu/LGPL-3.0.txt'));
+  assert.ok(review.retainedFiles.some((file) => file.file.includes('/mozjpeg/')));
+  await assert.rejects(retainedMacLibvipsNotices({ ...versions, vips: '0.0.0' }));
+  await assert.rejects(retainedMacLibvipsNotices({ ...versions, extraCodec: '1.0.0' }));
+  const missing = { ...versions };
+  delete missing.vips;
+  await assert.rejects(retainedMacLibvipsNotices(missing));
+});
 
 test('Mac packages use independent native architecture jobs', () => {
   const targets = workflow.jobs.build.strategy.matrix.include;

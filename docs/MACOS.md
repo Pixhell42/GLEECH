@@ -45,6 +45,12 @@ These are unsigned, unnotarized test builds; the workflow does not publish a rel
 
 The packages retain original licenses and notices from their installed Mac Sharp,
 libvips and selected ONNX runtime packages in `Contents/Resources/mac-native-notices`.
+The libvips npm packages omit original notice texts; their complete component
+version lists must match the retained source-review baseline before the collector
+uses checked-in original upstream notices in `Contents/Resources/licenses`.
+The generated inventory records each source archive and verifies every retained
+notice hash. This notice check does not replace native binary/source compatibility
+or redistribution review for a public Mac release.
 The build checks verify their hashes, native executable architecture, Sharp image
 processing, CPU subject inference and ZIP integrity. Packaged smoke, image, MCP and
 client-configuration tests run before artifact upload. Hosted CPU checks complement

@@ -8,7 +8,10 @@ terms or establish rights for user-imported artwork/shaders/fonts.
 The pinned production package inventory, SPDX declarations, upstream homepages
 and retained notice paths are in [LICENSES/dependencies.json](LICENSES/dependencies.json).
 Original license/notice texts are preserved in LICENSES and copied into the
-Windows app's resources/licenses directory. This inventory is a dependency
+apps' resources/licenses directory. Mac builds also retain a native-package
+notice inventory under resources/mac-native-notices; see [Mac packaging](docs/MACOS.md)
+for the libvips npm notice omission and the version-matched retained upstream texts.
+This inventory is a dependency
 superset, not a claim that every HTTP adapter is used by the local stdio server.
 
 React, MCP SDK, Zod and ONNX Runtime use MIT terms. Sharp uses Apache-2.0; its

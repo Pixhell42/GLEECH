@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve, relative } from 'node:path';
+import { retainedMacLibvipsNotices } from './mac-native-review.mjs';
 
 assert.equal(process.platform, 'darwin', 'Create Mac packages on a native macOS runner.');
 assert.ok(['arm64', 'x64'].includes(process.arch), 'Unsupported Mac architecture.');
@@ -45,8 +46,13 @@ for (const name of packages) {
     }
   }
   await collect(packageRoot);
+  const retained = name.startsWith('@img/sharp-libvips-darwin-')
+    ? await retainedMacLibvipsNotices(
+        JSON.parse(await readFile(resolve(packageRoot, 'versions.json'), 'utf8')),
+      )
+    : null;
   assert.ok(
-    files.some(({ file }) => /licen[sc]e/i.test(file)),
+    files.some(({ file }) => /licen[sc]e/i.test(file)) || retained?.retainedFiles.length,
     `No original license for ${name}.`,
   );
   inventory.push({
@@ -56,6 +62,7 @@ for (const name of packages) {
     license: metadata.license,
     repository: metadata.repository,
     files: files.sort((a, b) => a.file.localeCompare(b.file)),
+    ...(retained ? { upstreamPackageOmitsNotices: true, ...retained } : {}),
   });
 }
 await writeFile(

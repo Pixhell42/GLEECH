@@ -38,6 +38,17 @@ for (const entry of notices.packages) {
       `Missing/changed original notice: ${entry.installedAs}/${file.file}`,
     );
   }
+  for (const file of entry.retainedFiles ?? []) {
+    assert.ok(file.file.startsWith('LICENSES/'));
+    const bytes = await readFile(
+      resolve(resources, 'licenses', file.file.slice('LICENSES/'.length)),
+    );
+    assert.equal(
+      createHash('sha256').update(bytes).digest('hex'),
+      file.sha256,
+      `Missing/changed retained upstream notice: ${file.file}`,
+    );
+  }
 }
 const require = createRequire(import.meta.url);
 const asar = require('@electron/asar');
