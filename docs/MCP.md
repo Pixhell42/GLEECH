@@ -2,7 +2,9 @@
 
 GLEECH includes a local stdio MCP server with 62 tools, nine resources and three
 resource templates. It controls the open desktop instance using the normal
-editing/rendering engine. Windows named-pipe transport is implemented; HTTP,
+editing/rendering engine. Windows uses named pipes; macOS uses a Unix socket in
+a private temporary directory (0700), with a private socket and connection file
+(0600). The socket is removed when MCP is disabled or the app closes. HTTP,
 remote pairing and hosted/cloud access are deferred.
 
 ## Connect
@@ -75,3 +77,6 @@ automatic broadened grant.
 `pnpm test:mcp` checks the tool engine and `pnpm test:mcp-clients` checks all eight
 configuration/launcher profiles, activity labels, visible edits, previews, Undo,
 diagnostics and persistence. These do not certify every vendor UI/login workflow.
+
+For macOS build, installation, and still-image handoff to DaVinci Resolve, see
+[Mac setup](MACOS.md). Mac client profiles use local paths for the same computer.

@@ -46,6 +46,8 @@
     "ci:plan:test": "node --test tooling/windows-ci-plan.test.mjs",
     "pack:win": "pnpm build && pnpm --filter @gleech/desktop pack:win",
     "dist:win": "pnpm build && pnpm --filter @gleech/desktop dist:win",
+    "pack:mac": "pnpm build && pnpm --filter @gleech/desktop pack:mac",
+    "dist:mac": "pnpm build && pnpm --filter @gleech/desktop dist:mac",
     "test:snapshots": "pnpm build && node tooling/snapshot-check.mjs && node tooling/snapshot-check.mjs --cpu && node tooling/document-check.mjs && node tooling/document-check.mjs --cpu",
     "test:print-reflection": "pnpm build && node tooling/print-reflection-check.mjs && node tooling/print-reflection-check.mjs --cpu",
     "test:tiled-shapes": "pnpm build && node tooling/tiled-shapes-runtime-check.mjs && node tooling/tiled-shapes-check.mjs && node tooling/tiled-shapes-check.mjs --cpu",

@@ -11,7 +11,9 @@
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "pack:win": "electron-builder --win --dir",
-    "dist:win": "electron-builder --win nsis"
+    "dist:win": "electron-builder --win nsis",
+    "pack:mac": "electron-builder --mac --arm64 --dir",
+    "dist:mac": "electron-builder --mac zip --arm64"
   },
   "dependencies": {
     "@gleech/command-service": "workspace:*",
