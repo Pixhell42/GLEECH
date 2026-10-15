@@ -43,13 +43,14 @@ source commit and architecture. Download the artifact matching the Mac's process
 extract the artifact and then the GLEECH ZIP, and copy `GLEECH.app` to `~/Applications`.
 These are unsigned, unnotarized test builds; the workflow does not publish a release.
 
-The packages retain original licenses and notices from their installed Mac Sharp,
-libvips and selected ONNX runtime packages in `Contents/Resources/mac-native-notices`.
-The libvips npm packages omit original notice texts; their complete component
+The packages retain original licenses and a native-package notice inventory in
+`Contents/Resources/mac-native-notices`. The libvips npm packages omit original notice texts; their complete component
 version lists must match the retained source-review baseline before the collector
 uses checked-in original upstream notices in `Contents/Resources/licenses`.
 The generated inventory records each source archive and verifies every retained
-notice hash. This notice check does not replace native binary/source compatibility
+notice hash. The selected ONNX runtime also uses retained upstream LICENSE and
+ThirdPartyNotices texts, checked against hashes verified from the corresponding
+official ONNX version tags. This notice check does not replace native binary/source compatibility
 or redistribution review for a public Mac release.
 The build checks verify their hashes, native executable architecture, Sharp image
 processing, CPU subject inference and ZIP integrity. Packaged smoke, image, MCP and

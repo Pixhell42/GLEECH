@@ -1,14 +1,84 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { load } from 'js-yaml';
-import { retainedMacLibvipsNotices } from './mac-native-review.mjs';
+import {
+  collectMacNativeNotices,
+  retainedMacLibvipsNotices,
+  retainedMacOnnxNotices,
+} from './mac-native-review.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const workflow = load(await readFile(resolve(root, '.github/workflows/macos.yml'), 'utf8'));
 const builder = load(await readFile(resolve(root, 'apps/desktop/electron-builder.yml'), 'utf8'));
 const workspace = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+
+for (const arch of ['arm64', 'x64']) {
+  test(`notice collection accepts real-world missing license layouts on ${arch}`, async () => {
+    const parent = resolve(root, 'test-results');
+    await mkdir(parent, { recursive: true });
+    const folder = await mkdtemp(resolve(parent, 'mac-notices-'));
+    const roots = new Map();
+    const sharp = `@img/sharp-darwin-${arch}`;
+    const vips = `@img/sharp-libvips-darwin-${arch}`;
+    const onnx = arch === 'x64' ? 'onnxruntime-node-macos-x64' : 'onnxruntime-node';
+    for (const [name, version] of [
+      [sharp, '0.35.5'],
+      [vips, '1.3.4'],
+      [onnx, arch === 'x64' ? '1.22.0' : '1.30.0'],
+    ]) {
+      const target = resolve(folder, 'packages', name);
+      await mkdir(target, { recursive: true });
+      await writeFile(
+        resolve(target, 'package.json'),
+        JSON.stringify({
+          name: name === onnx ? 'onnxruntime-node' : name,
+          version,
+          license: 'MIT',
+          repository: 'https://example.invalid/native-fixture',
+        }),
+      );
+      roots.set(name, target);
+    }
+    const original = 'Original fixture license\r\nPreserve these bytes.\r\n';
+    await writeFile(resolve(roots.get(sharp), 'LICENSE'), original);
+    await writeFile(
+      resolve(roots.get(vips), 'versions.json'),
+      await readFile(resolve(root, 'LICENSES/img-sharp-win32-x64/0.35.5/versions.json')),
+    );
+    const output = resolve(folder, 'output');
+    const result = await collectMacNativeNotices({
+      arch,
+      output,
+      resolvePackage: (name) => roots.get(name),
+    });
+    assert.equal(result.packages.length, 3);
+    const ort = result.packages.find((entry) => entry.installedAs === onnx);
+    assert.equal(ort.files.length, 0);
+    assert.equal(ort.retainedFiles.length, 2);
+    assert.equal(ort.upstreamPackageOmitsNotices, true);
+    assert.equal(
+      result.packages.find((entry) => entry.installedAs === vips).retainedFiles.length,
+      74,
+    );
+    assert.equal(await readFile(resolve(output, sharp, 'LICENSE'), 'utf8'), original);
+    assert.deepEqual(JSON.parse(await readFile(resolve(output, 'inventory.json'), 'utf8')), result);
+  });
+}
+
+test('both Mac ONNX runtimes retain their exact reviewed upstream license and notice texts', async () => {
+  for (const version of ['1.22.0', '1.30.0']) {
+    const result = await retainedMacOnnxNotices(version);
+    assert.equal(result.retainedFiles.length, 2);
+    assert.ok(
+      result.retainedFiles.every((file) =>
+        file.file.startsWith(`LICENSES/onnxruntime/${version}/`),
+      ),
+    );
+  }
+  await assert.rejects(retainedMacOnnxNotices('0.0.0'));
+});
 
 test('Mac libvips missing notices require matching reviewed source versions and original hashes', async () => {
   const versions = JSON.parse(
