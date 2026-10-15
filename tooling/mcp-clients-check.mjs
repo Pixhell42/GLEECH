@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, readFile, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -216,7 +216,11 @@ try {
     assert.equal(launch.env.ELECTRON_RUN_AS_NODE, '1');
     assert.equal(launch.env.GLEECH_MCP_CONNECTION, resolve(profile, 'mcp-connection.json'));
     assert.ok(!('url' in launch));
-    if (executablePath) assert.equal(launch.command, resolve(executablePath));
+    if (executablePath)
+      assert.equal(
+        await realpath(launch.command),
+        await realpath(await app.evaluate(() => process.execPath)),
+      );
     if (id === 'claude-code') assert.equal(launch.timeout, 305000);
     if (id === 'cursor') assert.equal(launch.type, 'stdio');
     if (id === 'hermes') {
