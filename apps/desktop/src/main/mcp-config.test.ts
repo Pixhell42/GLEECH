@@ -143,4 +143,5 @@ it.each(MCP_CLIENTS)('uses Linux-local setup paths for $name', (client) => {
   expect(prompt).not.toContain('%APPDATA%');
   expect(prompt).not.toContain('Library/Application Support');
   expect(prompt).not.toContain('same Mac');
+  if (client.id === 'claude-desktop') expect(prompt).toContain('claude_desktop_config.json');
 });

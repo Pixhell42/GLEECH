@@ -77,7 +77,7 @@ export function mcpClient(id: McpClientId, platform = 'win32') {
     destination =
       platform === 'darwin'
         ? '~/Library/Application Support/Claude/claude_desktop_config.json'
-        : 'Your local Claude Desktop client configuration';
+        : 'Your local client’s claude_desktop_config.json';
     instructions =
       'Merge the gleech entry into mcpServers in this file. Fully quit and reopen Claude Desktop.';
   } else if (id === 'cursor') {

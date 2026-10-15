@@ -35,7 +35,7 @@ logged-in graphical session:
 pnpm check
 node tooling/smoke.mjs apps/desktop/release/linux-unpacked/gleech
 GLEECH_TEST_NATIVE_FRAMES=1 node tooling/mcp-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
-GLEECH_TEST_NATIVE_FRAMES=1 node tooling/mcp-check.mjs apps/desktop/release/linux-unpacked/gleech
+GLEECH_TEST_NATIVE_FRAMES=1 node tooling/mcp-check.mjs tooling/run-linux-webgpu.sh
 GLEECH_TEST_NATIVE_FRAMES=1 node tooling/mcp-clients-check.mjs apps/desktop/release/linux-unpacked/gleech
 ```
 
@@ -44,3 +44,27 @@ without it, hidden-window captures can stall under Hyprland. It does not replace
 rendering or relax pixel assertions. GPU availability depends on the adapter and
 driver; retain a separate CPU fallback result. Normal application launches do
 not use this test option or Playwright's launch flags.
+
+## Optional Vulkan / WebGPU launch
+
+The default Chromium launch may not expose a WebGPU adapter on Linux even when
+OpenGL acceleration works. On the tested Omarchy dev / AMD GCN-4 configuration,
+the optional launcher enables a real hardware WebGPU adapter:
+
+```sh
+./tooling/run-linux-webgpu.sh
+```
+
+This uses XWayland under Hyprland. It does not require `--enable-unsafe-webgpu`,
+`--ignore-gpu-blocklist`, a sandbox override, or system driver changes. Treat it
+as an opt-in launch mode; it is not a promise for all Linux adapters. Check the
+actual adapter and image output on the target machine. Use `--disable-gpu` for
+CPU fallback. Built-in effects have CPU implementations; imported WGSL shaders
+require a working WebGPU adapter.
+
+The launcher sets `--ozone-platform=x11`, `--use-angle=vulkan` and
+`--enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan`. A native compute
+probe identified AMD GCN-4 with `isFallbackAdapter=false` and correct readback;
+the full MCP GPU suite then passed, including imported WGSL rendering and exports.
+The CPU counterpart passed separately. These are bounded tests on the stated
+hardware, not long-duration driver or hardware qualification.
