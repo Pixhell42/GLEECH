@@ -159,6 +159,21 @@ async function rememberMap() {
       pixels: Uint8Array.from(mapBytes).buffer,
     });
 }
+async function waitForMap(id) {
+  // The picker closes before its asynchronous map load updates the effect.
+  // A settled previous render does not prove the newly chosen map is ready.
+  await page.waitForFunction(
+    (id) => {
+      const effects = JSON.parse(
+        document.querySelector('.image-layer')?.dataset.renderRecipe ?? '[]',
+      );
+      return effects.at(-1)?.fieldImage?.source.id === `depth-map-v1:${id}`;
+    },
+    id,
+    { timeout: 180000 },
+  );
+  await settle();
+}
 async function status(text) {
   await page.getByRole('status').filter({ hasText: text }).waitFor({ timeout: 60000 });
 }
@@ -220,7 +235,7 @@ try {
     .locator('.depth-map-grid')
     .getByRole('button', { name: 'Torus Structure', exact: true })
     .click();
-  await settle();
+  await waitForMap(catalog.find((map) => map.name === 'Torus').id);
   await rememberMap();
   await exportExact();
   // Exercise each addition through the real chooser and renderer, including search,
@@ -233,7 +248,7 @@ try {
       .locator('.depth-map-grid')
       .getByRole('button', { name: `${map.name} ${map.category}`, exact: true })
       .click();
-    await settle();
+    await waitForMap(map.id);
     assert.equal((await recipe()).effects.at(-1).fieldImage.source.id, `depth-map-v1:${map.id}`);
     await rememberMap();
     await exportExact();
@@ -266,7 +281,7 @@ try {
     .locator('.depth-map-grid')
     .getByRole('button', { name: 'Truchet Channels Complex', exact: true })
     .click();
-  await settle();
+  await waitForMap(catalog.find((map) => map.name === 'Truchet Channels').id);
   await rememberMap();
   await exportExact();
   const depth = (await recipe()).effects.at(-1);
