@@ -55,8 +55,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Check production dependency advisories
         run: pnpm audit --prod
-      - name: Formatting, lint, types and unit tests
-        run: pnpm check
       - name: Build native Mac ZIP
         run: pnpm dist:mac
       - name: Verify native binaries, original notices and ZIP
@@ -64,6 +62,8 @@ jobs:
           GLEECH_MAC_APP: ${{ matrix.app }}
           EXPECTED_ARCH: ${{ matrix.arch }}
         run: node tooling/mac-package-check.mjs "$GLEECH_MAC_APP" "$EXPECTED_ARCH"
+      - name: Formatting, lint, types and unit tests
+        run: pnpm check
       - name: Test the packaged app
         env:
           GLEECH_MAC_APP: ${{ matrix.app }}
