@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
@@ -86,7 +86,11 @@ async function open(path, action) {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
   }, path);
   await fileAction(page, action);
-  await status('Opened ' + basename(path));
+  await status(
+    action === 'Import Preset'
+      ? 'Imported preset Portable Channels and Echo'
+      : 'Opened ' + basename(path),
+  );
   await settle();
 }
 async function savePath(path) {

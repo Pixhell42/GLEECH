@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { createEffect, renderEffects, modelUrl } from './effects-reference.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
@@ -275,6 +275,7 @@ try {
     .first()
     .waitFor();
   const preset = page.getByRole('button', { name: 'Apply Beta geometry', exact: true });
+  await preset.waitFor({ state: 'visible' });
   assert.equal(await preset.locator('.shader-mark').count(), 1);
   await preset.click();
   await page

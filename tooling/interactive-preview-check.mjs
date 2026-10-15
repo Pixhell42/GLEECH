@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';
 import { renderEffects } from './effects-reference.mjs';
@@ -148,14 +148,53 @@ try {
     frames: Number(e.dataset.interactiveFrames),
     cancelled: Number(e.dataset.cancelledPreviews),
   }));
-  await page.getByRole('slider', { name: 'Radius', exact: true }).fill('7');
-  await page.waitForFunction(
-    (frames) => Number(document.querySelector('.image-layer').dataset.interactiveFrames) > frames,
-    beforeCancel.frames,
+  // Interrupt at the real full-detail request boundary. A fixed sleep can let
+  // refinement finish first, especially on a fast or lightly loaded runner.
+  const interruption = await page
+    .getByRole('slider', { name: 'Radius', exact: true })
+    .evaluate(async (slider) => {
+      const postMessage = Worker.prototype.postMessage;
+      const input = (value) => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
+          slider,
+          value,
+        );
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      try {
+        return await new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('Full-detail request did not start')),
+            30000,
+          );
+          Worker.prototype.postMessage = function (request, ...args) {
+            const result = postMessage.call(this, request, ...args);
+            if (
+              request?.kind === 'render' &&
+              request.purpose === 'preview' &&
+              request.previewMaxDimension === undefined &&
+              request.effects.some((effect) => effect.type === 'blur' && effect.params.radius === 7)
+            ) {
+              Worker.prototype.postMessage = postMessage;
+              clearTimeout(timer);
+              const frames = Number(
+                document.querySelector('.image-layer').dataset.interactiveFrames,
+              );
+              input('6');
+              resolve({ id: request.id, frames });
+            }
+            return result;
+          };
+          input('7');
+        });
+      } finally {
+        Worker.prototype.postMessage = postMessage;
+      }
+    });
+  assert.ok(
+    interruption.frames > beforeCancel.frames,
+    'Draft did not precede full-detail refinement',
   );
-  // Interrupt the full-detail pass after the quiet-time refinement starts.
-  await page.waitForTimeout(300);
-  await page.getByRole('slider', { name: 'Radius', exact: true }).fill('6');
   await settle();
   assert.ok(
     Number(await page.locator('.image-layer').getAttribute('data-cancelled-previews')) >
@@ -218,6 +257,7 @@ try {
   const report = {
     mode: label,
     measurements,
+    fullDetailInterruption: interruption,
     fullSizeExport: true,
     undoRedo: true,
     comparisonCache: true,

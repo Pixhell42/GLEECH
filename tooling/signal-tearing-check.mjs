@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
@@ -215,6 +215,16 @@ try {
   await exportExact();
   await page.getByRole('button', { name: 'Starter maps...', exact: true }).click();
   await page.locator('.depth-map-grid button').first().click();
+  // Loading the selected map completes asynchronously after the picker closes.
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        JSON.parse(document.querySelector('.image-layer')?.dataset.renderRecipe ?? '[]')[0]
+          ?.fieldImage,
+      ),
+    undefined,
+    { timeout: 60000 },
+  );
   await settle();
   assert.ok((await recipe()).effects[0].fieldImage);
   await exportExact();
@@ -320,7 +330,11 @@ try {
   await fileAction(page, 'Save Stack as Preset');
   await page.getByRole('textbox', { name: 'Preset name' }).fill('Portable Signal Tearing');
   await page.getByRole('checkbox', { name: 'Include painted masks', exact: true }).check();
-  await page.getByRole('button', { name: 'Save preset', exact: true }).click();
+  // Including masks regenerates the thumbnails before Save becomes enabled.
+  await page
+    .getByRole('img', { name: 'Current image preset preview', exact: true })
+    .waitFor({ timeout: 180000 });
+  await page.getByRole('button', { name: 'Save preset', exact: true }).click({ timeout: 180000 });
   await status('Saved preset Portable Signal Tearing');
   await page.getByRole('tab', { name: 'Presets', exact: true }).click();
   await savePath(presetPath);

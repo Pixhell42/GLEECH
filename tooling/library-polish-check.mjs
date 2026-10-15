@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, basename } from 'node:path';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
@@ -386,11 +386,10 @@ try {
     await page
       .getByRole('combobox', { name: 'Preset collection', exact: true })
       .selectOption('mine');
-    assert.ok(
-      await page
-        .getByRole('button', { name: `Edit preset ${entry.name}`, exact: true })
-        .isVisible(),
-    );
+    // Filtering the imported library commits asynchronously on slower runners.
+    await page
+      .getByRole('button', { name: `Edit preset ${entry.name}`, exact: true })
+      .waitFor({ state: 'visible' });
     await page.getByRole('button', { name: `Apply ${entry.name}`, exact: true }).click();
     await page.getByRole('button', { name: 'Replace All', exact: true }).click();
     await exportExact();

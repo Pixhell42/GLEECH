@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, basename } from 'node:path';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { createEffect, renderEffects } from './effects-reference.mjs';
@@ -130,6 +130,9 @@ try {
       { name, effects, thumbnail },
     );
     assert.equal(saved.ok, true);
+  }
+  // Seed all fixtures before the catalog takes its first library snapshot.
+  for (const name of Object.keys(cases)) {
     await apply(name);
     const before = await state();
     const frames = Number(

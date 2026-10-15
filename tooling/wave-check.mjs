@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { renderEffects, effectCount } from './effects-reference.mjs';
 
@@ -331,6 +331,15 @@ try {
     frequency: 3,
     direction: 0,
     edgeHandling: 'extend',
+    directionSource: 'native',
+    directionInfluence: 1,
+    directionX: 50,
+    directionY: 50,
+    directionScale: 100,
+    directionRotation: 0,
+    directionTwist: 0.5,
+    directionSeed: 0,
+    directionInvert: 'off',
     blendMode: 'normal',
     color: '#ffffff',
     colorMode: 'solid',

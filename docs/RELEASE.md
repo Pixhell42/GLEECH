@@ -20,6 +20,9 @@ Passing development checks does not publish a release.
 - [ ] Review the clean source candidate, its file manifest and fresh one-commit history.
 - [ ] Run `pnpm install --frozen-lockfile`, `pnpm check`, build and packaged checks
       from the intended release tree. Verify generated assets and documentation links.
+- [ ] Require both the hosted full CI lane and the physical-GPU full lane to pass
+      for the release tree. Preserve their result records; their combined command
+      coverage must match the complete plan. Hosted CI alone does not validate GPU shaders.
 - [ ] Run redacted secrets scans on the clean tree and all of its history. Inspect
       archives for local paths, private reference material, credentials and extra files.
 - [x] Review ownership/provenance and credits for shipped artwork, shaders, fonts and maps.

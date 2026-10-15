@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { modelUrl, renderEffects } from './effects-reference.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';

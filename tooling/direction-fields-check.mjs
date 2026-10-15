@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { createEffect, renderEffects, modelUrl } from './effects-reference.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';

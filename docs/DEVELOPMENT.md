@@ -72,17 +72,48 @@ before passing an executable; do not invent packaged support for those tools.
 
 ## CI
 
-Routine PRs/main pushes run one `validate` job: all static/unit checks, one build
-and essential smoke/image/editing/project/preset-transfer/MCP/UI-color workflows.
+Routine PRs/main pushes run static/unit checks followed by one build and the
+essential smoke/image/editing/project/preset-transfer/MCP/UI-color workflows.
 Core image checks use CPU so hosted runners need no promised hardware GPU.
 Docs-only changes retain static/unit checks but skip desktop build/integration.
-The routine timeout is 60 minutes; full mode allows 240 minutes.
+Code and quick desktop jobs each allow 60 minutes. The final `validate` check
+requires the code checks and the selected desktop suite to succeed; skipped,
+cancelled or failed required jobs cannot produce a passing validation result.
 
-Actions → Windows development checks → Run workflow → **full** builds and
-packages once, then runs supported development and packaged integration scripts.
-Version tags matching `v*` also select full mode. Full mode preserves script flags
-and excludes strict hardware-GPU-only checks on hosted Windows. Both modes stop
-at the first failing integration check. Failure diagnostics expire after three
+Actions → Windows development checks → Run workflow → **full** runs supported
+development and packaged integration scripts across twelve shards, with at most
+six running at once. Each shard builds/packages once and allows 120 minutes.
+The complete plan is distributed exactly once across the shards, retaining
+all script flags and supported executable variants.
+Hosted full runs select `--lane hosted`: CPU and adapter-independent workflows.
+Checks that deliberately require WebGPU/imported GPU programs run separately on
+a physical GPU with the same built app and unpacked package:
+
+```powershell
+node tooling/windows-ci.mjs full --lane gpu --packaged apps/desktop/release/win-unpacked/GLEECH.exe
+```
+
+Both lanes are release requirements. Archive their result files and verify their
+source commit matches the intended release tree. A hosted green check alone does
+not prove GPU acceptance. The complete plan (default `--lane all`) retains every
+original command, including strict shader checks. CI-plan tests require the two
+lanes to partition that plan exactly once and keep a CPU counterpart for every
+GPU-only workflow. Physical GPU pixel assertions are unchanged; software GPU
+emulation is not substituted for physical-adapter validation.
+
+On hosted CI, the shared test launcher keeps isolated smoke windows transparent,
+nonactivating and outside the taskbar so Chromium delivers native compositor
+frames. They ignore desktop mouse input; Playwright still drives the real UI.
+This avoids the 1 Hz frame delivery seen after canvas resizing in hidden windows.
+Production launches are unchanged. To use the same test-only mode locally, set
+`$env:GLEECH_TEST_NATIVE_FRAMES='1'` before running checks. Without that opt-in,
+local smoke windows remain hidden. Window/frame behavior is never mocked.
+
+Version tags matching `v*` also select hosted full mode. Quick mode stops
+at its first integration failure. Full mode records failures and continues the
+remaining checks; every shard must pass the final validation gate. This reports
+multiple failures without repeatedly waiting through the same prefix of tests.
+Per-shard failure diagnostics expire after three
 days. Package upload is off by default, including tag-triggered runs. For an
 explicit manual full run, enable **upload_package** only after reviewing binary
 redistribution requirements; uploaded package artifacts expire after seven days.

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
@@ -233,6 +233,7 @@ await sharp(mapPixels, { raw: { width, height, channels: 4 } })
   .png()
   .toFile(mapPath);
 async function inputImage(kind) {
+  const instanceId = (await recipe()).effects.at(-1).instanceId;
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
   }, mapPath);
@@ -247,6 +248,20 @@ async function inputImage(kind) {
       exact: true,
     })
     .click();
+  // Depth-map imports have their own busy state, so the global operation banner
+  // can already be hidden while the effect still has its previous recipe.
+  await page.waitForFunction(
+    ({ kind, name, instanceId }) => {
+      const effects = JSON.parse(
+        document.querySelector('.image-layer')?.dataset.renderRecipe ?? '[]',
+      );
+      const effect = effects.find((effect) => effect.instanceId === instanceId);
+      return effect?.[kind === 'field' ? 'fieldImage' : 'image']?.source.name === name;
+    },
+    { kind, name: basename(mapPath), instanceId },
+    { timeout: 180000 },
+  );
+  await page.locator('.operation-banner').waitFor({ state: 'hidden', timeout: 180000 });
   await settle();
   const e = (await recipe()).effects.at(-1);
   const image = kind === 'field' ? e.fieldImage : e.image;
@@ -491,6 +506,10 @@ try {
   await fileAction(page, 'Save Stack as Preset');
   await page.getByRole('textbox', { name: 'Preset name' }).fill('Portable Eight Filters');
   await page.getByRole('checkbox', { name: 'Include painted masks', exact: true }).check();
+  // Including masks regenerates both thumbnails before Save can be enabled.
+  await page
+    .getByRole('img', { name: 'Current image preset preview', exact: true })
+    .waitFor({ timeout: 180000 });
   await page.getByRole('button', { name: 'Save preset', exact: true }).click();
   await status('Saved preset Portable Eight Filters');
   await page.getByRole('tab', { name: 'Presets', exact: true }).click();

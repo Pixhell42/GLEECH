@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { recordDesktopFailure } from './record-desktop-failure.mjs';
 import { installTestIOTracing } from './test-io-tracing.mjs';

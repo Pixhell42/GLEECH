@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, writeFile, unlink } from 'node:fs/pr
 import { createRequire } from 'node:module';
 import { dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
 import { fileAction } from './file-action.mjs';
@@ -13,7 +13,7 @@ import {
   renderEffects,
   modelUrl,
 } from './effects-reference.mjs';
-const { EFFECT_DEFINITIONS } = await import(modelUrl);
+const { EFFECT_DEFINITIONS, assertProject } = await import(modelUrl);
 const builtinShaderCount = Object.keys(EFFECT_DEFINITIONS).filter(
   (type) => type.startsWith('shader-') && type !== 'shader-import',
 ).length;
@@ -179,6 +179,22 @@ async function exportChecked(expected) {
 try {
   await launch();
   if (cpu) {
+    // Each lane starts clean: build this fixture without a preceding GPU run.
+    await open(imagePath);
+    await fileAction(page, 'Open image Ctrl+Shift+O');
+    await status('Opened source.png');
+    await save(projectPath);
+    await fileAction(page, 'Save project Ctrl+S');
+    await status('Saved embedded');
+    const saved = await readFile(projectPath);
+    const recipeEnd = 12 + saved.readUInt32LE(8);
+    const document = JSON.parse(saved.subarray(12, recipeEnd).toString('utf8'));
+    document.project.effects = [createImportedShader(pkg, 'unsupported')];
+    assertProject(document.project);
+    const fixtureRecipe = Buffer.from(JSON.stringify(document));
+    const header = Buffer.from(saved.subarray(0, 12));
+    header.writeUInt32LE(fixtureRecipe.length, 8);
+    await writeFile(projectPath, Buffer.concat([header, fixtureRecipe, saved.subarray(recipeEnd)]));
     await open(samplePath);
     await fileAction(page, 'Add Shader');
     await page.getByRole('button', { name: 'Choose Local File…' }).click();

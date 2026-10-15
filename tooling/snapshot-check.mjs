@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sharp = createRequire(resolve(root, 'apps/desktop/package.json'))('sharp');
@@ -345,7 +345,8 @@ try {
         globalThis.finishPendingSave = resolve;
       });
   });
-  await fileAction(page, 'Save project Ctrl+S');
+  // This save is deliberately held open to test the in-flight close guard.
+  await fileAction(page, 'Save project Ctrl+S', { waitForOperation: false });
   await app.evaluate(async () => {
     while (!globalThis.finishPendingSave) await new Promise((resolve) => setTimeout(resolve, 10));
   });
