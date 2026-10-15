@@ -72,17 +72,25 @@ before passing an executable; do not invent packaged support for those tools.
 
 ## CI
 
-Routine PRs/main pushes run one `validate` job: all static/unit checks, one build
-and essential smoke/image/editing/project/preset-transfer/MCP/UI-color workflows.
+Routine PRs/main pushes run static/unit checks followed by one build and the
+essential smoke/image/editing/project/preset-transfer/MCP/UI-color workflows.
 Core image checks use CPU so hosted runners need no promised hardware GPU.
 Docs-only changes retain static/unit checks but skip desktop build/integration.
-The routine timeout is 60 minutes; full mode allows 240 minutes.
+Code and quick desktop jobs each allow 60 minutes. The final `validate` check
+requires the code checks and the selected desktop suite to succeed; skipped,
+cancelled or failed required jobs cannot produce a passing validation result.
 
-Actions → Windows development checks → Run workflow → **full** builds and
-packages once, then runs supported development and packaged integration scripts.
+Actions → Windows development checks → Run workflow → **full** runs supported
+development and packaged integration scripts across twelve shards, with at most
+six running at once. Each shard builds/packages once and allows 120 minutes.
+The complete plan is distributed exactly once across the shards, retaining
+all script flags and supported executable variants.
 Version tags matching `v*` also select full mode. Full mode preserves script flags
-and excludes strict hardware-GPU-only checks on hosted Windows. Both modes stop
-at the first failing integration check. Failure diagnostics expire after three
+and excludes strict hardware-GPU-only checks on hosted Windows. Quick mode stops
+at its first integration failure. Full mode records failures and continues the
+remaining checks; every shard must pass the final validation gate. This reports
+multiple failures without repeatedly waiting through the same prefix of tests.
+Per-shard failure diagnostics expire after three
 days. Package upload is off by default, including tag-triggered runs. For an
 explicit manual full run, enable **upload_package** only after reviewing binary
 redistribution requirements; uploaded package artifacts expire after seven days.

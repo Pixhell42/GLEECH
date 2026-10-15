@@ -16,6 +16,19 @@ export function needsDesktop(paths) {
   );
 }
 
+export function parseWindowsShard(value) {
+  if (value === undefined) return null;
+  const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(value);
+  if (!match || Number(match[1]) > Number(match[2]) || Number(match[2]) > 64)
+    throw new Error('Provide --shard <index>/<count>, with 1 <= index <= count <= 64.');
+  return { index: Number(match[1]), count: Number(match[2]) };
+}
+
+export function selectWindowsShard(plan, shard) {
+  if (!shard) return plan;
+  return plan.filter((_, index) => index % shard.count === shard.index - 1);
+}
+
 export function createWindowsPlan(mode, scripts, packagedPath) {
   if (!['quick', 'full'].includes(mode)) throw new Error('Choose quick or full CI.');
   if (packagedPath && mode !== 'full') throw new Error('Packaging belongs to full CI.');
