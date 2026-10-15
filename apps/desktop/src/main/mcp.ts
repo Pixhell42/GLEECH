@@ -2,11 +2,13 @@ import { app, clipboard, dialog, ipcMain, type BrowserWindow } from 'electron';
 import type { McpAccess, McpFolderKind } from './mcp-access';
 import { createServer, type Socket } from 'node:net';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
+import { readFile, writeFile, rename, unlink, mkdtemp, chmod, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { z } from 'zod';
 import { isMcpClient } from '../shared/mcp-clients';
 import { mcpConfiguration, mcpLauncher, mcpSetupPrompt } from './mcp-config';
+import { mcpRuntime } from './mcp-runtime';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import {
@@ -35,12 +37,22 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
   >();
   const jobs = new Map<string, { socket: Socket; cancelled: boolean; dispatchId?: string }>();
   const token = randomBytes(32).toString('hex');
-  const pipe = `\\\\.\\pipe\\gleech-mcp-${process.pid}-${randomUUID()}`;
+  let socketDirectory: string | null = null;
+  let pipe = `\\\\.\\pipe\\gleech-mcp-${process.pid}-${randomUUID()}`;
   const connectionPath = join(app.getPath('userData'), 'mcp-connection.json');
-  const serverScript = () =>
-    app.isPackaged
-      ? join(process.resourcesPath, 'mcp/server.cjs')
-      : join(__dirname, '../mcp/server.cjs');
+  const runtime = mcpRuntime(
+    {
+      command: process.execPath,
+      script: app.isPackaged
+        ? join(process.resourcesPath, 'mcp/server.cjs')
+        : join(__dirname, '../mcp/server.cjs'),
+      connectionPath,
+    },
+    {
+      appImage: process.platform === 'linux' && app.isPackaged && Boolean(process.env['APPIMAGE']),
+      userData: app.getPath('userData'),
+    },
+  );
   const status = (): McpStatus => ({
     mode,
     clients: [...sockets.values()].filter(Boolean),
@@ -300,6 +312,13 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
     }
   };
   let configuring = false;
+  const closeServer = async () => {
+    if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (socketDirectory) {
+      await rmdir(socketDirectory);
+      socketDirectory = null;
+    }
+  };
   const setMode = async (next: McpMode) => {
     if (configuring) throw new Error('MCP settings are still updating.');
     configuring = true;
@@ -311,23 +330,34 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
         access.setMode(mode);
         generation++;
         for (const socket of sockets.keys()) socket.destroy();
-        if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+        await closeServer();
         await removeConnection();
       } else {
         if (mode === 'off') {
-          await new Promise<void>((resolve, reject) => {
-            server.once('error', reject);
-            server.listen(pipe, () => {
-              server.removeListener('error', reject);
-              resolve();
-            });
-          });
+          if (process.platform !== 'win32') {
+            socketDirectory = await mkdtemp(join(tmpdir(), 'gleech-mcp-'));
+            await chmod(socketDirectory, 0o700);
+            pipe = join(socketDirectory, 'ipc.sock');
+          }
           try {
+            await runtime.prepare();
+            if (process.platform !== 'win32' && Buffer.byteLength(pipe) >= 104)
+              throw new Error(
+                'MCP temporary path is too long. Launch GLEECH with a shorter TMPDIR.',
+              );
+            await new Promise<void>((resolve, reject) => {
+              server.once('error', reject);
+              server.listen(pipe, () => {
+                server.removeListener('error', reject);
+                resolve();
+              });
+            });
+            if (process.platform !== 'win32') await chmod(pipe, 0o600);
             const temporary = `${connectionPath}.${process.pid}.tmp`;
             await writeFile(temporary, JSON.stringify({ pipe, token }), { mode: 0o600 });
             await rename(temporary, connectionPath);
           } catch (failure) {
-            server.close();
+            await closeServer();
             throw failure;
           }
         }
@@ -359,11 +389,7 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
     if (testing || operation) throw new Error('Wait for the current MCP operation before testing.');
     if (!isMcpClient(selected)) throw new Error('Invalid MCP client.');
     testing = true;
-    const launcher = mcpLauncher(selected, {
-      command: process.execPath,
-      script: serverScript(),
-      connectionPath,
-    });
+    const launcher = mcpLauncher(selected, runtime.paths);
     const client = new Client({ name: 'GLEECH connection test', version: app.getVersion() });
     const transport = new StdioClientTransport({
       ...launcher,
@@ -425,21 +451,11 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
     if (!valid(event) || mode === 'off')
       throw new Error('Enable MCP before copying its configuration.');
     if (!isMcpClient(client)) throw new Error('Invalid MCP client configuration.');
-    clipboard.writeText(
-      mcpConfiguration(client, {
-        command: process.execPath,
-        script: serverScript(),
-        connectionPath,
-      }),
-    );
+    clipboard.writeText(mcpConfiguration(client, runtime.paths));
   });
   function setupPrompt(event: Electron.IpcMainInvokeEvent, client: unknown) {
     if (!valid(event) || !isMcpClient(client)) throw new Error('Invalid MCP client setup request.');
-    return mcpSetupPrompt(client, {
-      command: process.execPath,
-      script: serverScript(),
-      connectionPath,
-    });
+    return mcpSetupPrompt(client, runtime.paths);
   }
   ipcMain.handle('mcp:setup-prompt', (event, client: unknown = 'codex') =>
     setupPrompt(event, client),
@@ -478,7 +494,7 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
     generation++;
     cancelAll();
     for (const socket of sockets.keys()) socket.destroy();
-    if (server.listening) server.close();
+    void closeServer().catch(() => {});
     for (const item of pending.values()) {
       clearTimeout(item.timer);
       item.resolve({ ok: false, error: 'GLEECH closed.' });

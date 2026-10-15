@@ -11,19 +11,24 @@
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "pack:win": "electron-builder --win --dir",
-    "dist:win": "electron-builder --win nsis"
+    "dist:win": "electron-builder --win nsis",
+    "pack:mac": "node ../../tooling/mac-native-notices.mjs && electron-builder --mac --dir",
+    "dist:mac": "node ../../tooling/mac-native-notices.mjs && electron-builder --mac zip",
+    "pack:linux": "node ../../tooling/linux-native-notices.mjs && electron-builder --linux --x64 --dir",
+    "dist:linux": "node ../../tooling/linux-native-notices.mjs && electron-builder --linux AppImage --x64"
   },
   "dependencies": {
     "@gleech/command-service": "workspace:*",
     "@gleech/effects": "workspace:*",
+    "@gleech/mcp": "workspace:*",
     "@gleech/project-model": "workspace:*",
     "@gleech/renderer-core": "workspace:*",
     "onnxruntime-node": "1.30.0",
+    "onnxruntime-node-macos-x64": "npm:onnxruntime-node@1.22.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "sharp": "0.35.5",
-    "zod": "4.6.6",
-    "@gleech/mcp": "workspace:*"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

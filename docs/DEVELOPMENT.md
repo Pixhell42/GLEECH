@@ -27,7 +27,7 @@ node tooling/image-check.mjs --cpu
 ```
 
 `check` runs publication-content and build-tool scope checks, Prettier, ESLint, all workspace types,
-Vitest and the Windows CI-plan tests. CPU-heavy unit tests use one worker in CI
+Vitest and the Windows/Mac CI-plan tests. CPU-heavy unit tests use one worker in CI
 and at most four locally. Exhaustive render/variation sweeps use independently
 timed cases. Avoid interpreting a timeout as an image correctness assertion.
 
@@ -69,6 +69,13 @@ node tooling/mcp-clients-check.mjs apps/desktop/release/win-unpacked/GLEECH.exe
 
 Some renderer benchmarks are development-only. See script argument handling
 before passing an executable; do not invent packaged support for those tools.
+
+## macOS packaging
+
+For experimental native Intel and Apple Silicon packaging and verification, see
+[macOS development](MACOS.md). Run `pnpm pack:mac` or `pnpm dist:mac` with native
+Node.js on the target architecture; the Intel subject-detection runtime is pinned
+separately from Windows and Apple Silicon.
 
 ## CI
 

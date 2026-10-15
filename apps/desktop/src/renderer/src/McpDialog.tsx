@@ -17,7 +17,7 @@ export function McpDialog({ onClose }: { onClose(): void }) {
       return 'codex';
     }
   });
-  const selectedClient = mcpClient(client);
+  const selectedClient = mcpClient(client, window.gleech.platform);
   useEffect(() => {
     const dialog = modal.current!;
     dialog.showModal();

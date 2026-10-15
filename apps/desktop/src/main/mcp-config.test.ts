@@ -66,7 +66,7 @@ describe('local MCP client configuration profiles', () => {
   );
 
   it.each(MCP_CLIENTS)('includes the actual launcher and safe setup scope for $name', (client) => {
-    const prompt = mcpSetupPrompt(client.id, paths);
+    const prompt = mcpSetupPrompt(client.id, paths, 'win32');
     expect(prompt).toContain(client.name);
     expect(prompt).toContain(mcpConfiguration(client.id, paths).trimEnd());
     expect(prompt).toContain('Preserve other servers and settings');
@@ -108,4 +108,40 @@ describe('local MCP client configuration profiles', () => {
     for (const value of ['grokbot', 'dots', 'http', '__proto__', {}, null, undefined])
       expect(isMcpClient(value)).toBe(false);
   });
+
+  it.each(MCP_CLIENTS)(
+    'uses macOS destinations and intact app bundle paths for $name',
+    (client) => {
+      const macPaths = {
+        command: '/Applications/GLEECH.app/Contents/MacOS/GLEECH',
+        script: '/Applications/GLEECH.app/Contents/Resources/mcp/server.cjs',
+        connectionPath: '/Users/artist/Library/Application Support/GLEECH/mcp-connection.json',
+      };
+      const prompt = mcpSetupPrompt(client.id, macPaths, 'darwin');
+      expect(prompt).toContain('on macOS');
+      expect(prompt).not.toContain('%USERPROFILE%');
+      expect(prompt).not.toContain('%APPDATA%');
+      expect(prompt).not.toContain('Windows');
+      expect(prompt).toContain(mcpConfiguration(client.id, macPaths).trimEnd());
+      if (client.id === 'claude-desktop')
+        expect(prompt).toContain('~/Library/Application Support/Claude/claude_desktop_config.json');
+    },
+  );
+});
+
+it.each(MCP_CLIENTS)('uses Linux-local setup paths for $name', (client) => {
+  const prompt = mcpSetupPrompt(
+    client.id,
+    {
+      command: '/opt/gleech/gleech',
+      script: '/opt/gleech/resources/mcp/server.cjs',
+      connectionPath: '/home/artist/.config/@gleech/desktop/mcp-connection.json',
+    },
+    'linux',
+  );
+  expect(prompt).not.toContain('%USERPROFILE%');
+  expect(prompt).not.toContain('%APPDATA%');
+  expect(prompt).not.toContain('Library/Application Support');
+  expect(prompt).not.toContain('same Mac');
+  if (client.id === 'claude-desktop') expect(prompt).toContain('claude_desktop_config.json');
 });
