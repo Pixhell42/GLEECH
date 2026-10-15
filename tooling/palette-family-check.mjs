@@ -211,7 +211,7 @@ try {
   await pattern();
   await exportExact();
   await page.locator('.effect-lock').first().click();
-  await page.locator('.effect-row').first().locator('input[type=checkbox]').first().uncheck();
+  await page.locator('.effect-row').first().locator('.effect-visibility').click();
   console.log(label + ': all nine palettes, five remapping styles and seeded corruption passed');
 
   await add('Threshold / Photocopy');
@@ -239,7 +239,7 @@ try {
   await page.getByRole('textbox', { name: 'Paper end hex', exact: true }).fill('#80c0ff');
   await pattern();
   await exportExact();
-  await page.locator('.effect-row').first().locator('input[type=checkbox]').first().uncheck();
+  await page.locator('.effect-row').first().locator('.effect-visibility').click();
   console.log(
     label + ': threshold, bitmap, local means, photocopy, ink/paper gradients and patterns passed',
   );
@@ -333,8 +333,10 @@ try {
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.locator('.effect-lock').first().click();
-  for (const row of await page.locator('.effect-row').all())
-    await row.locator('input[type=checkbox]').first().check();
+  for (const row of await page.locator('.effect-row').all()) {
+    const visibility = row.locator('.effect-visibility');
+    if ((await visibility.getAttribute('aria-pressed')) !== 'true') await visibility.click();
+  }
   await exportExact();
   const masked = await recipe();
   await page.locator('.effect-select').first().click({ button: 'right' });

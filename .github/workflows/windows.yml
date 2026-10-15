@@ -111,7 +111,7 @@ jobs:
           node tooling/native-release-check.mjs apps/desktop/release/win-unpacked
           node tooling/build-tool-review.mjs apps/desktop/release/win-unpacked
       - name: Full built and packaged workflows
-        run: node tooling/windows-ci.mjs full --packaged apps/desktop/release/win-unpacked/GLEECH.exe --shard ${{ matrix.shard }}/12
+        run: node tooling/windows-ci.mjs full --packaged apps/desktop/release/win-unpacked/GLEECH.exe --lane hosted --shard ${{ matrix.shard }}/12
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: success() && matrix.shard == 1 && inputs.upload_package
         with:

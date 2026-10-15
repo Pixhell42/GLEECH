@@ -247,6 +247,7 @@ async function inputImage(kind) {
       exact: true,
     })
     .click();
+  await page.locator('.operation-banner').waitFor({ state: 'hidden', timeout: 180000 });
   await settle();
   const e = (await recipe()).effects.at(-1);
   const image = kind === 'field' ? e.fieldImage : e.image;

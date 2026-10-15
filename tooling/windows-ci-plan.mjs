@@ -10,6 +10,34 @@ const nativeOnly = new Set([
   'tooling/ui-color-check.mjs',
 ]);
 
+// These scripts deliberately assert a WebGPU backend or render imported GPU
+// programs. Keep their CPU/unsupported-backend checks on hosted Windows; run
+// their GPU variants on a physical adapter before accepting a release.
+const physicalGpuChecks = new Set(
+  [
+    'shader',
+    'shader-import',
+    'shader-paste',
+    'isf',
+    'mcp',
+    'beta-shaders',
+    'library-polish',
+    'reference-collection',
+    'set2-resolution',
+    'preview-performance',
+    'stack-preview',
+  ].map((name) => `tooling/${name}-check.mjs`),
+);
+
+export function selectWindowsLane(plan, lane = 'all') {
+  if (!['all', 'hosted', 'gpu'].includes(lane)) throw new Error('Choose all, hosted or gpu lane.');
+  if (lane === 'all') return plan;
+  return plan.filter(({ args }) => {
+    const gpu = physicalGpuChecks.has(args[0]) && !args.includes('--cpu');
+    return lane === 'gpu' ? gpu : !gpu;
+  });
+}
+
 export function needsDesktop(paths) {
   return (
     !paths.length || paths.some((path) => !/^(?:docs\/|[^/]+\.md$|LICENSE(?:\.md)?$)/.test(path))
@@ -57,9 +85,6 @@ export function createWindowsPlan(mode, scripts, packagedPath) {
       if (!/^node tooling\/[a-z0-9-]+\.mjs(?: --[a-z0-9-]+)*$/.test(part))
         throw new Error(`Unsupported CI command in ${name}: ${part}`);
       const args = part.split(' ').slice(1);
-      // The strict GPU-only check needs hardware hosted Windows does not promise.
-      // Other shader workflows retain automatic backend selection and CPU checks.
-      if (args[0] === 'tooling/shader-check.mjs' && !args.includes('--cpu')) continue;
       add(args);
     }
   }

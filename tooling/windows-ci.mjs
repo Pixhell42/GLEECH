@@ -7,6 +7,7 @@ import {
   needsDesktop,
   parseWindowsShard,
   selectWindowsShard,
+  selectWindowsLane,
 } from './windows-ci-plan.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -38,20 +39,42 @@ if (mode === 'classify') {
     throw new Error('Provide the shard index/count.');
   const shard = parseWindowsShard(shardIndex >= 0 ? options[shardIndex + 1] : undefined);
   if (shard && mode !== 'full') throw new Error('Sharding belongs to full CI.');
+  const laneIndex = options.indexOf('--lane');
+  const lane = laneIndex >= 0 ? options[laneIndex + 1] : 'all';
+  if (laneIndex >= 0 && (!lane || mode !== 'full'))
+    throw new Error('Provide --lane all/hosted/gpu for full CI only.');
   const expected = options.includes('--list') ? ['--list'] : [];
   if (packagedPath) expected.push('--packaged', packagedPath);
   if (shard) expected.push('--shard', options[shardIndex + 1]);
+  if (laneIndex >= 0) expected.push('--lane', lane);
   if (options.length !== expected.length || options.some((arg) => !expected.includes(arg)))
     throw new Error(
-      'Use quick/full, optional --list, --packaged <path>, and full-only --shard <index>/<count>.',
+      'Use quick/full, optional --list, --packaged <path>, and full-only --shard <index>/<count> and --lane all/hosted/gpu.',
     );
   const { scripts } = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
   const allChecks = createWindowsPlan(mode, scripts, packagedPath);
-  const plan = selectWindowsShard(allChecks, shard);
+  const laneChecks = selectWindowsLane(allChecks, lane);
+  const plan = selectWindowsShard(laneChecks, shard);
+  const sourceCommit = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+  }).stdout?.trim();
   for (const command of plan) await access(resolve(root, command.args[0]));
   if (options.includes('--list')) {
     console.log(
-      JSON.stringify({ mode, shard, totalChecks: allChecks.length, commands: plan }, null, 2),
+      JSON.stringify(
+        {
+          mode,
+          lane,
+          shard,
+          totalChecks: allChecks.length,
+          laneChecks: laneChecks.length,
+          commands: plan,
+        },
+        null,
+        2,
+      ),
     );
   } else {
     if (packagedPath) await access(resolve(root, packagedPath));
@@ -75,8 +98,23 @@ if (mode === 'classify') {
       if (process.env.GITHUB_ACTIONS) console.log('::endgroup::');
       results.push({ ...command, status, seconds: (Date.now() - started) / 1000 });
       await writeFile(
-        resolve(output, `${mode}${shard ? `-${shard.index}-of-${shard.count}` : ''}-result.json`),
-        JSON.stringify({ mode, shard, totalChecks: plan.length, results }, null, 2),
+        resolve(
+          output,
+          `${mode}${lane !== 'all' ? `-${lane}` : ''}${shard ? `-${shard.index}-of-${shard.count}` : ''}-result.json`,
+        ),
+        JSON.stringify(
+          {
+            mode,
+            lane,
+            shard,
+            sourceCommit,
+            totalChecks: plan.length,
+            fullChecks: allChecks.length,
+            results,
+          },
+          null,
+          2,
+        ),
       );
       if (status !== 0) {
         console.error(`CI check failed: ${label}`);
@@ -87,7 +125,7 @@ if (mode === 'classify') {
     if (process.env.GITHUB_STEP_SUMMARY) {
       await appendFile(
         process.env.GITHUB_STEP_SUMMARY,
-        `## Windows ${mode}${shard ? ` ${shard.index}/${shard.count}` : ''} checks\n\n${results.filter((result) => result.status === 0).length}/${plan.length} checks passed.\n\n` +
+        `## Windows ${mode} (${lane})${shard ? ` ${shard.index}/${shard.count}` : ''} checks\n\n${results.filter((result) => result.status === 0).length}/${plan.length} checks passed.\n\n` +
           results
             .map(
               (result) =>

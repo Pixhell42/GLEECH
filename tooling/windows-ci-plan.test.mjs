@@ -8,6 +8,7 @@ import {
   needsDesktop,
   parseWindowsShard,
   selectWindowsShard,
+  selectWindowsLane,
 } from './windows-ci-plan.mjs';
 
 const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -47,7 +48,7 @@ test('full checks retain actual scripts, flags and packaged support without fake
     ),
   );
   assert.ok(
-    !plan.some(({ args }) => args[0] === 'tooling/shader-check.mjs' && !args.includes('--cpu')),
+    plan.some(({ args }) => args[0] === 'tooling/shader-check.mjs' && !args.includes('--cpu')),
   );
 });
 test('docs skip desktop work while code, assets, dependencies and workflows do not', () => {
@@ -92,6 +93,7 @@ test('stable validation gate requires code checks and the selected desktop suite
   assert.ok(
     workflow.jobs.full.steps.some((step) => step.run?.endsWith('--shard ${{ matrix.shard }}/12')),
   );
+  assert.ok(workflow.jobs.full.steps.some((step) => step.run?.includes('--lane hosted')));
   assert.ok(!workflow.on.pull_request?.paths && !workflow.on.pull_request?.['paths-ignore']);
   assert.equal(workflow.permissions.contents, 'read');
   assert.ok(scripts.check.includes('pnpm build:tool:check'));
@@ -138,6 +140,44 @@ test('invalid shard definitions cannot silently omit checks', () => {
   assert.equal(parseWindowsShard(undefined), null);
   for (const value of ['', '0/12', '13/12', '1/0', '1/65', 'x/12', '1.5/12', '1/12/3'])
     assert.throws(() => parseWindowsShard(value), /shard/);
+});
+
+test('hosted and physical-GPU lanes partition the complete release plan without omissions', () => {
+  const all = createWindowsPlan('full', scripts, 'GLEECH.exe');
+  const hosted = selectWindowsLane(all, 'hosted');
+  const gpu = selectWindowsLane(all, 'gpu');
+  const keys = [...hosted, ...gpu].map((command) => JSON.stringify(command));
+  assert.equal(new Set(keys).size, all.length);
+  assert.equal(keys.length, all.length);
+  assert.deepEqual(keys.sort(), all.map((command) => JSON.stringify(command)).sort());
+  assert.ok(gpu.length > 0 && hosted.length > gpu.length);
+  assert.ok(gpu.every(({ args }) => !args.includes('--cpu')));
+  for (const command of gpu) {
+    assert.ok(
+      hosted.some(
+        ({ args, packaged }) =>
+          packaged === command.packaged && args[0] === command.args[0] && args.includes('--cpu'),
+      ),
+      `Missing CPU coverage for ${command.args.join(' ')}`,
+    );
+  }
+  assert.throws(() => selectWindowsLane(all, 'unknown'), /lane/);
+});
+
+test('the CLI preserves the exact commands in each backend lane', () => {
+  const all = createWindowsPlan('full', scripts, 'GLEECH.exe');
+  for (const lane of ['hosted', 'gpu']) {
+    const result = spawnSync(
+      process.execPath,
+      ['tooling/windows-ci.mjs', 'full', '--list', '--packaged', 'GLEECH.exe', '--lane', lane],
+      { encoding: 'utf8', windowsHide: true },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const listed = JSON.parse(result.stdout);
+    assert.equal(listed.totalChecks, all.length);
+    assert.equal(listed.lane, lane);
+    assert.deepEqual(listed.commands, selectWindowsLane(all, lane));
+  }
 });
 
 test('the CI command line applies its shard to the actual full plan', () => {

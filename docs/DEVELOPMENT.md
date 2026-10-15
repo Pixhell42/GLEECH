@@ -85,8 +85,23 @@ development and packaged integration scripts across twelve shards, with at most
 six running at once. Each shard builds/packages once and allows 120 minutes.
 The complete plan is distributed exactly once across the shards, retaining
 all script flags and supported executable variants.
-Version tags matching `v*` also select full mode. Full mode preserves script flags
-and excludes strict hardware-GPU-only checks on hosted Windows. Quick mode stops
+Hosted full runs select `--lane hosted`: CPU and adapter-independent workflows.
+Checks that deliberately require WebGPU/imported GPU programs run separately on
+a physical GPU with the same built app and unpacked package:
+
+```powershell
+node tooling/windows-ci.mjs full --lane gpu --packaged apps/desktop/release/win-unpacked/GLEECH.exe
+```
+
+Both lanes are release requirements. Archive their result files and verify their
+source commit matches the intended release tree. A hosted green check alone does
+not prove GPU acceptance. The complete plan (default `--lane all`) retains every
+original command, including strict shader checks. CI-plan tests require the two
+lanes to partition that plan exactly once and keep a CPU counterpart for every
+GPU-only workflow. Physical GPU pixel assertions are unchanged; software GPU
+emulation is not substituted for physical-adapter validation.
+
+Version tags matching `v*` also select hosted full mode. Quick mode stops
 at its first integration failure. Full mode records failures and continues the
 remaining checks; every shard must pass the final validation gate. This reports
 multiple failures without repeatedly waiting through the same prefix of tests.

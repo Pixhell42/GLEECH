@@ -110,8 +110,13 @@ try {
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await toggle.click();
-  await menu.getByRole('button', { name: 'Exit GLEECH Alt+F4', exact: true }).focus();
+  // The version-copy button now follows Exit and is the final focusable item.
+  await menu.getByRole('button', { name: 'Copy GLEECH version', exact: true }).focus();
   await page.keyboard.press('Tab');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="File menu"]')?.getAttribute('aria-expanded') === 'false',
+  );
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false', 'Tab out dismisses the menu');
   await fileAction(page, 'Discord Community');
   assert.deepEqual(await app.evaluate(() => globalThis.__betaExternalLinks), [

@@ -22,4 +22,10 @@ export async function fileAction(page, name) {
       .getByRole('button', { name: group, exact: true })
       .click();
   await page.locator('.file-menu-items').getByRole('button', { name, exact: true }).click();
+  // Native image I/O can outlast a locator's short default timeout on hosted
+  // Windows. Wait for the real operation to finish before reading its result.
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
+  await page.locator('.operation-banner').waitFor({ state: 'hidden', timeout: 180000 });
 }

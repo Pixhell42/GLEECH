@@ -130,6 +130,9 @@ try {
       { name, effects, thumbnail },
     );
     assert.equal(saved.ok, true);
+  }
+  // Seed all fixtures before the catalog takes its first library snapshot.
+  for (const name of Object.keys(cases)) {
     await apply(name);
     const before = await state();
     const frames = Number(
