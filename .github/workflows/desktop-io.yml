@@ -44,4 +44,9 @@ jobs:
             test-results/desktop-io
             test-results/preset-transfer-check
             test-results/mcp-check
+            !test-results/**/*profile*/**
+            !test-results/preset-transfer-check/*-source-*/**
+            !test-results/preset-transfer-check/*-destination-*/**
+            !test-results/**/mcp-connection.json
+            !test-results/**/Local State
           retention-days: 3

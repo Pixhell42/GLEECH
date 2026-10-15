@@ -78,7 +78,13 @@ jobs:
         if: failure()
         with:
           name: desktop-diagnostics-quick
-          path: test-results
+          path: |
+            test-results
+            !test-results/**/*profile*/**
+            !test-results/preset-transfer-check/*-source-*/**
+            !test-results/preset-transfer-check/*-destination-*/**
+            !test-results/**/mcp-connection.json
+            !test-results/**/Local State
           if-no-files-found: ignore
           retention-days: 3
 
@@ -122,7 +128,13 @@ jobs:
         if: failure()
         with:
           name: desktop-diagnostics-full-${{ matrix.shard }}
-          path: test-results
+          path: |
+            test-results
+            !test-results/**/*profile*/**
+            !test-results/preset-transfer-check/*-source-*/**
+            !test-results/preset-transfer-check/*-destination-*/**
+            !test-results/**/mcp-connection.json
+            !test-results/**/Local State
           if-no-files-found: ignore
           retention-days: 3
 
