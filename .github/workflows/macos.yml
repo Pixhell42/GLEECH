@@ -58,10 +58,7 @@ jobs:
       - name: Build native Mac ZIP
         run: pnpm dist:mac
       - name: Verify native binaries, original notices and ZIP
-        env:
-          GLEECH_MAC_APP: ${{ matrix.app }}
-          EXPECTED_ARCH: ${{ matrix.arch }}
-        run: node tooling/mac-package-check.mjs "$GLEECH_MAC_APP" "$EXPECTED_ARCH"
+        run: node tooling/mac-package-check.mjs
       - name: Formatting, lint, types and unit tests
         run: pnpm check
       - name: Test the packaged app

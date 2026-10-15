@@ -5,6 +5,24 @@ import { dirname, relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 
+export function macBuildTarget(arch) {
+  if (arch === 'arm64')
+    return {
+      arch: 'arm64',
+      app: 'mac-arm64/GLEECH.app',
+      report: 'mac-build-arm64.json',
+      checksum: 'SHA256SUMS-mac-arm64.txt',
+    };
+  if (arch === 'x64')
+    return {
+      arch: 'x64',
+      app: 'mac/GLEECH.app',
+      report: 'mac-build-x64.json',
+      checksum: 'SHA256SUMS-mac-x64.txt',
+    };
+  throw new Error('Unsupported native Mac architecture.');
+}
+
 export async function retainedMacOnnxNotices(version) {
   const noticeHashes = {
     '1.22.0': 'e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc',

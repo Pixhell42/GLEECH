@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { load } from 'js-yaml';
 import {
   collectMacNativeNotices,
+  macBuildTarget,
   retainedMacLibvipsNotices,
   retainedMacOnnxNotices,
 } from './mac-native-review.mjs';
@@ -13,6 +15,20 @@ const root = resolve(import.meta.dirname, '..');
 const workflow = load(await readFile(resolve(root, '.github/workflows/macos.yml'), 'utf8'));
 const builder = load(await readFile(resolve(root, 'apps/desktop/electron-builder.yml'), 'utf8'));
 const workspace = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+
+test('Mac verifier derives fixed native paths and rejects arbitrary executable/path arguments', () => {
+  assert.equal(macBuildTarget('arm64').app, 'mac-arm64/GLEECH.app');
+  assert.equal(macBuildTarget('x64').app, 'mac/GLEECH.app');
+  for (const input of ['../other.app', 'x64/../../', undefined, 'ia32'])
+    assert.throws(() => macBuildTarget(input));
+  const rejected = spawnSync(
+    process.execPath,
+    [resolve(root, 'tooling/mac-package-check.mjs'), '../other.app', 'x64'],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.stderr, /no arguments accepted/);
+});
 
 for (const arch of ['arm64', 'x64']) {
   test(`notice collection accepts real-world missing license layouts on ${arch}`, async () => {

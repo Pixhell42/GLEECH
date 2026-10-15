@@ -4,16 +4,18 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { macBuildTarget } from './mac-native-review.mjs';
 
-const [appPath, arch, ...extra] = process.argv.slice(2);
-assert.ok(
-  appPath && ['arm64', 'x64'].includes(arch) && !extra.length,
-  'Usage: mac-package-check.mjs <GLEECH.app> <arm64|x64>',
+assert.equal(
+  process.argv.length,
+  2,
+  'mac-package-check.mjs uses fixed native build outputs; no arguments accepted.',
 );
 assert.equal(process.platform, 'darwin');
-assert.equal(process.arch, arch, 'Build and test on the native target architecture.');
+const target = macBuildTarget(process.arch);
+const { arch } = target;
 const root = resolve(import.meta.dirname, '..');
-const app = resolve(appPath);
+const app = resolve(root, 'apps/desktop/release', target.app);
 const resources = resolve(app, 'Contents/Resources');
 const executable = resolve(app, 'Contents/MacOS/GLEECH');
 const machoArch = arch === 'x64' ? 'x86_64' : 'arm64';
@@ -119,11 +121,11 @@ const report = {
   })),
 };
 await writeFile(
-  resolve(root, `apps/desktop/release/mac-build-${arch}.json`),
+  resolve(root, 'apps/desktop/release', target.report),
   JSON.stringify(report, null, 2) + '\n',
 );
 await writeFile(
-  resolve(root, `apps/desktop/release/SHA256SUMS-mac-${arch}.txt`),
+  resolve(root, 'apps/desktop/release', target.checksum),
   `${sha256}  ${archiveName}\n`,
 );
 console.log(`Mac ${arch} alpha package checks passed: ${archiveName}.`);
