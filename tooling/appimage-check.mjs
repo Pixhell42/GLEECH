@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'smol-toml';
 import { _electron as electron } from './test-electron.mjs';
@@ -20,8 +21,19 @@ const args = [
 ];
 const env = { ...process.env, GLEECH_SMOKE_USER_DATA: profile };
 delete env.ELECTRON_RUN_AS_NODE;
+const launchDirectories = [];
 async function launch(copyConfiguration = true) {
-  const app = await electron.launch({ executablePath, args, env, timeout: 30000 });
+  // Extract-and-run caches by image digest inside TMPDIR. Use a short, distinct
+  // temporary root per launch so CI exercises the same path change as FUSE.
+  // Keep the app profile fixed so the original copied client settings are reused.
+  const temporary = await mkdtemp(join(tmpdir(), 'gleech-ai-'));
+  launchDirectories.push(temporary);
+  const app = await electron.launch({
+    executablePath,
+    args,
+    env: { ...env, TMPDIR: temporary },
+    timeout: 30000,
+  });
   try {
     const page = await app.firstWindow();
     await page.getByRole('heading', { name: 'GLEECH.', exact: true }).waitFor();
@@ -47,7 +59,7 @@ async function launch(copyConfiguration = true) {
     }));
     assert.ok(runtime.appimage, 'Launch the actual AppImage, not an unpacked executable');
     await page.getByRole('button', { name: 'Close MCP panel' }).click();
-    return { app, page, config, runtime };
+    return { app, page, config, runtime, temporary };
   } catch (error) {
     await closeTestApp(app);
     throw error;
@@ -83,6 +95,8 @@ try {
   );
   await closeTestApp(first.app);
   first.app = null;
+  await rm(first.temporary, { recursive: true, force: true });
+  await assert.rejects(access(first.runtime.executable), { code: 'ENOENT' });
   second = await launch(false);
   const old = await connect(first.config);
   assert.notEqual(
@@ -97,4 +111,5 @@ try {
 } finally {
   if (first?.app) await closeTestApp(first.app);
   if (second?.app) await closeTestApp(second.app);
+  for (const temporary of launchDirectories) await rm(temporary, { recursive: true, force: true });
 }
