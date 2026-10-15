@@ -386,11 +386,10 @@ try {
     await page
       .getByRole('combobox', { name: 'Preset collection', exact: true })
       .selectOption('mine');
-    assert.ok(
-      await page
-        .getByRole('button', { name: `Edit preset ${entry.name}`, exact: true })
-        .isVisible(),
-    );
+    // Filtering the imported library commits asynchronously on slower runners.
+    await page
+      .getByRole('button', { name: `Edit preset ${entry.name}`, exact: true })
+      .waitFor({ state: 'visible' });
     await page.getByRole('button', { name: `Apply ${entry.name}`, exact: true }).click();
     await page.getByRole('button', { name: 'Replace All', exact: true }).click();
     await exportExact();
