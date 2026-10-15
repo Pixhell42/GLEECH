@@ -5,12 +5,10 @@ directories:
 files:
   - out/**
   - package.json
-  - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
-  - '!**/onnxruntime-node/bin/napi-v6/linux/**'
-  - '!**/onnxruntime-node/bin/napi-v6/win32/arm64/**'
 asar: true
 asarUnpack:
   - node_modules/onnxruntime-node/bin/**
+  - node_modules/onnxruntime-node-macos-x64/bin/**
 extraResources:
   - from: ../../LICENSE
     to: LICENSE.GLEECH.txt
@@ -35,6 +33,11 @@ extraResources:
 # Shared workspace packages are bundled by Vite into the renderer.
 npmRebuild: false
 win:
+  files:
+    - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
+    - '!**/onnxruntime-node/bin/napi-v6/linux/**'
+    - '!**/onnxruntime-node/bin/napi-v6/win32/arm64/**'
+    - '!**/onnxruntime-node-macos-x64/**'
   icon: resources/branding/icon-beta.ico
   target:
     - target: nsis
@@ -42,6 +45,22 @@ win:
         - x64
   # Apply icon/metadata resources; signing credentials come before public release.
   signExecutable: false
+mac:
+  category: public.app-category.graphics-design
+  icon: resources/branding/icon-beta.png
+  identity: null
+  extraResources:
+    - from: out/mac-native-notices
+      to: mac-native-notices
+  files:
+    - '!**/onnxruntime-node/bin/napi-v6/win32/**'
+    - '!**/onnxruntime-node/bin/napi-v6/linux/**'
+    - '!**/onnxruntime-node-macos-x64/bin/napi-v6/win32/**'
+    - '!**/onnxruntime-node-macos-x64/bin/napi-v6/linux/**'
+    - '!**/onnxruntime-node-macos-x64/bin/napi-v6/darwin/arm64/**'
+  target:
+    - target: zip
+  artifactName: GLEECH-${version}-mac-${arch}.${ext}
 nsis:
   installerIcon: resources/branding/icon-beta.ico
   uninstallerIcon: resources/branding/icon-beta.ico

@@ -1,18 +1,27 @@
 import { readFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { basename, dirname, isAbsolute } from 'node:path';
 import { type McpRequest, type McpReply } from './protocol';
 
 export interface McpConnection {
   pipe: string;
   token: string;
 }
+export function isMcpEndpoint(pipe: unknown, platform = process.platform): pipe is string {
+  if (typeof pipe !== 'string') return false;
+  if (platform === 'win32') return pipe.startsWith('\\\\.\\pipe\\gleech-mcp-');
+  return (
+    isAbsolute(pipe) &&
+    !pipe.includes('\0') &&
+    Buffer.byteLength(pipe) < 104 &&
+    basename(pipe) === 'ipc.sock' &&
+    /^gleech-mcp-[A-Za-z0-9]{6}$/.test(basename(dirname(pipe)))
+  );
+}
 export async function connectGleech(path: string, clientName: string) {
   const connection = JSON.parse(await readFile(path, 'utf8')) as McpConnection;
-  if (
-    !connection.pipe?.startsWith('\\\\.\\pipe\\gleech-mcp-') ||
-    !/^[a-f0-9]{64}$/.test(connection.token ?? '')
-  )
+  if (!isMcpEndpoint(connection.pipe) || !/^[a-f0-9]{64}$/.test(connection.token ?? ''))
     throw new Error('Invalid GLEECH connection file.');
   const socket = connect(connection.pipe);
   const pending = new Map<

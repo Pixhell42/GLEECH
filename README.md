@@ -2,14 +2,14 @@
 
 It's not broken. It's just a GLEECH.
 
-GLEECH is a Windows desktop image editor for procedural corruption, distortion
+GLEECH is a desktop image editor for procedural corruption, distortion
 and stylization. Stack filters and shaders, paint masks, explore variations and
 keep your work editable in portable projects.
 
 ## Beta status
 
-Windows x64 is the current supported development and testing target. Linux and
-macOS ports are planned; their packages are not available yet. This is a
+Windows x64 is the supported development and testing target. An experimental
+macOS build for Intel and Apple Silicon includes local MCP support; Linux is still planned. This is a
 still-image editor. Video/GIF animation, shader playback/export, animation tools
 and timeline editing are planned and waiting for design.
 
@@ -36,6 +36,30 @@ describe the beta's current boundaries.
 See [Known Issues](docs/KNOWN_ISSUES.md) for current bugs and areas being tuned.
 
 ## Build from source
+
+### macOS (Intel and Apple Silicon)
+
+The experimental macOS build targets the build machine's architecture and includes local MCP over a Unix socket.
+Use Node.js **22.16.0** and pnpm **10.11.1**, then:
+
+```sh
+corepack enable
+pnpm install --frozen-lockfile
+pnpm pack:mac
+# Intel:
+open apps/desktop/release/mac/GLEECH.app
+# Apple Silicon: open apps/desktop/release/mac-arm64/GLEECH.app
+```
+
+Copy `GLEECH.app` to `~/Applications` for a stable launcher/MCP path. The app
+contains its own runtime. This local build is unsigned and not notarized.
+`pnpm dist:mac` also creates a ZIP. Build with native Node.js on each architecture;
+see [Mac setup](docs/MACOS.md) for runtime differences and verification.
+
+Open **MCP · AI control**, choose a control mode, and copy the configuration for
+your client. MCP starts Off on every launch. See [Mac setup and Resolve workflow](docs/MACOS.md).
+
+### Windows
 
 Use Windows PowerShell, Node.js **22.16.0** and pnpm **10.11.1**.
 

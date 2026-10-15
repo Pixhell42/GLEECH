@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { parse as parseToml } from 'smol-toml';
-import { mkdir, mkdtemp, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, access, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -143,6 +143,12 @@ try {
   assert.equal(originalPng.height, 64);
   // Reject unauthenticated clients before any renderer operation is dispatched.
   const connection = JSON.parse(await readFile(resolve(profile, 'mcp-connection.json'), 'utf8'));
+  if (process.platform === 'darwin') {
+    assert.ok(connection.pipe.startsWith('/'), 'MCP must use an absolute Unix socket path.');
+    assert.equal((await stat(dirname(connection.pipe))).mode & 0o777, 0o700);
+    assert.equal((await stat(connection.pipe)).mode & 0o777, 0o600);
+    assert.equal((await stat(resolve(profile, 'mcp-connection.json'))).mode & 0o777, 0o600);
+  }
   await new Promise((resolve, reject) => {
     const socket = connect(connection.pipe);
     const timer = setTimeout(() => {
@@ -1029,6 +1035,12 @@ try {
   await setMode('Off');
   assert.equal(await page.getByRole('button', { name: 'MCP controls', exact: true }).count(), 0);
   await assert.rejects(access(resolve(profile, 'mcp-connection.json')));
+  if (process.platform === 'darwin') {
+    await assert.rejects(access(connection.pipe));
+    await assert.rejects(access(dirname(connection.pipe)));
+    await setMode('Observe');
+    await setMode('Off');
+  }
   assert.deepEqual(pageErrors, []);
   const backend = await page.locator('footer').getAttribute('data-render-backend');
   await writeFile(
