@@ -8,6 +8,7 @@ on:
       - apps/desktop/electron-builder.yml
       - apps/desktop/package.json
       - apps/desktop/src/main/mcp*.ts
+      - apps/desktop/src/main/feedback-auth-store*.ts
       - apps/desktop/src/shared/mcp-clients.ts
       - package.json
       - pnpm-lock.yaml

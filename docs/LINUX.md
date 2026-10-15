@@ -61,6 +61,12 @@ that running build. The server uses the app's embedded runtime and a private
 Unix socket. Linux client instructions use home-directory paths. MCP is Off at
 launch; file operations retain the existing approved-folder rules.
 
+GitHub sign-in for native bug reports and feature requests requires a supported
+desktop keyring (GNOME Secret Service or KWallet). GLEECH refuses to store tokens
+when Electron selects its `basic_text` fallback or cannot identify a secure
+backend. Enable your desktop keyring before signing in; core editing and local
+MCP do not require GitHub sign-in.
+
 ## Native verification
 
 Run these from the project directory with the pinned Node runtime, inside the
