@@ -919,7 +919,10 @@ try {
   await page
     .getByRole('textbox', { name: 'Preset name', exact: true })
     .fill('Reference collection');
-  await page.getByRole('img', { name: 'Statue preset preview', exact: true }).waitFor();
+  // Full CPU stacks also render a statue thumbnail on hosted machines.
+  await page
+    .getByRole('img', { name: 'Statue preset preview', exact: true })
+    .waitFor({ timeout: 180000 });
   await page.getByRole('radio', { name: 'Statue', exact: true }).check();
   await page.getByRole('button', { name: 'Save preset', exact: true }).click();
   await page
@@ -928,6 +931,8 @@ try {
     .first()
     .waitFor();
   const preset = page.getByRole('button', { name: 'Apply Reference collection', exact: true });
+  // Saving opens the library before its asynchronous list refresh completes.
+  await preset.waitFor({ state: 'visible' });
   assert.equal(await preset.locator('.shader-mark').count(), 1);
   await preset.click();
   await page

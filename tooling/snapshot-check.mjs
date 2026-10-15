@@ -345,7 +345,8 @@ try {
         globalThis.finishPendingSave = resolve;
       });
   });
-  await fileAction(page, 'Save project Ctrl+S');
+  // This save is deliberately held open to test the in-flight close guard.
+  await fileAction(page, 'Save project Ctrl+S', { waitForOperation: false });
   await app.evaluate(async () => {
     while (!globalThis.finishPendingSave) await new Promise((resolve) => setTimeout(resolve, 10));
   });

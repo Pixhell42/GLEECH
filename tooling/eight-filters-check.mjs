@@ -492,6 +492,10 @@ try {
   await fileAction(page, 'Save Stack as Preset');
   await page.getByRole('textbox', { name: 'Preset name' }).fill('Portable Eight Filters');
   await page.getByRole('checkbox', { name: 'Include painted masks', exact: true }).check();
+  // Including masks regenerates both thumbnails before Save can be enabled.
+  await page
+    .getByRole('img', { name: 'Current image preset preview', exact: true })
+    .waitFor({ timeout: 180000 });
   await page.getByRole('button', { name: 'Save preset', exact: true }).click();
   await status('Saved preset Portable Eight Filters');
   await page.getByRole('tab', { name: 'Presets', exact: true }).click();

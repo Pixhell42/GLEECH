@@ -275,6 +275,7 @@ try {
     .first()
     .waitFor();
   const preset = page.getByRole('button', { name: 'Apply Beta geometry', exact: true });
+  await preset.waitFor({ state: 'visible' });
   assert.equal(await preset.locator('.shader-mark').count(), 1);
   await preset.click();
   await page

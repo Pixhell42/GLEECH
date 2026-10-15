@@ -86,7 +86,11 @@ async function open(path, action) {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
   }, path);
   await fileAction(page, action);
-  await status('Opened ' + basename(path));
+  await status(
+    action === 'Import Preset'
+      ? 'Imported preset Portable Channels and Echo'
+      : 'Opened ' + basename(path),
+  );
   await settle();
 }
 async function savePath(path) {
