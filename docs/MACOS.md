@@ -1,6 +1,6 @@
 # GLEECH on macOS
 
-This fork targets Apple Silicon. Build with Node.js 22.16.0 and pnpm 10.11.1:
+The experimental macOS build targets Apple Silicon. Use Node.js 22.16.0 and pnpm 10.11.1:
 
 ```sh
 corepack enable

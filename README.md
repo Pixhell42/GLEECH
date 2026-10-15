@@ -8,8 +8,8 @@ keep your work editable in portable projects.
 
 ## Beta status
 
-Windows x64 is the upstream supported development and testing target. This fork
-adds an Apple Silicon macOS build and local MCP support; Linux is still planned. This is a
+Windows x64 is the supported development and testing target. An experimental
+Apple Silicon macOS build includes local MCP support; Linux is still planned. This is a
 still-image editor. Video/GIF animation, shader playback/export, animation tools
 and timeline editing are planned and waiting for design.
 
@@ -39,7 +39,7 @@ See [Known Issues](docs/KNOWN_ISSUES.md) for current bugs and areas being tuned.
 
 ### macOS (Apple Silicon)
 
-This fork adds a native Apple Silicon app and local MCP over a Unix socket.
+The experimental macOS build includes a native Apple Silicon app and local MCP over a Unix socket.
 Use Node.js **22.16.0** and pnpm **10.11.1**, then:
 
 ```sh

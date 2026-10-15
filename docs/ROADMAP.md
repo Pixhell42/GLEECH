@@ -1,6 +1,6 @@
 # GLEECH roadmap
 
-Updated 2026-10-14. This roadmap describes product priorities, not committed
+Updated 2026-10-15. This roadmap describes product priorities, not committed
 release dates. Beta feedback helps determine the order of work.
 
 ## Available today
@@ -62,8 +62,12 @@ release dates. Beta feedback helps determine the order of work.
 
 ## Linux and macOS
 
-Native port work and packages have not started. Each platform will ship when its
-core workflows are validated, independently of the Windows release schedule.
+An experimental Apple Silicon macOS build now supports local app packaging and
+MCP over Unix sockets. Packaged smoke, GPU/CPU MCP workflows and all eight MCP
+client launcher profiles have been validated on Apple Silicon. See [Mac setup](MACOS.md).
+Intel Macs, signing/notarization and the broader native UI/release checklist
+remain unverified. Linux port work has not started. Each platform will ship when
+its core workflows are validated, independently of the Windows release schedule.
 
 - Support native windows, shortcuts, paths, fonts, clipboard and credentials.
 - Validate image processing, shaders, CPU fallback and local MCP on native hardware.

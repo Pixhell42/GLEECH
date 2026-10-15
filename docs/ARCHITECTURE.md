@@ -61,8 +61,9 @@ File contracts and size budgets are documented in [FILE_FORMATS.md](FILE_FORMATS
 
 ## MCP and feedback
 
-The bundled MCP stdio server connects to a Windows named pipe using a
-per-instance connection file/token. Modes and approved folders gate operations;
+The bundled MCP stdio server connects to a Windows named pipe or a macOS Unix
+socket using a per-instance connection file/token. Unix sockets use a private
+temporary directory. Modes and approved folders gate operations;
 file grants are checked again before writes. Revision checks prevent stale
 edits. Isolated batches retain the working project's UI/history. No HTTP server,
 remote pairing or hosted relay is part of this transport.
@@ -74,7 +75,8 @@ settings and omit image pixels, shader source, painted strokes and paths.
 
 ## Platforms
 
-Windows x64 is the current supported target. Linux/macOS ports share these
+Windows x64 is the supported target; the experimental macOS build targets Apple
+Silicon. Linux/macOS ports share these
 packages and the UI; platform adapters must isolate window controls, shortcuts,
 paths, credential storage, fonts, native dependencies, packaging and MCP
 connection discovery. One [roadmap](ROADMAP.md) on main records all platform status.
