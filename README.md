@@ -33,6 +33,8 @@ The [user guide](docs/USER_GUIDE.md) covers effects, masks, presets, snapshots,
 exports and local AI control. [Known limitations](docs/RELEASE.md#known-limitations)
 describe the beta's current boundaries.
 
+See [Known Issues](docs/KNOWN_ISSUES.md) for current bugs and areas being tuned.
+
 ## Build from source
 
 Use Windows PowerShell, Node.js **22.16.0** and pnpm **10.11.1**.
