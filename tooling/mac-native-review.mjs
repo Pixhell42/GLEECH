@@ -43,13 +43,22 @@ export async function retainedMacOnnxNotices(version) {
   return { retainedFiles };
 }
 
-export async function collectMacNativeNotices({ arch, output, resolvePackage }) {
-  assert.ok(['arm64', 'x64'].includes(arch), 'Unsupported Mac architecture.');
+export function collectMacNativeNotices(options) {
+  return collectNativeNotices({ ...options, platform: 'darwin' });
+}
+
+export async function collectNativeNotices({ platform, arch, output, resolvePackage }) {
+  assert.ok(
+    (platform === 'darwin' && ['arm64', 'x64'].includes(arch)) ||
+      (platform === 'linux' && arch === 'x64'),
+    'Unsupported native package target.',
+  );
+  const intelMac = platform === 'darwin' && arch === 'x64';
   await mkdir(output, { recursive: true });
   const packages = [
-    `@img/sharp-darwin-${arch}`,
-    `@img/sharp-libvips-darwin-${arch}`,
-    arch === 'x64' ? 'onnxruntime-node-macos-x64' : 'onnxruntime-node',
+    `@img/sharp-${platform}-${arch}`,
+    `@img/sharp-libvips-${platform}-${arch}`,
+    intelMac ? 'onnxruntime-node-macos-x64' : 'onnxruntime-node',
   ];
   const inventory = [];
   for (const name of packages) {
@@ -77,14 +86,14 @@ export async function collectMacNativeNotices({ arch, output, resolvePackage }) 
     }
     await collect(packageRoot);
     let retained = null;
-    if (name.startsWith('@img/sharp-libvips-darwin-')) {
+    if (name.startsWith('@img/sharp-libvips-')) {
       assert.equal(metadata.name, name);
       retained = await retainedMacLibvipsNotices(
         JSON.parse(await readFile(resolve(packageRoot, 'versions.json'), 'utf8')),
       );
     } else if (name.startsWith('onnxruntime-node')) {
       assert.equal(metadata.name, 'onnxruntime-node');
-      assert.equal(metadata.version, arch === 'x64' ? '1.22.0' : '1.30.0');
+      assert.equal(metadata.version, intelMac ? '1.22.0' : '1.30.0');
       retained = await retainedMacOnnxNotices(metadata.version);
     }
     assert.ok(

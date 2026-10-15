@@ -128,3 +128,20 @@ describe('local MCP client configuration profiles', () => {
     },
   );
 });
+
+it.each(MCP_CLIENTS)('uses Linux-local setup paths for $name', (client) => {
+  const prompt = mcpSetupPrompt(
+    client.id,
+    {
+      command: '/opt/gleech/gleech',
+      script: '/opt/gleech/resources/mcp/server.cjs',
+      connectionPath: '/home/artist/.config/@gleech/desktop/mcp-connection.json',
+    },
+    'linux',
+  );
+  expect(prompt).not.toContain('%USERPROFILE%');
+  expect(prompt).not.toContain('%APPDATA%');
+  expect(prompt).not.toContain('Library/Application Support');
+  expect(prompt).not.toContain('same Mac');
+  if (client.id === 'claude-desktop') expect(prompt).toContain('claude_desktop_config.json');
+});
