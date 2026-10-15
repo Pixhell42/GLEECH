@@ -62,11 +62,12 @@ release dates. Beta feedback helps determine the order of work.
 
 ## Linux and macOS
 
-An experimental Apple Silicon macOS build now supports local app packaging and
-MCP over Unix sockets. Packaged smoke, GPU/CPU MCP workflows and all eight MCP
-client launcher profiles have been validated on Apple Silicon. See [Mac setup](MACOS.md).
-Intel Macs, signing/notarization and the broader native UI/release checklist
-remain unverified. Linux port work has not started. Each platform will ship when
+An experimental macOS build supports native Intel and Apple Silicon packaging and
+MCP over Unix sockets. Packaged smoke and GPU/CPU MCP workflows have been validated
+on both architectures. Intel image import/export also exercises the AMD WebGPU
+backend, CPU fallback and device-loss recovery. See [Mac setup](MACOS.md).
+Signing/notarization and the broader native UI/release checklist remain unverified.
+Linux port work has not started. Each platform will ship when
 its core workflows are validated, independently of the Windows release schedule.
 
 - Support native windows, shortcuts, paths, fonts, clipboard and credentials.
