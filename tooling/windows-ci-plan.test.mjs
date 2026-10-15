@@ -185,12 +185,13 @@ test(
       ['quick', 'success', 'skipped', 'skipped', false],
     ]) {
       const result = spawnSync(
-        'powershell.exe',
+        process.env.GITHUB_ACTIONS === 'true' ? 'pwsh.exe' : 'powershell.exe',
         ['-NoProfile', '-NonInteractive', '-Command', code],
         {
           encoding: 'utf8',
           windowsHide: true,
-          timeout: 10000,
+          // Hosted Windows runners can take longer to start a cold PowerShell process.
+          timeout: 60000,
           env: {
             ...process.env,
             CI_SUITE: suite,
