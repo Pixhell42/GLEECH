@@ -70,6 +70,13 @@ node tooling/mcp-clients-check.mjs apps/desktop/release/win-unpacked/GLEECH.exe
 Some renderer benchmarks are development-only. See script argument handling
 before passing an executable; do not invent packaged support for those tools.
 
+## macOS packaging
+
+For experimental native Intel and Apple Silicon packaging and verification, see
+[macOS development](MACOS.md). Run `pnpm pack:mac` or `pnpm dist:mac` with native
+Node.js on the target architecture; the Intel subject-detection runtime is pinned
+separately from Windows and Apple Silicon.
+
 ## CI
 
 Routine PRs/main pushes run static/unit checks followed by one build and the

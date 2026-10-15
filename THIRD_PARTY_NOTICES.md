@@ -38,7 +38,10 @@ Its complete original README.ijg and the mozjpeg/libjpeg-turbo license terms are
 retained under LICENSES/native-components/mozjpeg/0826579.
 
 ONNX Runtime 1.30.0's upstream MIT license and third-party notices are retained
-under LICENSES/onnxruntime/1.30.0. Electron 44.5.1's MIT license is retained under
+under LICENSES/onnxruntime/1.30.0. Intel macOS subject detection uses the
+`onnxruntime-node-macos-x64` npm alias of ONNX Runtime 1.22.0; its upstream MIT
+license and third-party notices are retained under LICENSES/onnxruntime/1.22.0.
+Electron 44.5.1's MIT license is retained under
 LICENSES/electron/44.5.1; preserve LICENSE.electron.txt and LICENSES.chromium.html
 alongside the packaged runtime. Chromium's notices describe its own components.
 

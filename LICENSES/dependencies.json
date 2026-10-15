@@ -46,6 +46,15 @@
   },
   {
     "name": "adm-zip",
+    "version": "0.5.18",
+    "license": "MIT",
+    "homepage": "https://github.com/cthackers/adm-zip",
+    "files": [
+      "LICENSES/adm-zip/0.5.18/LICENSE"
+    ]
+  },
+  {
+    "name": "adm-zip",
     "version": "0.6.1",
     "license": "MIT",
     "homepage": "https://github.com/cthackers/adm-zip",
@@ -613,12 +622,32 @@
   },
   {
     "name": "onnxruntime-common",
+    "version": "1.22.0",
+    "license": "MIT",
+    "homepage": "https://github.com/Microsoft/onnxruntime#readme",
+    "files": [
+      "LICENSES/onnxruntime/1.22.0/LICENSE",
+      "LICENSES/onnxruntime/1.22.0/ThirdPartyNotices.txt"
+    ]
+  },
+  {
+    "name": "onnxruntime-common",
     "version": "1.30.0",
     "license": "MIT",
     "homepage": "https://github.com/Microsoft/onnxruntime#readme",
     "files": [
       "LICENSES/onnxruntime/1.30.0/LICENSE",
       "LICENSES/onnxruntime/1.30.0/ThirdPartyNotices.txt"
+    ]
+  },
+  {
+    "name": "onnxruntime-node",
+    "version": "1.22.0",
+    "license": "MIT",
+    "homepage": "https://github.com/Microsoft/onnxruntime#readme",
+    "files": [
+      "LICENSES/onnxruntime/1.22.0/LICENSE",
+      "LICENSES/onnxruntime/1.22.0/ThirdPartyNotices.txt"
     ]
   },
   {

@@ -1,18 +1,32 @@
 # GLEECH on macOS
 
-The experimental macOS build targets Apple Silicon. Use Node.js 22.16.0 and pnpm 10.11.1:
+The experimental macOS build targets Intel or Apple Silicon, matching the native
+Node.js architecture. Use Node.js 22.16.0 and pnpm 10.11.1:
 
 ```sh
 corepack enable
 pnpm install --frozen-lockfile
 pnpm pack:mac
-open apps/desktop/release/mac-arm64/GLEECH.app
+# Intel:
+open apps/desktop/release/mac/GLEECH.app
+# Apple Silicon: open apps/desktop/release/mac-arm64/GLEECH.app
 ```
 
 Copy the app to `~/Applications` before configuring an MCP client, so rebuilding
 or moving the checkout does not change the launcher. No separate Node runtime
 is needed by the installed app or its MCP server. Packages are local, unsigned,
-and not notarized; this is not a public macOS release or Intel compatibility claim.
+and not notarized; this is not a public macOS release.
+
+`pnpm dist:mac` creates `GLEECH-<version>-mac-x64.zip` on Intel or
+`GLEECH-<version>-mac-arm64.zip` on Apple Silicon. Build on each native architecture
+with a fresh dependency installation so Sharp and Electron match the target.
+
+Intel subject detection uses the pinned `onnxruntime-node-macos-x64` alias of
+ONNX Runtime 1.22.0 because newer npm releases omit Darwin x64 binaries. Windows
+and Apple Silicon continue using 1.30.0. The alias loads only for Intel inference;
+both versions use the same bundled model and CPU execution provider. Its
+install-only proxy helper shares the existing pinned global-agent 4.1.3 dependency.
+The older runtime's license and notices are retained under `LICENSES/onnxruntime/1.22.0`.
 
 ## Agent connection
 
@@ -51,11 +65,22 @@ GLEECH and Resolve have separate MCP servers; the agent coordinates their files.
 
 ```sh
 pnpm check
-node tooling/smoke.mjs apps/desktop/release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH
-node tooling/mcp-check.mjs apps/desktop/release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH
-node tooling/mcp-check.mjs apps/desktop/release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH --cpu
-node tooling/mcp-clients-check.mjs apps/desktop/release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH
+# Intel; use release/mac-arm64 on Apple Silicon.
+gleech_executable=apps/desktop/release/mac/GLEECH.app/Contents/MacOS/GLEECH
+node tooling/smoke.mjs "$gleech_executable"
+node tooling/image-check.mjs "$gleech_executable"
+node tooling/image-check.mjs "$gleech_executable" --cpu
+node tooling/mcp-check.mjs "$gleech_executable"
+node tooling/mcp-check.mjs "$gleech_executable" --cpu
+node tooling/mcp-clients-check.mjs "$gleech_executable"
 ```
 
 Tests use isolated app profiles under `test-results/`. GPU and CPU results are
 separate; successful packaging alone does not verify rendering or MCP.
+
+Validated on an Intel Xeon W-3245 Mac Pro with macOS 26.6.2 on 2026-10-15:
+native x86_64 packaging, packaged smoke, image import/effects/clipboard/lossless
+export on AMD WebGPU and forced CPU, GPU device-loss recovery, all 62 MCP tools
+on both rendering backends (including subject detection), and all eight MCP
+client launcher/configuration profiles. Vendor UI/login flows and the broader
+native UI/release checklist still need separate validation.

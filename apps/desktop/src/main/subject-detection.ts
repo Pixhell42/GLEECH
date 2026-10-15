@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
-import { InferenceSession, Tensor } from 'onnxruntime-node';
+import type { InferenceSession } from 'onnxruntime-node';
 import type { SubjectMask } from '@gleech/project-model';
 import type { PixelImage } from '../shared/image-api';
 
 const MODEL_SHA256 = '309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8';
-let session: Promise<InferenceSession> | null = null;
+let session: Promise<Pick<InferenceSession, 'run' | 'inputNames' | 'outputNames'>> | null = null;
 let serial: Promise<unknown> = Promise.resolve();
 
 export function detectSubject(image: PixelImage, modelPath: string): Promise<SubjectMask> {
@@ -14,6 +14,12 @@ export function detectSubject(image: PixelImage, modelPath: string): Promise<Sub
   const task = serial
     .catch(() => {})
     .then(async () => {
+      // Newer ONNX npm releases omit Darwin x64 binaries. Keep a compatible Intel
+      // runtime isolated from the current Windows/Apple Silicon runtime.
+      const intelMac = process.platform === 'darwin' && process.arch === 'x64';
+      const { InferenceSession, Tensor } = await (intelMac
+        ? import('onnxruntime-node-macos-x64')
+        : import('onnxruntime-node'));
       if (!session) {
         session = (async () => {
           const model = await readFile(modelPath);

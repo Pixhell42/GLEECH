@@ -9,6 +9,11 @@
     "node": ">=22.16.0 <23",
     "pnpm": "10.11.1"
   },
+  "pnpm": {
+    "overrides": {
+      "onnxruntime-node@1.22.0>global-agent": "4.1.3"
+    }
+  },
   "scripts": {
     "dev": "pnpm --filter @gleech/desktop dev",
     "build": "pnpm --filter @gleech/desktop build",

@@ -75,8 +75,8 @@ settings and omit image pixels, shader source, painted strokes and paths.
 
 ## Platforms
 
-Windows x64 is the supported target; the experimental macOS build targets Apple
-Silicon. Linux/macOS ports share these
+Windows x64 is the supported target; the experimental macOS build targets Intel
+and Apple Silicon. Linux/macOS ports share these
 packages and the UI; platform adapters must isolate window controls, shortcuts,
 paths, credential storage, fonts, native dependencies, packaging and MCP
 connection discovery. One [roadmap](ROADMAP.md) on main records all platform status.
