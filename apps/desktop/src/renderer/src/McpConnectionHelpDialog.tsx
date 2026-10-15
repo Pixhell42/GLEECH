@@ -11,7 +11,7 @@ export function McpConnectionHelpDialog({
   onClose(): void;
 }) {
   const modal = useRef<HTMLDialogElement>(null);
-  const selected = mcpClient(client);
+  const selected = mcpClient(client, window.gleech.platform);
   const [prompt, setPrompt] = useState('');
   const [message, setMessage] = useState('');
   const [pending, setPending] = useState(false);

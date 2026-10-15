@@ -68,6 +68,22 @@ export type McpClientId = (typeof MCP_CLIENTS)[number]['id'];
 export function isMcpClient(value: unknown): value is McpClientId {
   return MCP_CLIENTS.some((client) => client.id === value);
 }
-export function mcpClient(id: McpClientId) {
-  return MCP_CLIENTS.find((client) => client.id === id)!;
+export function mcpClient(id: McpClientId, platform = 'win32') {
+  const client = MCP_CLIENTS.find((entry) => entry.id === id)!;
+  if (platform === 'win32') return client;
+  let destination = client.destination.replace('%USERPROFILE%', '~').replaceAll('\\', '/');
+  let instructions: string = client.instructions;
+  if (id === 'claude-desktop') {
+    destination = '~/Library/Application Support/Claude/claude_desktop_config.json';
+    instructions =
+      'Merge the gleech entry into mcpServers in this file. Fully quit and reopen Claude Desktop.';
+  } else if (id === 'cursor') {
+    instructions = instructions.replace('local Windows agent', 'local desktop agent');
+  } else if (id === 'hermes') {
+    instructions =
+      'Merge gleech into mcp_servers in config.yaml. Use /reload-mcp or restart Hermes, then run hermes mcp test gleech. Run the client locally on the same Mac as GLEECH.';
+  } else if (id === 'json') {
+    instructions = instructions.replace('on Windows', 'on this computer');
+  }
+  return { ...client, destination, instructions };
 }

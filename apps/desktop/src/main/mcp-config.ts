@@ -66,16 +66,20 @@ export function mcpConfiguration(client: McpClientId, paths: McpLauncherPaths) {
 }
 
 /** The prompt contains launcher paths only; the connection token stays in GLEECH. */
-export function mcpSetupPrompt(client: McpClientId, paths: McpLauncherPaths) {
-  const selected = mcpClient(client);
+export function mcpSetupPrompt(
+  client: McpClientId,
+  paths: McpLauncherPaths,
+  platform = process.platform,
+) {
+  const selected = mcpClient(client, platform);
   const target =
-    client === 'claude-desktop'
+    client === 'claude-desktop' && platform === 'win32'
       ? '%APPDATA%\\Claude\\claude_desktop_config.json'
-      : client === 'chatgpt-desktop'
+      : client === 'chatgpt-desktop' && platform === 'win32'
         ? '%USERPROFILE%\\.codex\\config.toml'
         : selected.destination;
   return [
-    `Connect ${selected.name} to my open GLEECH app on Windows using local stdio MCP.`,
+    `Connect ${selected.name} to my open GLEECH app on ${platform === 'darwin' ? 'macOS' : platform === 'win32' ? 'Windows' : platform} using local stdio MCP.`,
     'GLEECH must stay open with Observe, Edit or Full Control enabled. Tell me if I need to enable MCP before connecting.',
     `Configuration destination: ${target}. Expand environment variables for the current user.`,
     'If you have local file access, back up the existing file, then merge only the gleech server entry below. Preserve other servers and settings; replace an existing gleech entry without duplicating it. If the file is invalid or the destination is unknown, stop and explain what needs fixing.',

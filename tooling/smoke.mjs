@@ -28,7 +28,7 @@ try {
   assert.equal(await seed.inputValue(), '8172');
   await seed.fill('991');
   assert.equal(await seed.inputValue(), '991');
-  assert.equal(await page.evaluate(() => window.gleech.platform), 'win32');
+  assert.equal(await page.evaluate(() => window.gleech.platform), process.platform);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   const settings = await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences(),
@@ -39,7 +39,9 @@ try {
   assert.deepEqual(errors, []);
   await mkdir(resolve(root, 'test-results'), { recursive: true });
   await page.screenshot({ path: resolve(root, 'test-results/desktop-smoke.png') });
-  console.log(`Windows desktop smoke passed (${executablePath ? 'packaged' : 'built'} app).`);
+  console.log(
+    `${process.platform} desktop smoke passed (${executablePath ? 'packaged' : 'built'} app).`,
+  );
 } finally {
   await closeTestApp(app);
 }
