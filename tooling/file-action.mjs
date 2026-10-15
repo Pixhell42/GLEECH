@@ -22,6 +22,8 @@ export async function fileAction(page, name) {
       .getByRole('button', { name: group, exact: true })
       .click();
   await page.locator('.file-menu-items').getByRole('button', { name, exact: true }).click();
+  // Exit may destroy the renderer; document-check waits for that native close.
+  if (name === 'Exit GLEECH Alt+F4') return;
   // Native image I/O can outlast a locator's short default timeout on hosted
   // Windows. Wait for the real operation to finish before reading its result.
   await page.evaluate(
