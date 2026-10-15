@@ -233,6 +233,7 @@ await sharp(mapPixels, { raw: { width, height, channels: 4 } })
   .png()
   .toFile(mapPath);
 async function inputImage(kind) {
+  const instanceId = (await recipe()).effects.at(-1).instanceId;
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
   }, mapPath);
@@ -247,6 +248,19 @@ async function inputImage(kind) {
       exact: true,
     })
     .click();
+  // Depth-map imports have their own busy state, so the global operation banner
+  // can already be hidden while the effect still has its previous recipe.
+  await page.waitForFunction(
+    ({ kind, name, instanceId }) => {
+      const effects = JSON.parse(
+        document.querySelector('.image-layer')?.dataset.renderRecipe ?? '[]',
+      );
+      const effect = effects.find((effect) => effect.instanceId === instanceId);
+      return effect?.[kind === 'field' ? 'fieldImage' : 'image']?.source.name === name;
+    },
+    { kind, name: basename(mapPath), instanceId },
+    { timeout: 180000 },
+  );
   await page.locator('.operation-banner').waitFor({ state: 'hidden', timeout: 180000 });
   await settle();
   const e = (await recipe()).effects.at(-1);
