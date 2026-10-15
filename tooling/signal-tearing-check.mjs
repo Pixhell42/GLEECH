@@ -215,6 +215,16 @@ try {
   await exportExact();
   await page.getByRole('button', { name: 'Starter maps...', exact: true }).click();
   await page.locator('.depth-map-grid button').first().click();
+  // Loading the selected map completes asynchronously after the picker closes.
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        JSON.parse(document.querySelector('.image-layer')?.dataset.renderRecipe ?? '[]')[0]
+          ?.fieldImage,
+      ),
+    undefined,
+    { timeout: 60000 },
+  );
   await settle();
   assert.ok((await recipe()).effects[0].fieldImage);
   await exportExact();
