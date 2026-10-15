@@ -9,6 +9,12 @@
     "node": ">=22.16.0 <23",
     "pnpm": "10.11.1"
   },
+  "pnpm": {
+    "overrides": {
+      "onnxruntime-node@1.22.0>global-agent": "4.1.3",
+      "onnxruntime-node@1.22.0>adm-zip": "0.6.1"
+    }
+  },
   "scripts": {
     "dev": "pnpm --filter @gleech/desktop dev",
     "build": "pnpm --filter @gleech/desktop build",
@@ -43,7 +49,7 @@
     "native:release:check": "node tooling/native-release-check.mjs",
     "native:attribution:check": "node tooling/native-attribution-check.mjs",
     "native:source:check": "node tooling/native-source-review-check.mjs",
-    "ci:plan:test": "node --test tooling/windows-ci-plan.test.mjs",
+    "ci:plan:test": "node --test tooling/windows-ci-plan.test.mjs tooling/mac-build-plan.test.mjs tooling/linux-build-plan.test.mjs",
     "pack:win": "pnpm build && pnpm --filter @gleech/desktop pack:win",
     "dist:win": "pnpm build && pnpm --filter @gleech/desktop dist:win",
     "pack:mac": "pnpm build && pnpm --filter @gleech/desktop pack:mac",
@@ -106,7 +112,9 @@
     "test:mcp": "pnpm build && node tooling/mcp-check.mjs && node tooling/mcp-check.mjs --cpu",
     "test:mcp-clients": "pnpm build && node tooling/mcp-clients-check.mjs",
     "test:ui-color": "pnpm build && node tooling/ui-color-check.mjs",
-    "test:beta-ui": "pnpm build && node tooling/beta-ui-check.mjs && node tooling/beta-ui-check.mjs --cpu"
+    "test:beta-ui": "pnpm build && node tooling/beta-ui-check.mjs && node tooling/beta-ui-check.mjs --cpu",
+    "pack:linux": "pnpm build && pnpm --filter @gleech/desktop pack:linux",
+    "dist:linux": "pnpm build && pnpm --filter @gleech/desktop dist:linux"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

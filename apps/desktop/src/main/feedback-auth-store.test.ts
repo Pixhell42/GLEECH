@@ -17,6 +17,7 @@ async function fixture() {
   // Simulated encryption tests storage behavior; native tests exercise Electron safeStorage.
   const encryption = {
     isEncryptionAvailable: vi.fn(() => true),
+    getSelectedStorageBackend: vi.fn(() => 'gnome_libsecret'),
     encryptString: (text: string) => Buffer.from(Buffer.from(text).map((byte) => byte ^ 0xa5)),
     decryptString: (bytes: Buffer) =>
       Buffer.from(bytes)
@@ -60,5 +61,37 @@ describe('encrypted feedback credentials', () => {
     await expect(f.store.save(auth)).rejects.toThrow('encryption is unavailable');
     expect(await readdir(f.folder)).toEqual([]);
     expect(await f.store.load()).toBeNull();
+  });
+  it.each(['basic_text', 'unknown', ''])(
+    'does not read or persist GitHub credentials through the Linux %s backend',
+    async (backend) => {
+      const f = await fixture();
+      f.encryption.getSelectedStorageBackend.mockReturnValue(backend);
+      const store = createFeedbackAuthStore(f.path, f.encryption, 'linux');
+      await expect(store.save(auth)).rejects.toThrow('Enable a desktop keyring');
+      expect(await readdir(f.folder)).toEqual([]);
+      expect(await store.load()).toBeNull();
+    },
+  );
+  it.each(['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'])(
+    'persists credentials with the Linux %s keyring',
+    async (backend) => {
+      const f = await fixture();
+      f.encryption.getSelectedStorageBackend.mockReturnValue(backend);
+      const store = createFeedbackAuthStore(f.path, f.encryption, 'linux');
+      await store.save(auth);
+      expect(await store.load()).toEqual(auth);
+    },
+  );
+  it('keeps Windows and Mac encryption independent of Linux backend selection', async () => {
+    const f = await fixture();
+    f.encryption.getSelectedStorageBackend.mockImplementation(() => {
+      throw new Error('Linux-only backend API');
+    });
+    for (const platform of ['win32', 'darwin'] as const) {
+      const store = createFeedbackAuthStore(f.path, f.encryption, platform);
+      await store.save(auth);
+      expect(await store.load()).toEqual(auth);
+    }
   });
 });

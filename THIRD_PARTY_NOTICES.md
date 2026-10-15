@@ -8,7 +8,10 @@ terms or establish rights for user-imported artwork/shaders/fonts.
 The pinned production package inventory, SPDX declarations, upstream homepages
 and retained notice paths are in [LICENSES/dependencies.json](LICENSES/dependencies.json).
 Original license/notice texts are preserved in LICENSES and copied into the
-Windows app's resources/licenses directory. This inventory is a dependency
+apps' resources/licenses directory. Mac builds also retain a native-package
+notice inventory under resources/mac-native-notices; see [Mac packaging](docs/MACOS.md)
+for the libvips npm notice omission and the version-matched retained upstream texts.
+This inventory is a dependency
 superset, not a claim that every HTTP adapter is used by the local stdio server.
 
 React, MCP SDK, Zod and ONNX Runtime use MIT terms. Sharp uses Apache-2.0; its
@@ -38,7 +41,10 @@ Its complete original README.ijg and the mozjpeg/libjpeg-turbo license terms are
 retained under LICENSES/native-components/mozjpeg/0826579.
 
 ONNX Runtime 1.30.0's upstream MIT license and third-party notices are retained
-under LICENSES/onnxruntime/1.30.0. Electron 44.5.1's MIT license is retained under
+under LICENSES/onnxruntime/1.30.0. Intel macOS subject detection uses the
+`onnxruntime-node-macos-x64` npm alias of ONNX Runtime 1.22.0; its upstream MIT
+license and third-party notices are retained under LICENSES/onnxruntime/1.22.0.
+Electron 44.5.1's MIT license is retained under
 LICENSES/electron/44.5.1; preserve LICENSE.electron.txt and LICENSES.chromium.html
 alongside the packaged runtime. Chromium's notices describe its own components.
 
