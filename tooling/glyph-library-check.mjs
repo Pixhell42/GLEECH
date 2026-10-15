@@ -114,7 +114,12 @@ const choose = (name, value) =>
 const slider = (name, value) => page.getByRole('slider', { name, exact: true }).fill(String(value));
 const dialog = () => page.locator('#effect-catalog');
 const effectNames = () => dialog().locator('.effect-tile strong').allTextContents();
-const presetNames = () => dialog().locator('.preset-tile strong').allTextContents();
+const presetNames = async () => {
+  // Saving/deleting reopens the picker before its asynchronous library reload.
+  // An absent grid is still loading, rather than an empty favorites collection.
+  await dialog().locator('.preset-grid').waitFor({ state: 'attached' });
+  return dialog().locator('.preset-tile strong').allTextContents();
+};
 const alphabetical = (names) =>
   [...names].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base', numeric: true }));
 async function picker(tab = 'effects') {
