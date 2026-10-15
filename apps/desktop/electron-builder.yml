@@ -49,6 +49,9 @@ mac:
   category: public.app-category.graphics-design
   icon: resources/branding/icon-beta.png
   identity: null
+  extraResources:
+    - from: out/mac-native-notices
+      to: mac-native-notices
   files:
     - '!**/onnxruntime-node/bin/napi-v6/win32/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/**'

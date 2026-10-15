@@ -46,15 +46,6 @@
   },
   {
     "name": "adm-zip",
-    "version": "0.5.18",
-    "license": "MIT",
-    "homepage": "https://github.com/cthackers/adm-zip",
-    "files": [
-      "LICENSES/adm-zip/0.5.18/LICENSE"
-    ]
-  },
-  {
-    "name": "adm-zip",
     "version": "0.6.1",
     "license": "MIT",
     "homepage": "https://github.com/cthackers/adm-zip",

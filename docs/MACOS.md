@@ -27,6 +27,29 @@ and Apple Silicon continue using 1.30.0. The alias loads only for Intel inferenc
 both versions use the same bundled model and CPU execution provider. Its
 install-only proxy helper shares the existing pinned global-agent 4.1.3 dependency.
 The older runtime's license and notices are retained under `LICENSES/onnxruntime/1.22.0`.
+Its install-only ZIP helper is overridden to the existing patched adm-zip 0.6.1.
+
+## Separate alpha builds
+
+The **macOS alpha builds** Actions workflow builds separate Apple Silicon
+(`arm64`) and Intel (`x64`) ZIPs from the same source commit. It runs on native
+macOS 15 runners, installs dependencies from the frozen lockfile, checks production
+advisories, and verifies the packaged app before uploading artifacts. Run it
+manually from **Actions → macOS alpha builds → Run workflow**. Relevant packaging
+pull requests also run it automatically.
+
+Each artifact contains the ZIP, a SHA-256 checksum and a build record naming its
+source commit and architecture. Download the artifact matching the Mac's processor,
+extract the artifact and then the GLEECH ZIP, and copy `GLEECH.app` to `~/Applications`.
+These are unsigned, unnotarized test builds; the workflow does not publish a release.
+
+The packages retain original licenses and notices from their installed Mac Sharp,
+libvips and selected ONNX runtime packages in `Contents/Resources/mac-native-notices`.
+The build checks verify their hashes, native executable architecture, Sharp image
+processing, CPU subject inference and ZIP integrity. Packaged smoke, image, MCP and
+client-configuration tests run before artifact upload. Hosted CPU checks complement
+the contributor's physical Intel/Apple Silicon GPU testing; they do not certify
+GPU performance, vendor client login flows or the broader native UI checklist.
 
 ## Agent connection
 
