@@ -45,7 +45,12 @@ assert.ok(!got.defaults.options.cache, 'HTTP response caching requires a new adv
 const config = load(await readFile(resolve(root, 'apps/desktop/electron-builder.yml'), 'utf8'));
 assert.ok(!config.electronDownload?.downloadOptions?.cache, 'Do not enable HTTP response caching.');
 const workflow = load(await readFile(resolve(root, '.github/workflows/windows.yml'), 'utf8'));
-assert.equal(workflow.jobs.validate.env.ROARR_LOG, 'false');
+assert.equal(workflow.env.ROARR_LOG, 'false');
+for (const job of Object.values(workflow.jobs)) {
+  const jobLogging = job.env?.ROARR_LOG ?? workflow.env.ROARR_LOG;
+  assert.equal(jobLogging, 'false');
+  for (const step of job.steps ?? []) assert.equal(step.env?.ROARR_LOG ?? jobLogging, 'false');
+}
 assert.ok(
   !formatterRequire('boolean').boolean(process.env.ROARR_LOG ?? ''),
   'Disable ROARR_LOG during the reviewed packaging workflow.',
