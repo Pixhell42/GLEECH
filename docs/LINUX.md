@@ -11,13 +11,31 @@ mise exec node@22.16.0 -- corepack pnpm pack:linux
 ```
 
 The unpacked directory contains the runtime and must remain intact. `dist:linux`
-adds an AppImage build target. This is experimental x64 support; ARM64 and other
+builds a portable AppImage in `apps/desktop/release/`. This is experimental x64 support; ARM64 and other
 Linux distributions have not been validated. Public distribution still needs
 release and binary-redistribution review.
 
 Sharp's versioned libvips shared objects must be unpacked beside its native
 binding, so electron-builder explicitly unpacks `node_modules/@img/**`.
 Packaging includes the Linux ONNX runtime and excludes Windows/macOS binaries.
+
+## AppImage
+
+```sh
+pnpm dist:linux
+chmod +x apps/desktop/release/GLEECH-*-linux-x86_64.AppImage
+./apps/desktop/release/GLEECH-*-linux-x86_64.AppImage
+```
+
+Omarchy's `fuse2` package supplies the FUSE library required by this AppImage
+runtime. Keep the executable bit when copying the file. For the optional GPU
+mode, pass the same three Vulkan flags listed below directly to the AppImage.
+
+AppImages mount at a different temporary path on each launch. MCP configurations
+therefore use a private, stable `mcp-appimage/runtime` link under the app's user-data
+directory. Enabling MCP refreshes it to the current mounted runtime; copied
+client settings survive subsequent launches. The app must remain open and MCP
+still starts Off. This does not grant file or clipboard access.
 
 ## Local MCP
 
@@ -37,6 +55,7 @@ node tooling/smoke.mjs apps/desktop/release/linux-unpacked/gleech
 GLEECH_TEST_NATIVE_FRAMES=1 node tooling/mcp-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
 GLEECH_TEST_NATIVE_FRAMES=1 node tooling/mcp-check.mjs tooling/run-linux-webgpu.sh
 GLEECH_TEST_NATIVE_FRAMES=1 node tooling/mcp-clients-check.mjs apps/desktop/release/linux-unpacked/gleech
+GLEECH_TEST_NATIVE_FRAMES=1 node tooling/appimage-check.mjs apps/desktop/release/GLEECH-*-linux-x86_64.AppImage
 ```
 
 The existing native-frame test option keeps isolated test windows compositing;
