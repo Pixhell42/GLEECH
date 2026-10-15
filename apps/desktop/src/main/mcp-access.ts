@@ -100,9 +100,10 @@ export function createMcpAccess() {
       if (!clipboardAllowed || request.action !== 'copy_to_clipboard')
         throw new Error('Enable the separate clipboard permission in GLEECH’s MCP panel.');
     },
-    async addFolder(kind: McpFolderKind, path: string) {
+    async addFolder(kind: McpFolderKind, path: string, guard: () => void = () => {}) {
       const canonical = await realpath(pathValue(path));
       if (!(await stat(canonical)).isDirectory()) throw new Error('Choose an existing folder.');
+      guard();
       if (
         !folders.some(
           (folder) => folder.kind === kind && folder.path.toLowerCase() === canonical.toLowerCase(),

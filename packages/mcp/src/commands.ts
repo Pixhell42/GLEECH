@@ -486,6 +486,9 @@ export function createMcpCommands(
         case 'branch_from_snapshot':
         case 'create_project':
         case 'load_image':
+        case 'load_image_data':
+        case 'request_folder_access':
+        case 'revoke_folder_access':
         case 'replace_source':
         case 'open_project':
         case 'save_project':

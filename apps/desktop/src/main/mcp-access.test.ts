@@ -13,6 +13,20 @@ async function cleanup(root: string) {
   await rm(root, { recursive: true, force: true });
 }
 describe('MCP approved filesystem scopes', () => {
+  it('rechecks approval immediately before committing a folder grant', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gleech-mcp-approval-'));
+    const access = createMcpAccess();
+    try {
+      await expect(
+        access.addFolder('imports', root, () => {
+          throw new Error('Request cancelled');
+        }),
+      ).rejects.toThrow('Request cancelled');
+      expect(access.folders()).toEqual([]);
+    } finally {
+      await cleanup(root);
+    }
+  });
   it('requires an independent clipboard grant, an active matching request and Edit mode', () => {
     const access = createMcpAccess();
     access.setMode('edit');

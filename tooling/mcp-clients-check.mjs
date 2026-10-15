@@ -230,7 +230,7 @@ try {
     await page.getByRole('button', { name: 'Test Connection', exact: true }).click();
     await page
       .locator('.mcp-dialog [role="status"]')
-      .filter({ hasText: 'Connection verified · 62 tools available' })
+      .filter({ hasText: 'Connection verified · 65 tools available' })
       .waitFor();
     await captureTestWindow(app, resolve(output, `${id}-panel.png`));
     await page.getByRole('button', { name: 'Close MCP panel' }).click();
@@ -245,7 +245,7 @@ try {
     const stderr = [];
     transport.stderr.on('data', (data) => stderr.push(data.toString()));
     await client.connect(transport);
-    assert.equal((await client.listTools()).tools.length, 62);
+    assert.equal((await client.listTools()).tools.length, 65);
     const label = id === 'json' ? 'MCP client' : name;
     const status = (await call('get_mcp_status')).structuredContent;
     assert.ok(status.clients.includes(label));

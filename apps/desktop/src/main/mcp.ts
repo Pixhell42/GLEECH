@@ -214,6 +214,7 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
             'bake_as_new_source',
             'analyze_image',
             'copy_to_clipboard',
+            'request_folder_access',
           ].includes(String(message.request.action)),
         );
         const deadline = Date.now() + (longOperation ? 299000 : 59000);
@@ -434,6 +435,37 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
     publish();
     return status();
   });
+  let folderPickerPending = false;
+  ipcMain.handle('mcp:folder-operation', async (event, id: unknown) => {
+    if (!valid(event) || typeof id !== 'string') throw new Error('Invalid MCP folder request.');
+    const request = access.request(id);
+    if (request.action === 'revoke_folder_access') {
+      access.removeFolder(request.folderId);
+      publish();
+      return { canceled: false, status: status() };
+    }
+    if (request.action !== 'request_folder_access')
+      throw new Error('Invalid MCP folder operation.');
+    if (folderPickerPending)
+      throw new Error('Close the current folder picker before requesting another grant.');
+    folderPickerPending = true;
+    try {
+      const selected = await dialog.showOpenDialog(window, {
+        title: `Approve MCP ${request.kind} folder`,
+        message: `A connected MCP client is requesting ${request.kind} access. Choose a folder to grant access for this app session, or cancel to grant nothing.`,
+        properties: ['openDirectory'],
+      });
+      access.request(id);
+      if (selected.canceled || !selected.filePaths[0]) return { canceled: true, status: status() };
+      await access.addFolder(request.kind, selected.filePaths[0], () => {
+        access.request(id);
+      });
+      publish();
+      return { canceled: false, status: status() };
+    } finally {
+      folderPickerPending = false;
+    }
+  });
   ipcMain.handle('mcp:remove-folder', (event, id: unknown) => {
     if (!valid(event) || typeof id !== 'string') throw new Error('Invalid MCP folder request.');
     access.removeFolder(id);
@@ -513,6 +545,7 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
       'mcp:test-connection',
       'mcp:set-clipboard',
       'mcp:add-folder',
+      'mcp:folder-operation',
       'mcp:remove-folder',
     ])
       ipcMain.removeHandler(name);

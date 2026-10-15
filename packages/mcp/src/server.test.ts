@@ -98,7 +98,7 @@ it('serves tools, resources, structured results, validation errors and PNG image
   try {
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     const toolList = (await client.listTools()).tools;
-    expect(toolList.length).toBe(62);
+    expect(toolList.length).toBe(65);
     expect(
       toolList.every((tool) => typeof tool.description === 'string' && tool.description.length > 0),
     ).toBe(true);

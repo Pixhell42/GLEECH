@@ -1,6 +1,6 @@
 # Local MCP setup
 
-GLEECH includes a local stdio MCP server with 62 tools, nine resources and three
+GLEECH includes a local stdio MCP server with 65 tools, nine resources and three
 resource templates. It controls the open desktop instance using the normal
 editing/rendering engine. Windows uses named pipes; macOS uses a Unix socket in
 a private temporary directory (0700), with a private socket and connection file
@@ -45,6 +45,28 @@ do not promise WSL or remote execution. See client documentation for host change
 Approvals apply to paths and are rechecked before writes. Mode changes,
 cancellation, locked layers and revision mismatches are enforced. An open modal
 can block edits until it is closed. Do not grant broad folders unless needed.
+
+## Importing supplied images and managing folder grants
+
+`load_image_data` accepts a still PNG, JPEG or WebP as canonical padded base64 in
+`data`, plus `mimeType`, an optional display `name`, and `expectedRevision`.
+Do not include a `data:` URL prefix. The decoded file must be at most 6 MiB;
+normal image dimension, pixel-count and still-image limits also apply. It works
+in Edit or Full Control without an Imports folder or clipboard permission,
+because the client supplies the bytes. It preserves the current effect stack
+and can be undone. Use `create_project` first when an empty stack is wanted.
+For larger files, use `load_image` with an approved Imports folder.
+
+In Full Control, `request_folder_access` with `kind` (`imports`, `projects` or
+`exports`) opens a native GLEECH folder picker. The user chooses the folder; the
+tool cannot supply a path or silently grant access. Cancellation, expiry, or a
+mode change while the picker is open grants nothing. Allow up to five minutes
+for the user to respond. A cancelled request may leave the native picker open;
+close it before requesting another folder. Grants remain session-only.
+
+Use `get_mcp_status` to inspect grants and `revoke_folder_access` with a returned
+`folderId` to remove one. Revocation does not delete files. Existing path-based
+imports and exports still require their corresponding folder grants.
 
 Read get_project_state first and use expectedRevision when editing/rendering.
 Use instanceId, not titles, to target effects. MCP stack indexes match visible

@@ -82,6 +82,10 @@ export interface WindowState {
 }
 
 export interface DesktopBridge {
+  readMcpImageData(dispatchId: string): Promise<Result<{ kind: 'image'; image: ImportedImage }>>;
+  mcpFolderOperation(
+    dispatchId: string,
+  ): Promise<{ canceled: boolean; status: import('@gleech/mcp/protocol').McpStatus }>;
   preflightMcpBatch(dispatchId: string): Promise<Result<void>>;
   readMcpBatch(dispatchId: string, index: number): Promise<Result<ImportedImage>>;
   writeMcpBatch(
