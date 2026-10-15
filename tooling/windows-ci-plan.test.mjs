@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { test } from 'node:test';
 import { load } from 'js-yaml';
 import { spawnSync } from 'node:child_process';
+import { needsNativeTestFrames } from './test-electron.mjs';
 import {
   createWindowsPlan,
   needsDesktop,
@@ -15,6 +16,18 @@ const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.me
 const workflow = load(
   readFileSync(new URL('../.github/workflows/windows.yml', import.meta.url), 'utf8'),
 );
+
+test('native test frames require an isolated smoke profile and explicit test environment', () => {
+  const options = { args: ['app', '--smoke-test'], env: { GLEECH_SMOKE_USER_DATA: 'profile' } };
+  assert.equal(needsNativeTestFrames(options, {}), false);
+  assert.equal(needsNativeTestFrames(options, { GITHUB_ACTIONS: 'true' }), true);
+  assert.equal(needsNativeTestFrames(options, { GLEECH_TEST_NATIVE_FRAMES: '1' }), true);
+  assert.equal(
+    needsNativeTestFrames({ ...options, args: ['app'] }, { GITHUB_ACTIONS: 'true' }),
+    false,
+  );
+  assert.equal(needsNativeTestFrames({ ...options, env: {} }, { GITHUB_ACTIONS: 'true' }), false);
+});
 test('routine changes keep critical workflows without rebuilding or packaging', () => {
   const plan = createWindowsPlan('quick', scripts);
   assert.equal(plan.length, 7);

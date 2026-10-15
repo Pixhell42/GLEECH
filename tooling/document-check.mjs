@@ -4,7 +4,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sharp = createRequire(resolve(root, 'apps/desktop/package.json'))('sharp');
 const output = resolve(root, 'test-results/document-check');

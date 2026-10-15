@@ -101,6 +101,14 @@ lanes to partition that plan exactly once and keep a CPU counterpart for every
 GPU-only workflow. Physical GPU pixel assertions are unchanged; software GPU
 emulation is not substituted for physical-adapter validation.
 
+On hosted CI, the shared test launcher keeps isolated smoke windows transparent,
+nonactivating and outside the taskbar so Chromium delivers native compositor
+frames. They ignore desktop mouse input; Playwright still drives the real UI.
+This avoids the 1 Hz frame delivery seen after canvas resizing in hidden windows.
+Production launches are unchanged. To use the same test-only mode locally, set
+`$env:GLEECH_TEST_NATIVE_FRAMES='1'` before running checks. Without that opt-in,
+local smoke windows remain hidden. Window/frame behavior is never mocked.
+
 Version tags matching `v*` also select hosted full mode. Quick mode stops
 at its first integration failure. Full mode records failures and continues the
 remaining checks; every shard must pass the final validation gate. This reports

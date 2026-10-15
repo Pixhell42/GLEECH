@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { createEffect } from './effects-reference.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { connect } from 'node:net';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createEffect, createImportedShader } from './effects-reference.mjs';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { recordDesktopFailure } from './record-desktop-failure.mjs';

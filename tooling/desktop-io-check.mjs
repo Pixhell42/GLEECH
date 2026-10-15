@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { installTestIOTracing } from './test-io-tracing.mjs';
 import { recordDesktopFailure } from './record-desktop-failure.mjs';

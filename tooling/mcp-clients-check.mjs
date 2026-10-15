@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseToml } from 'smol-toml';
 import { load as parseYaml } from 'js-yaml';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from './test-electron.mjs';
 import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
