@@ -311,7 +311,11 @@ try {
   await picker('Presets');
   await page.getByRole('button', { name: 'Save current stack', exact: true }).click();
   await page.getByRole('textbox', { name: 'Preset name', exact: true }).fill('Feature completion');
-  await page.getByRole('button', { name: 'Save preset', exact: true }).click();
+  // The full stack's preset thumbnail can outlast the default click timeout.
+  await page
+    .getByRole('img', { name: 'Current image preset preview', exact: true })
+    .waitFor({ timeout: 180000 });
+  await page.getByRole('button', { name: 'Save preset', exact: true }).click({ timeout: 180000 });
   await status('Saved preset Feature completion');
   const preset = JSON.parse(await readFile(resolve(profile, 'presets.json'), 'utf8')).presets[0];
   assert.ok(preset.effects[0].application.depthImage.png.startsWith('data:image/png;base64,'));
