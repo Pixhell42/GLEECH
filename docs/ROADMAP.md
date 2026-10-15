@@ -62,15 +62,16 @@ release dates. Beta feedback helps determine the order of work.
 
 ## Linux and macOS
 
-An experimental Apple Silicon macOS build now supports local app packaging and
-MCP over Unix sockets. Packaged smoke, GPU/CPU MCP workflows and all eight MCP
-client launcher profiles have been validated on Apple Silicon. See [Mac setup](MACOS.md).
-Intel Macs, signing/notarization and the broader native UI/release checklist
-remain unverified. An experimental Linux x64 build adds native packaging and Linux-local MCP
+An experimental macOS build supports native Intel and Apple Silicon packaging and
+MCP over Unix sockets. Packaged smoke and GPU/CPU MCP workflows have been validated
+on both architectures. Intel image import/export also exercises the AMD WebGPU
+backend, CPU fallback and device-loss recovery. See [Mac setup](MACOS.md).
+Signing/notarization and the broader native UI/release checklist remain unverified.
+An experimental Linux x64 build adds native packaging and Linux-local MCP
 configuration. Omarchy dev launch, CPU MCP and opt-in Vulkan/WebGPU workflows
-are validated on AMD GCN-4. GPU support still depends on the adapter and driver. See [Linux setup](LINUX.md).
-Each platform will ship when its core workflows are validated, independently of
-the Windows release schedule.
+are validated on AMD GCN-4. GPU support still depends on the adapter and driver.
+See [Linux setup](LINUX.md). Each platform will ship when its core workflows are
+validated, independently of the Windows release schedule.
 
 - Support native windows, shortcuts, paths, fonts, clipboard and credentials.
 - Validate image processing, shaders, CPU fallback and local MCP on native hardware.

@@ -9,7 +9,8 @@ keep your work editable in portable projects.
 ## Beta status
 
 Windows x64 is the supported development and testing target. An experimental
-Apple Silicon macOS build and an experimental Linux x64 build include local MCP support. This is a
+macOS build for Intel and Apple Silicon and an experimental Linux x64 build
+include local MCP support. This is a
 still-image editor. Video/GIF animation, shader playback/export, animation tools
 and timeline editing are planned and waiting for design.
 
@@ -37,21 +38,24 @@ See [Known Issues](docs/KNOWN_ISSUES.md) for current bugs and areas being tuned.
 
 ## Build from source
 
-### macOS (Apple Silicon)
+### macOS (Intel and Apple Silicon)
 
-The experimental macOS build includes a native Apple Silicon app and local MCP over a Unix socket.
+The experimental macOS build targets the build machine's architecture and includes local MCP over a Unix socket.
 Use Node.js **22.16.0** and pnpm **10.11.1**, then:
 
 ```sh
 corepack enable
 pnpm install --frozen-lockfile
 pnpm pack:mac
-open apps/desktop/release/mac-arm64/GLEECH.app
+# Intel:
+open apps/desktop/release/mac/GLEECH.app
+# Apple Silicon: open apps/desktop/release/mac-arm64/GLEECH.app
 ```
 
 Copy `GLEECH.app` to `~/Applications` for a stable launcher/MCP path. The app
 contains its own runtime. This local build is unsigned and not notarized.
-`pnpm dist:mac` also creates a ZIP. Intel Macs have not been validated.
+`pnpm dist:mac` also creates a ZIP. Build with native Node.js on each architecture;
+see [Mac setup](docs/MACOS.md) for runtime differences and verification.
 
 Open **MCP · AI control**, choose a control mode, and copy the configuration for
 your client. MCP starts Off on every launch. See [Mac setup and Resolve workflow](docs/MACOS.md).

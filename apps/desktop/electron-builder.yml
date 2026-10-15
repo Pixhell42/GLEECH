@@ -9,6 +9,7 @@ asar: true
 asarUnpack:
   - node_modules/@img/**
   - node_modules/onnxruntime-node/bin/**
+  - node_modules/onnxruntime-node-macos-x64/bin/**
 extraResources:
   - from: ../../LICENSE
     to: LICENSE.GLEECH.txt
@@ -37,6 +38,7 @@ win:
     - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/**'
     - '!**/onnxruntime-node/bin/napi-v6/win32/arm64/**'
+    - '!**/onnxruntime-node-macos-x64/**'
   icon: resources/branding/icon-beta.ico
   target:
     - target: nsis
@@ -48,23 +50,30 @@ mac:
   category: public.app-category.graphics-design
   icon: resources/branding/icon-beta.png
   identity: null
+  extraResources:
+    - from: out/mac-native-notices
+      to: mac-native-notices
   files:
     - '!**/onnxruntime-node/bin/napi-v6/win32/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/**'
-    - '!**/onnxruntime-node/bin/napi-v6/darwin/x64/**'
+    - '!**/onnxruntime-node-macos-x64/bin/napi-v6/win32/**'
+    - '!**/onnxruntime-node-macos-x64/bin/napi-v6/linux/**'
+    - '!**/onnxruntime-node-macos-x64/bin/napi-v6/darwin/arm64/**'
   target:
     - target: zip
-      arch:
-        - arm64
   artifactName: GLEECH-${version}-mac-${arch}.${ext}
 linux:
   executableName: gleech
   category: Graphics
   icon: resources/branding/icon-beta.png
+  extraResources:
+    - from: out/linux-native-notices
+      to: linux-native-notices
   files:
     - '!**/onnxruntime-node/bin/napi-v6/win32/**'
     - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/arm64/**'
+    - '!**/onnxruntime-node-macos-x64/**'
   target:
     - target: AppImage
       arch:

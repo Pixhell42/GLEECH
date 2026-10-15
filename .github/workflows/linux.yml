@@ -1,0 +1,77 @@
+name: Linux Omarchy alpha build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/linux.yml
+      - apps/desktop/electron-builder.yml
+      - apps/desktop/package.json
+      - apps/desktop/src/main/mcp*.ts
+      - apps/desktop/src/shared/mcp-clients.ts
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - tooling/linux-*.mjs
+      - tooling/mac-native-review.mjs
+      - tooling/appimage-check.mjs
+      - tooling/run-linux-webgpu.sh
+
+permissions:
+  contents: read
+
+env:
+  ROARR_LOG: 'false'
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+concurrency:
+  group: linux-alpha-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Linux x64 AppImage
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Require native Linux x64
+        run: node -e "require('node:assert/strict').equal(process.platform, 'linux'); require('node:assert/strict').equal(process.arch, 'x64')"
+      - run: pnpm install --frozen-lockfile
+      - name: Check production dependency advisories
+        run: pnpm audit --prod
+      - name: Install AppImage and test display prerequisites
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 xvfb libgtk-3-0 libnss3 libasound2
+      - name: Build native Linux AppImage
+        run: pnpm dist:linux
+      - name: Verify native binaries and original notices
+        run: node tooling/linux-package-check.mjs
+      - name: Formatting, lint, types and unit tests
+        run: pnpm check
+      - name: Test unpacked image rendering and MCP clients
+        run: |
+          xvfb-run -a node tooling/image-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
+          xvfb-run -a node tooling/mcp-clients-check.mjs apps/desktop/release/linux-unpacked/gleech
+      - name: Test actual AppImage startup, MCP and remount
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          xvfb-run -a node tooling/smoke.mjs apps/desktop/release/GLEECH-0.1.0-linux-x86_64.AppImage
+          xvfb-run -a node tooling/mcp-check.mjs apps/desktop/release/GLEECH-0.1.0-linux-x86_64.AppImage --cpu
+          xvfb-run -a node tooling/appimage-check.mjs apps/desktop/release/GLEECH-0.1.0-linux-x86_64.AppImage
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gleech-linux-omarchy-alpha-x64-${{ github.sha }}
+          path: |
+            apps/desktop/release/GLEECH-0.1.0-linux-x86_64.AppImage
+            apps/desktop/release/linux-build-x64.json
+            apps/desktop/release/SHA256SUMS-linux-x64.txt
+          if-no-files-found: error
+          retention-days: 14

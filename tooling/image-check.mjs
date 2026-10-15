@@ -36,7 +36,7 @@ const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="4096" he
 </svg>`);
 await sharp(svg).png().toFile(largePath);
 await writeFile(invalidPath, 'This is not an image.');
-const executablePath = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
+const executablePath = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const forceCpu = process.argv.includes('--cpu');
 const args = [
   ...(executablePath ? [] : [resolve(root, 'apps/desktop')]),
@@ -327,7 +327,7 @@ try {
   );
   metrics.largeExportMs = Date.now() - exportStart;
 
-  // Exercise Windows clipboard image I/O, retaining every available original format in memory.
+  // Exercise native clipboard image I/O, retaining every available original format in memory.
   await app.evaluate(
     async ({ clipboard, ClipboardItem }, png) => {
       const captureClipboard = async () => {
@@ -346,7 +346,16 @@ try {
       // Exercise the hosted-runner failure case locally too, preserving the real
       // clipboard above and restoring it in finally.
       clipboard.clear();
-      if ((await captureClipboard()).length !== 0)
+      // macOS also exposes its separate Find pasteboard through read(). Clearing
+      // the general clipboard leaves that unrelated search text intact.
+      const cleared = await captureClipboard();
+      if (
+        cleared.some((item) =>
+          item.types.some(
+            (type) => process.platform !== 'darwin' || type !== 'electron application/findtext',
+          ),
+        )
+      )
         throw new Error('The empty clipboard backup should contain no formats.');
       await clipboard.write([
         new ClipboardItem({

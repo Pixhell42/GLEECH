@@ -12,12 +12,29 @@ mise exec node@22.16.0 -- corepack pnpm pack:linux
 
 The unpacked directory contains the runtime and must remain intact. `dist:linux`
 builds a portable AppImage in `apps/desktop/release/`. This is experimental x64 support; ARM64 and other
-Linux distributions have not been validated. Public distribution still needs
-release and binary-redistribution review.
+Linux distributions have not been validated. Public packages are experimental
+alphas and retain original third-party notices and the reviewed native sources.
 
 Sharp's versioned libvips shared objects must be unpacked beside its native
 binding, so electron-builder explicitly unpacks `node_modules/@img/**`.
 Packaging includes the Linux ONNX runtime and excludes Windows/macOS binaries.
+The Intel-only Mac alias is excluded entirely. Original native-package notices
+and the source-backed libvips notice inventory are included in
+`resources/linux-native-notices`; retained upstream texts are in `resources/licenses`.
+The complete native component version list must match the reviewed source bundle.
+
+## Alpha builds
+
+The **Linux Omarchy alpha build** Actions workflow builds a native x64 AppImage
+on Ubuntu 22.04, checks production advisories and source/code checks, verifies
+packaged Sharp and CPU subject inference, and runs image/MCP/client tests under
+a virtual display. It also exercises the actual AppImage and saved MCP settings
+across a restart. Hosted tests use CPU rendering; they do not certify Omarchy's
+GPU drivers or replace the contributor's physical Omarchy results.
+
+Each successful artifact contains the AppImage, `linux-build-x64.json` and its
+SHA-256 checksum. Run manually from Actions or through a packaging pull request.
+The workflow uses read-only permissions and does not publish releases.
 
 ## AppImage
 
