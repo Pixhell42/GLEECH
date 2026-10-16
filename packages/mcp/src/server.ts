@@ -1,5 +1,6 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import mcpPackage from '../package.json';
 import {
   requestSchema,
   operationSchema,
@@ -15,7 +16,7 @@ export function createGleechMcpServer(
   call: (request: McpRequest, signal?: AbortSignal) => Promise<Record<string, unknown>>,
 ) {
   const server = new McpServer(
-    { name: 'GLEECH', version: '0.1.0' },
+    { name: 'GLEECH', version: mcpPackage.version },
     {
       instructions:
         'Control the open GLEECH desktop project. Enable MCP in the app first. Observe mode allows inspection and previews; Edit mode enables reversible project/stack edits. Full Control also permits file I/O inside folders approved in the app. Read get_project_state and pass expectedRevision when editing or rendering. Stack indexes follow the visible top-to-bottom order, with index 0 at the top. Use instanceId, never titles, to target layers. All values use the exact units and limits returned by get_effect_parameters. Locked layers must be explicitly unlocked before changing them. File paths must be absolute; matching folder grants are required. Exports and project saves default to refusing existing destinations unless overwrite is explicitly true.',
