@@ -82,11 +82,8 @@ test('Linux artifact upload requires native, advisory, code, actual AppImage and
   assert.equal(steps[upload].if, undefined);
   const appimage = steps.find((step) => step.run?.includes('node tooling/appimage-check.mjs'));
   assert.equal(appimage.env.APPIMAGE_EXTRACT_AND_RUN, '1');
-  assert.ok(
-    appimage.run.includes(
-      'mcp-check.mjs apps/desktop/release/GLEECH-0.1.0-linux-x86_64.AppImage --cpu',
-    ),
-  );
+  assert.equal(appimage.env.GLEECH_APPIMAGE, '${{ steps.package.outputs.appimage }}');
+  assert.ok(appimage.run.includes('mcp-check.mjs "$GLEECH_APPIMAGE" --cpu'));
   const native = steps.findIndex((step) => step.run?.includes('process.arch'));
   assert.ok(native < steps.findIndex((step) => step.run?.includes('pnpm install')));
 });
@@ -100,10 +97,39 @@ test('Linux CI keeps tokens read-only, actions pinned and uploads only three del
     .find((step) => step.uses?.startsWith('actions/upload-artifact@'))
     .with.path.trim()
     .split('\n');
-  assert.equal(paths.length, 3);
-  assert.ok(
-    paths.every((path) => path.startsWith('apps/desktop/release/') && !path.includes('**')),
-  );
+  assert.deepEqual(paths, [
+    '${{ steps.package.outputs.appimage }}',
+    'apps/desktop/release/linux-build-x64.json',
+    'apps/desktop/release/SHA256SUMS-linux-x64.txt',
+  ]);
+});
+
+test('Linux runtime checks and upload follow the verified filename across release versions', async () => {
+  await mkdir(resolve(root, 'test-results'), { recursive: true });
+  const steps = workflow.jobs.build.steps;
+  const verify = steps.find((step) => step.id === 'package');
+  const script = /node -e "([^"]+)"/.exec(verify.run)?.[1];
+  assert.ok(script);
+  const appimage = steps.find((step) => step.run?.includes('node tooling/appimage-check.mjs'));
+  for (const command of ['smoke', 'mcp-check', 'appimage-check'])
+    assert.ok(appimage.run.includes(`tooling/${command}.mjs "$GLEECH_APPIMAGE"`));
+  for (const version of ['0.1.1', '0.2.0-beta.3']) {
+    const folder = await mkdtemp(resolve(root, 'test-results/linux-version-'));
+    await mkdir(resolve(folder, 'apps/desktop/release'), { recursive: true });
+    const archive = `GLEECH-${version}-linux-x86_64.AppImage`;
+    await writeFile(
+      resolve(folder, 'apps/desktop/release/linux-build-x64.json'),
+      JSON.stringify({ archive }),
+    );
+    const output = resolve(folder, 'outputs.txt');
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd: folder,
+      env: { ...process.env, GITHUB_OUTPUT: output },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(await readFile(output, 'utf8'), `appimage=apps/desktop/release/${archive}\n`);
+  }
 });
 
 test('Linux packages unpack Sharp shared libraries and exclude Intel Mac alias completely', () => {
