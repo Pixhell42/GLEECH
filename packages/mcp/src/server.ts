@@ -42,6 +42,7 @@ export function createGleechMcpServer(
             'render_full',
             'export_batch',
             'batch',
+            'request_folder_access',
           ].includes(name),
           openWorldHint: false,
         },
@@ -106,6 +107,10 @@ export function createGleechMcpServer(
       {
         get_mcp_status:
           'Inspect the current control mode, connected clients and approved Imports, Projects and Exports folder paths before using file tools.',
+        request_folder_access:
+          'Ask the user to choose and approve an Imports, Projects or Exports folder in GLEECH’s native folder picker. Requires Full Control. No access is granted without a selection; cancellation, timeout or a mode change grants nothing. Grants last for this app session. Allow up to five minutes for user interaction.',
+        revoke_folder_access:
+          'Remove a folder grant by its ID from get_mcp_status. Requires Full Control. Does not delete any files or change the project.',
         copy_to_clipboard:
           'Copy the full-resolution edited image as PNG to the Windows clipboard. Requires Edit or Full Control and the separate clipboard permission enabled in GLEECH. Does not change the project or create files.',
         list_operations:
@@ -168,6 +173,8 @@ export function createGleechMcpServer(
           'Create an empty project as one Undo step. Previous images and stack remain in history.',
         load_image:
           'Open an image from an approved Imports folder using the same source replacement as the UI. Preserves current effects and snapshots; use create_project first for an empty stack. Requires Full Control.',
+        load_image_data:
+          'Import a still PNG, JPEG or WebP supplied as canonical padded base64 in data (no data URL), with mimeType and an optional display name. Maximum decoded size is 6 MiB. Requires Edit or Full Control, with no filesystem or clipboard grant. Preserves the effect stack; use create_project first for an empty stack. Undo restores the previous source. Read get_project_state and pass expectedRevision.',
         replace_source:
           'Replace the current source from an approved Imports folder while preserving effects and snapshots. Undo restores the previous source. Requires Full Control.',
         open_project:
@@ -199,6 +206,9 @@ export function createGleechMcpServer(
         'branch_from_snapshot',
         'rename_snapshot',
         'load_image',
+        'load_image_data',
+        'request_folder_access',
+        'revoke_folder_access',
         'replace_source',
         'open_project',
         'save_project',

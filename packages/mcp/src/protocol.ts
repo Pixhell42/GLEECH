@@ -7,6 +7,37 @@ const expectedRevision = z.number().int().min(0).optional();
 const path = z.string().min(1).max(4096);
 const placement = z.enum(['replace', 'above', 'below', 'merge']);
 const presetName = z.string().trim().min(1).max(120);
+// Base64 expands 6 MiB to 8 MiB, leaving room in the 10 MiB local request envelope.
+export const MAX_MCP_IMAGE_BYTES = 6 * 1024 * 1024;
+export const imagePayloadSchema = z
+  .object({
+    data: z
+      .string()
+      .min(4)
+      .max(4 * Math.ceil(MAX_MCP_IMAGE_BYTES / 3))
+      .refine(
+        (value) => value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(value),
+        'Supply canonical padded base64 image data, without a data URL prefix.',
+      ),
+    mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .refine(
+        (value) =>
+          !/[\\/]/.test(value) &&
+          !['.', '..'].includes(value) &&
+          [...value].every(
+            (character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127,
+          ),
+        'Use a display name without a path or control characters.',
+      )
+      .default('MCP image'),
+  })
+  .strict();
+export type McpImagePayload = z.infer<typeof imagePayloadSchema>;
 export const maskStrokeSchema = z
   .object({
     size: z.number().min(0.1).max(100),
@@ -206,6 +237,13 @@ export const requestSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('render_variation'), variationId: id, expectedRevision }).strict(),
   z.object({ action: z.literal('apply_variation'), variationId: id, expectedRevision }).strict(),
   z.object({ action: z.literal('get_mcp_status') }).strict(),
+  z
+    .object({
+      action: z.literal('request_folder_access'),
+      kind: z.enum(['imports', 'projects', 'exports']),
+    })
+    .strict(),
+  z.object({ action: z.literal('revoke_folder_access'), folderId: id }).strict(),
   z.object({ action: z.literal('list_snapshots') }).strict(),
   z.object({ action: z.literal('get_snapshot'), snapshotId: id }).strict(),
   z
@@ -253,6 +291,9 @@ export const requestSchema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('load_image'), path, expectedRevision }).strict(),
+  z
+    .object({ action: z.literal('load_image_data'), ...imagePayloadSchema.shape, expectedRevision })
+    .strict(),
   z.object({ action: z.literal('replace_source'), path, expectedRevision }).strict(),
   z.object({ action: z.literal('open_project'), path, expectedRevision }).strict(),
   z
@@ -340,6 +381,8 @@ export const INITIAL_MCP_STATUS: McpStatus = {
 };
 export function requiresFullControl(request: McpRequest): boolean {
   return [
+    'request_folder_access',
+    'revoke_folder_access',
     'load_image',
     'replace_source',
     'open_project',
@@ -356,6 +399,7 @@ export function isMutation(request: McpRequest): boolean {
   return (
     requiresFullControl(request) ||
     [
+      'load_image_data',
       'create_project',
       'create_snapshot',
       'restore_snapshot',

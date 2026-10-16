@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { DesktopBridge } from '../shared/image-api';
 
 const bridge: DesktopBridge = {
+  readMcpImageData: (id) => ipcRenderer.invoke('mcp:read-image-data', id),
+  mcpFolderOperation: (id) => ipcRenderer.invoke('mcp:folder-operation', id),
   preflightMcpBatch: (id) => ipcRenderer.invoke('mcp:batch-preflight', id),
   readMcpBatch: (id, index) => ipcRenderer.invoke('mcp:batch-read', id, index),
   writeMcpBatch: (id, index, pixels) => ipcRenderer.invoke('mcp:batch-write', id, index, pixels),
