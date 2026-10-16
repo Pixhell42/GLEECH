@@ -80,7 +80,7 @@ advisories visible and reassess changes; scan results age and are not a security
 
 ## Known limitations
 
-- Windows x64 only; Linux/macOS and other architectures are not released.
+- Windows x64 beta, with separate experimental macOS Intel/Apple Silicon and Linux x64 alphas.
 - Development installers are unsigned; no automatic updater/public publishing job.
 - Still images only; Phase chooses a saved frame. Video/GIF animation, shader
   playback/export, animation tools and timeline editing are waiting for design.

@@ -5,6 +5,7 @@ import { createGleechMcpServer } from './server';
 import { createMcpCommands } from './commands';
 import { createCommandService } from '@gleech/command-service';
 import { createProject, createEffect } from '@gleech/project-model';
+import workspacePackage from '../../../package.json';
 
 it('returns large portable data once instead of exceeding stdio limits with duplicate JSON', async () => {
   const payload = { recipe: { embedded: 'x'.repeat(3 * 1024 * 1024) } };
@@ -97,6 +98,10 @@ it('serves tools, resources, structured results, validation errors and PNG image
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    expect(client.getServerVersion()).toEqual({
+      name: 'GLEECH',
+      version: workspacePackage.version,
+    });
     const toolList = (await client.listTools()).tools;
     expect(toolList.length).toBe(65);
     expect(
