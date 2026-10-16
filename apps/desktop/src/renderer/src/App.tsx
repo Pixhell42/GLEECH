@@ -1481,6 +1481,11 @@ export function App() {
                 throw new Error('Could not restore this snapshot.');
               value = adapter.state();
             }
+          } else if (
+            request.action === 'request_folder_access' ||
+            request.action === 'revoke_folder_access'
+          ) {
+            value = { ...(await window.gleech.mcpFolderOperation(dispatch.id)) };
           } else if (request.action === 'create_project') {
             const previous = commands.getState();
             documentHistory.current.set(previous, { ...documentState.current });
@@ -1496,6 +1501,7 @@ export function App() {
           } else if (
             [
               'load_image',
+              'load_image_data',
               'replace_source',
               'open_project',
               'save_project',
@@ -1514,10 +1520,15 @@ export function App() {
             try {
               if (
                 request.action === 'load_image' ||
+                request.action === 'load_image_data' ||
                 request.action === 'replace_source' ||
                 request.action === 'open_project'
               ) {
-                const candidate = unwrap(await window.gleech.readMcpFile(dispatch.id));
+                const candidate = unwrap(
+                  await (request.action === 'load_image_data'
+                    ? window.gleech.readMcpImageData(dispatch.id)
+                    : window.gleech.readMcpFile(dispatch.id)),
+                );
                 imported = candidate.kind === 'project' ? [...candidate.images] : [candidate.image];
                 const next =
                   candidate.kind === 'project'
