@@ -13,6 +13,7 @@ import { closeTestApp } from './close-test-app.mjs';
 import { recordDesktopFailure } from './record-desktop-failure.mjs';
 import { installTestIOTracing } from './test-io-tracing.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
+import { checkMcpImports } from './mcp-import-cases.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const requireMcp = createRequire(resolve(root, 'packages/mcp/package.json'));
@@ -114,7 +115,7 @@ try {
     return actualCallTool(params, ...options);
   };
 
-  assert.equal((await client.listTools()).tools.length, 62);
+  assert.equal((await client.listTools()).tools.length, 65);
   assert.equal((await client.listResources()).resources.length, 9);
   assert.equal((await client.listResourceTemplates()).resourceTemplates.length, 3);
   const initial = (await call('get_project_state')).structuredContent;
@@ -994,7 +995,7 @@ try {
   await page.getByRole('button', { name: 'Test Connection', exact: true }).click();
   await page
     .getByRole('status')
-    .filter({ hasText: 'Connection verified · 62 tools available' })
+    .filter({ hasText: 'Connection verified · 65 tools available' })
     .waitFor();
   await page.getByRole('button', { name: 'Close MCP panel' }).click();
   assert.deepEqual((await call('get_project_state')).structuredContent, cancellationBefore);
@@ -1026,6 +1027,7 @@ try {
   assert.match(await page.locator('.mcp-dialog').innerText(), /Codex/);
   await captureTestWindow(app, resolve(output, 'mcp-connected.png'));
   await page.getByRole('button', { name: 'Close MCP panel' }).click();
+  await checkMcpImports({ app, page, client, call, setMode, sharp, output, input });
   const missingTools = (await client.listTools()).tools
     .map((tool) => tool.name)
     .filter((name) => !usedTools.has(name));
@@ -1049,7 +1051,7 @@ try {
       {
         backend,
         packaged: Boolean(executablePath),
-        toolCount: 62,
+        toolCount: 65,
         pageErrors,
         stderr,
         snapshotCount: withSnapshots.snapshots.length,
@@ -1059,7 +1061,7 @@ try {
     ),
   );
   console.log(
-    `MCP ${label}${executablePath ? ' packaged' : ''}: 62 tools, presets/recipes, nine variations, GLEECH modes, semantic controls, scoped file I/O, snapshots, previews, permissions and persistence passed (${backend}).`,
+    `MCP ${label}${executablePath ? ' packaged' : ''}: 65 tools, presets/recipes, nine variations, GLEECH modes, semantic controls, scoped file I/O, snapshots, previews, permissions and persistence passed (${backend}).`,
   );
 } catch (failure) {
   await recordDesktopFailure({ app, page, output, label, failure, errors: pageErrors }).catch(

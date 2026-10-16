@@ -13,7 +13,9 @@
     "pack:win": "electron-builder --win --dir",
     "dist:win": "electron-builder --win nsis",
     "pack:mac": "node ../../tooling/mac-native-notices.mjs && electron-builder --mac --dir",
-    "dist:mac": "node ../../tooling/mac-native-notices.mjs && electron-builder --mac zip"
+    "dist:mac": "node ../../tooling/mac-native-notices.mjs && electron-builder --mac zip",
+    "pack:linux": "node ../../tooling/linux-native-notices.mjs && electron-builder --linux --x64 --dir",
+    "dist:linux": "node ../../tooling/linux-native-notices.mjs && electron-builder --linux AppImage --x64"
   },
   "dependencies": {
     "@gleech/command-service": "workspace:*",

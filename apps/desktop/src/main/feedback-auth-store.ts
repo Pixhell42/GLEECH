@@ -19,12 +19,20 @@ export function createFeedbackAuthStore(
     isEncryptionAvailable(): boolean;
     encryptString(value: string): Buffer;
     decryptString(value: Buffer): string;
+    getSelectedStorageBackend?(): string;
   },
+  platform: NodeJS.Platform = process.platform,
 ): FeedbackAuthStore {
+  const secureEncryptionAvailable = () =>
+    encryption.isEncryptionAvailable() &&
+    (platform !== 'linux' ||
+      ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(
+        encryption.getSelectedStorageBackend?.() ?? '',
+      ));
   return {
     async load() {
       try {
-        if (!encryption.isEncryptionAvailable()) return null;
+        if (!secureEncryptionAvailable()) return null;
         const bytes = await readFile(path);
         if (bytes.length > 16384) return null;
         const data = JSON.parse(encryption.decryptString(bytes)) as Partial<FeedbackAuth>;
@@ -44,8 +52,12 @@ export function createFeedbackAuthStore(
       }
     },
     async save(value) {
-      if (!encryption.isEncryptionAvailable())
-        throw new Error('Windows credential encryption is unavailable.');
+      if (!secureEncryptionAvailable())
+        throw new Error(
+          platform === 'linux'
+            ? 'Secure credential encryption is unavailable. Enable a desktop keyring before signing in to GitHub.'
+            : 'Credential encryption is unavailable.',
+        );
       await mkdir(dirname(path), { recursive: true });
       const temporary = `${path}.${randomUUID()}.tmp`;
       try {

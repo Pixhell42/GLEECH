@@ -9,7 +9,8 @@ keep your work editable in portable projects.
 ## Beta status
 
 Windows x64 is the supported development and testing target. An experimental
-macOS build for Intel and Apple Silicon includes local MCP support; Linux is still planned. This is a
+macOS build for Intel and Apple Silicon and an experimental Linux x64 build
+include local MCP support. This is a
 still-image editor. Video/GIF animation, shader playback/export, animation tools
 and timeline editing are planned and waiting for design.
 
@@ -58,6 +59,19 @@ see [Mac setup](docs/MACOS.md) for runtime differences and verification.
 
 Open **MCP · AI control**, choose a control mode, and copy the configuration for
 your client. MCP starts Off on every launch. See [Mac setup and Resolve workflow](docs/MACOS.md).
+
+### Linux x64
+
+Use Node.js **22.16.0** and pnpm **10.11.1**:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm pack:linux
+./apps/desktop/release/linux-unpacked/gleech
+```
+
+Keep the unpacked directory intact. See [Linux setup](docs/LINUX.md) for Omarchy,
+native testing and the current portability limits.
 
 ### Windows
 

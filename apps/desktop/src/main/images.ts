@@ -1,5 +1,6 @@
 import { createDepthMapLibrary } from './depth-maps';
 import type { McpAccess } from './mcp-access';
+import { mcpImageData } from './mcp-image-data';
 import { supportLink, supportCopyText } from '../shared/support';
 import { SUPPORT_REPOSITORY } from '../shared/support';
 import { APP_VERSION_LABEL } from '../shared/branding';
@@ -442,7 +443,27 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
   });
   handle('mcp:check-access', (dispatchId) => {
     if (typeof dispatchId !== 'string') throw new Error('Invalid MCP operation.');
-    mcpAccess.request(dispatchId);
+    const request = mcpAccess.request(dispatchId, 'edit');
+    if (request.action !== 'load_image_data') mcpAccess.request(dispatchId);
+  });
+  handle('mcp:read-image-data', async (dispatchId) => {
+    if (typeof dispatchId !== 'string') throw new Error('Invalid MCP operation.');
+    const request = mcpAccess.request(dispatchId, 'edit');
+    if (request.action !== 'load_image_data')
+      throw new Error('This operation cannot import image data.');
+    const payload = mcpImageData({
+      data: request.data,
+      mimeType: request.mimeType,
+      name: request.name,
+    });
+    const image = await decode(payload.bytes, payload.name);
+    try {
+      mcpAccess.request(dispatchId, 'edit');
+      return { kind: 'image' as const, image };
+    } catch (failure) {
+      assets.delete(image.source.id);
+      throw failure;
+    }
   });
   handle('mcp:preset-operation', async (dispatchId, payload) => {
     if (typeof dispatchId !== 'string') throw new Error('Invalid MCP preset operation.');
