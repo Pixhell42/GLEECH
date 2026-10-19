@@ -138,11 +138,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-  # Keep the branch-protection context stable and reject skipped required jobs.
-  # Canceled workflows must not start an additional failing validation job.
+  # Keep required PR/main validation strict. Optional manual runs use a separate
+  # check name so cancellation cannot replace the branch-protection context.
   validate:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'manual-validate' || 'validate' }}
     needs: [checks, desktop, full]
-    if: ${{ !cancelled() }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 5
     env:

@@ -85,7 +85,6 @@ test('stable validation gate requires code checks and the selected desktop suite
   assert.ok(!steps.some((step) => step.run?.includes('pack:win')));
   assert.ok(workflow.jobs.checks.steps.find((step) => step.run === 'pnpm check'));
   assert.deepEqual(workflow.jobs.validate.needs, ['checks', 'desktop', 'full']);
-  assert.equal(workflow.jobs.validate.if, '${{ !cancelled() }}');
   assert.equal(workflow.jobs.full.strategy['fail-fast'], false);
   assert.equal(workflow.jobs.full.strategy['max-parallel'], 6);
   assert.deepEqual(
@@ -112,6 +111,17 @@ test('release publication never triggers duplicate CI and full validation is exp
   );
   // Manual quick runs remain quick even when targeting a tag.
   assert.equal(workflow.jobs.desktop.if, "inputs.suite != 'full'");
+});
+
+test('manual cancellation cannot fail or replace the required merge check', () => {
+  assert.equal(
+    workflow.jobs.validate.name,
+    "${{ github.event_name == 'workflow_dispatch' && 'manual-validate' || 'validate' }}",
+  );
+  assert.equal(
+    workflow.jobs.validate.if,
+    "${{ github.event_name != 'workflow_dispatch' || !cancelled() }}",
+  );
 });
 
 test('manual full validation is isolated from automatic quick-run cancellation', () => {

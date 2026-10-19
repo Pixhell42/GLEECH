@@ -86,9 +86,10 @@ Docs-only changes retain static/unit checks but skip desktop build/integration.
 Code and quick desktop jobs each allow 60 minutes. The final `validate` check
 requires the code checks and the selected desktop suite to succeed; skipped,
 cancelled or failed required jobs cannot produce a passing validation result.
-A canceled workflow skips the final gate instead of launching another job that
-fails solely because its dependencies were canceled. Genuine failures still run
-the gate and fail validation.
+Manual runs use a separate `manual-validate` check, so their results cannot
+replace the required PR/main `validate` check. Canceling a manual run skips its
+optional gate instead of creating a failure solely from canceled dependencies.
+PR/main validation remains strict about incomplete or failed required jobs.
 
 Actions → Windows development checks → Run workflow → **full** runs supported
 development and packaged integration scripts across twelve shards, with at most
@@ -125,8 +126,8 @@ publishing; retain the results with the release artifacts. Full validation is
 selected only through **Run workflow → suite: full**. Manual runs default to
 quick even when targeting a tag; the ref name never selects the suite.
 
-Quick mode stops at its first integration failure. Full mode records failures and continues the
-remaining checks; every shard must pass the final validation gate. This reports
+Quick mode stops at its first integration failure. Full mode records failures
+and continues the remaining checks; every shard must pass `manual-validate`. This reports
 multiple failures without repeatedly waiting through the same prefix of tests.
 Per-shard failure diagnostics expire after three
 days. Package upload is off by default. For an explicit manual full run, enable
