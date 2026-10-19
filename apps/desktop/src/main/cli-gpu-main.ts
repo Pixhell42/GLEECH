@@ -1,7 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { readFile, writeFile, stat } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { open, writeFile } from 'node:fs/promises';
+import { basename, isAbsolute, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { recompressJpeg } from './jpeg-codec';
 import type { EffectReply } from '../renderer/src/effect-protocol';
 import type {
@@ -13,9 +14,24 @@ import type {
 
 /** Private child process: never opens the editor or reads the user's app profile. */
 export async function startCliGpu(): Promise<void> {
-  const directory = process.env['GLEECH_CLI_GPU_DIRECTORY'];
-  if (!directory || !isAbsolute(directory) || !process.send || !process.connected)
+  const supplied = process.env['GLEECH_CLI_GPU_DIRECTORY'];
+  if (!supplied || !isAbsolute(supplied) || !process.send || !process.connected)
     throw new Error('The GPU helper must be started by the GLEECH CLI.');
+  const name = basename(supplied);
+  if (!/^gleech-cli-gpu-[A-Za-z0-9]+$/.test(name) || resolve(supplied) !== join(tmpdir(), name))
+    throw new Error('Unexpected GPU helper directory.');
+  const directory = join(tmpdir(), name);
+  async function readOwned(fileName: string, limit: number): Promise<Buffer> {
+    const file = await open(join(directory, fileName), 'r');
+    try {
+      if ((await file.stat()).size > limit) throw new Error('GPU attachment is too large.');
+      const bytes = await file.readFile();
+      if (bytes.length > limit) throw new Error('GPU attachment is too large.');
+      return bytes;
+    } finally {
+      await file.close();
+    }
+  }
   mkdirSync(join(directory, 'profile'), { recursive: true });
   mkdirSync(join(directory, 'session'), { recursive: true });
   app.setPath('userData', join(directory, 'profile'));
@@ -68,10 +84,10 @@ export async function startCliGpu(): Promise<void> {
       throw new Error('Invalid GPU image descriptor.');
     let data = images.get(image.file);
     if (!data) {
-      const path = join(directory!, image.file);
       const bytes = image.width * image.height * (subject ? 1 : 4);
-      if ((await stat(path)).size !== bytes) throw new Error('Invalid GPU image byte count.');
-      data = Uint8Array.from(await readFile(path)).buffer;
+      const raw = await readOwned(image.file, bytes);
+      if (raw.length !== bytes) throw new Error('Invalid GPU image byte count.');
+      data = Uint8Array.from(raw).buffer;
       images.set(image.file, data);
     }
     return data;
@@ -158,9 +174,8 @@ export async function startCliGpu(): Promise<void> {
     }
     active = message.id;
     void (async () => {
-      const path = join(directory!, 'request-' + message.id + '.json');
-      if ((await stat(path)).size > 32 * 1024 * 1024) throw new Error('GPU recipe is too large.');
-      const manifest = JSON.parse(await readFile(path, 'utf8')) as GpuManifest;
+      const bytes = await readOwned('request-' + Number(message.id) + '.json', 32 * 1024 * 1024);
+      const manifest = JSON.parse(bytes.toString('utf8')) as GpuManifest;
       if (
         manifest.request.id !== message.id ||
         manifest.request.kind !== 'render' ||

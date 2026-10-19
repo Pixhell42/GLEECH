@@ -1,22 +1,17 @@
 import { openSync, closeSync } from 'node:fs';
 import { ReadStream, isatty } from 'node:tty';
 import type sharpModule from 'sharp';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { InferenceSession, Tensor } from 'onnxruntime-node';
 
 type Sharp = typeof sharpModule;
 type Electronish = NodeJS.Process & { resourcesPath?: string };
 
-// The entry script's folder (src/cli, out/cli or resources/cli). Bundlers may
-// rewrite __dirname, so the running script's own path comes first.
+// The CLI is always built as CommonJS; use its module location, not argv[1].
+// That keeps resource/native lookup independent of user-supplied input paths.
 function entryDirectory(): string {
-  try {
-    if (process.argv[1]) return dirname(realpathSync(process.argv[1]));
-  } catch {
-    /* Fall through to the module location. */
-  }
   return typeof __dirname === 'string' ? __dirname : process.cwd();
 }
 const here = entryDirectory();

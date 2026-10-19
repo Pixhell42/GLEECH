@@ -14,9 +14,18 @@ const packagedIndex = process.argv.indexOf('--packaged');
 const positional = process.argv.slice(2).find((argument) => !argument.startsWith('--'));
 const supplied = packagedIndex >= 0 ? process.argv[packagedIndex + 1] : positional;
 const packaged = !!supplied;
+const candidates = [
+  'win-unpacked/GLEECH.exe',
+  'mac-arm64/GLEECH.app/Contents/MacOS/GLEECH',
+  'mac/GLEECH.app/Contents/MacOS/GLEECH',
+  'linux-unpacked/gleech',
+  'linux-unpacked/gleech-bin',
+].map((p) => resolve(root, 'apps/desktop/release', p));
+const allowed = new Map(candidates.map((p) => [p, p]));
 const executable = supplied
-  ? resolve(supplied, ...(supplied.endsWith('.app') ? ['Contents', 'MacOS', 'GLEECH'] : []))
+  ? allowed.get(resolve(supplied, ...(supplied.endsWith('.app') ? ['Contents/MacOS/GLEECH'] : [])))
   : process.execPath;
+assert.ok(executable, 'Use a known packaged executable under apps/desktop/release.');
 const entry = packaged
   ? resolve(
       dirname(executable),
@@ -74,8 +83,11 @@ await check('CPU export and complete metadata', async () => {
   );
   assert.equal(data.backend, 'cpu');
   const xmp = (await sharp(path).metadata()).xmp.toString();
-  assert.ok(xmp.includes('https://github.com/Pixhell42/GLEECH'));
-  assert.ok(xmp.includes('https://x.com/pixhell'));
+  assert.equal(
+    /<gleech:RepositoryURL>([^<]+)<\//.exec(xmp)?.[1],
+    'https://github.com/Pixhell42/GLEECH',
+  );
+  assert.equal(/<gleech:DeveloperURL>([^<]+)<\//.exec(xmp)?.[1], 'https://x.com/pixhell');
 });
 await check('fallback PNG metadata without native codecs', async () => {
   const path = join(output, 'fallback.png');
@@ -83,8 +95,11 @@ await check('fallback PNG metadata without native codecs', async () => {
     env: { ...env, GLEECH_NO_SHARP: '1' },
   });
   const xmp = (await sharp(path).metadata()).xmp.toString();
-  assert.ok(xmp.includes('https://github.com/Pixhell42/GLEECH'));
-  assert.ok(xmp.includes('https://x.com/pixhell'));
+  assert.equal(
+    /<gleech:RepositoryURL>([^<]+)<\//.exec(xmp)?.[1],
+    'https://github.com/Pixhell42/GLEECH',
+  );
+  assert.equal(/<gleech:DeveloperURL>([^<]+)<\//.exec(xmp)?.[1], 'https://x.com/pixhell');
 });
 await check('batch exports and JSON variation results', async () => {
   const second = join(output, 'second.png');

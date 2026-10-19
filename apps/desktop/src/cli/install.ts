@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { lstat, open, mkdir, unlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -19,10 +20,17 @@ function cmdQuote(value: string): string {
 }
 async function contents(path: string): Promise<string | undefined> {
   try {
-    const stat = await lstat(path);
-    if (!stat.isFile() || stat.isSymbolicLink())
-      throw new Error('Refusing to modify a link or non-file: ' + path);
-    return await readFile(path, 'utf8');
+    const file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    try {
+      if (
+        !(await file.stat()).isFile() ||
+        (process.platform === 'win32' && (await lstat(path)).isSymbolicLink())
+      )
+        throw new Error('Refusing to modify a link or non-file: ' + path);
+      return await file.readFile('utf8');
+    } finally {
+      await file.close();
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;

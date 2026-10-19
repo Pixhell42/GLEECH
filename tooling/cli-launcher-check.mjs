@@ -8,7 +8,16 @@ const root = resolve(import.meta.dirname, '..');
 const supplied = process.argv[2];
 assert.ok(supplied, 'Pass a packaged executable, .app or AppImage.');
 const appimage = supplied.endsWith('.AppImage');
-const executable = resolve(supplied);
+const metadata = JSON.parse(await readFile(join(root, 'apps/desktop/package.json'), 'utf8'));
+const candidates = [
+  'win-unpacked/GLEECH.exe',
+  'mac-arm64/GLEECH.app',
+  'mac/GLEECH.app',
+  'linux-unpacked/gleech',
+  'GLEECH-' + metadata.version + '-linux-x86_64.AppImage',
+].map((p) => resolve(root, 'apps/desktop/release', p));
+const executable = new Map(candidates.map((p) => [p, p])).get(resolve(supplied));
+assert.ok(executable, 'Use a known package under apps/desktop/release.');
 const parent = join(root, 'test-results/cli-launcher');
 await mkdir(parent, { recursive: true });
 const home = await mkdtemp(join(parent, 'user-'));
@@ -34,7 +43,7 @@ async function invoke(args, command = launcher) {
   const result =
     process.platform === 'win32'
       ? await run(
-          process.env.ComSpec || 'cmd.exe',
+          'cmd.exe',
           ['/d', '/s', '/c', '"' + [command, ...args].map((a) => '"' + a + '"').join(' ') + '"'],
           {
             env,

@@ -1,4 +1,4 @@
-import { stat, readdir } from 'node:fs/promises';
+import { open, readdir } from 'node:fs/promises';
 import { decodeShaderImport, type ShaderPackage } from '@gleech/project-model/shader-package';
 import { createShaderLibrary } from '../main/shader-library';
 import { readFile } from 'node:fs/promises';
@@ -97,8 +97,15 @@ export async function listShaders(): Promise<ShaderPackage[]> {
   return [...new Map(result.map((pkg) => [pkg.id + '@' + pkg.version, pkg])).values()];
 }
 export async function readShader(path: string): Promise<ShaderPackage> {
-  if ((await stat(path)).size > 256 * 1024) throw new Error('Shader file exceeds 256 KiB.');
-  return decodeShaderImport(await readFile(path, 'utf8'), path.split(/[\\/]/).pop()!);
+  const file = await open(path, 'r');
+  try {
+    if ((await file.stat()).size > 256 * 1024) throw new Error('Shader file exceeds 256 KiB.');
+    const bytes = await file.readFile();
+    if (bytes.length > 256 * 1024) throw new Error('Shader file exceeds 256 KiB.');
+    return decodeShaderImport(bytes.toString('utf8'), path.split(/[\\/]/).pop()!);
+  } finally {
+    await file.close();
+  }
 }
 export async function findShader(query: string): Promise<ShaderPackage> {
   if (existsSync(query)) return readShader(resolve(query));

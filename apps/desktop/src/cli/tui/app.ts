@@ -2,7 +2,7 @@ import { configureRendering, renderingSettings } from '../gpu';
 import { randomInt, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
 import type { GleechComplexity, GleechMode } from '@gleech/command-service';
@@ -447,15 +447,21 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     await runBusy('OPENING', async (isCancelled) => {
       try {
         const result = await session.render(isCancelled);
-        const path = join(tmpdir(), `gleech-${defaultStem()}-${process.pid}.png`);
-        await writeFile(path, await encodeImage(result.image, 'png'));
+        const directory = await mkdtemp(join(tmpdir(), 'gleech-viewer-'));
+        const path = join(directory, 'preview.png');
+        await writeFile(path, await encodeImage(result.image, 'png'), { flag: 'wx', mode: 0o600 });
         const [command, args] =
           process.platform === 'win32'
-            ? ['cmd', ['/c', 'start', '""', path]]
+            ? ['explorer.exe', [path]]
             : process.platform === 'darwin'
               ? ['open', [path]]
               : ['xdg-open', [path]];
-        spawn(command as string, args as string[], { detached: true, stdio: 'ignore' }).unref();
+        const viewer = spawn(command as string, args as string[], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        viewer.on('error', (error) => flash(error.message, C.red, 5000));
+        viewer.unref();
         flash(`Opened full resolution ${result.image.width}×${result.image.height} in your viewer`);
       } catch (error) {
         if (error instanceof RenderCancelledError) flash('Cancelled.', C.warn);

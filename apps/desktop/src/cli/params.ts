@@ -236,7 +236,7 @@ export function setParams(
   if (!effect) throw new Error('Effect does not exist.');
   const definitions = getEffectDefinition(effect).parameters;
   let application = effect.application;
-  const params: Record<string, number | string> = {};
+  const params: Record<string, number | string> = Object.create(null);
   for (const [key, value] of Object.entries(values)) {
     if (key.startsWith('application.')) application = setApplicationValue(application, key, value);
     else if (Object.hasOwn(definitions, key)) params[key] = value;
@@ -271,7 +271,7 @@ export function addEffectFromSpec(
   service.addEffect(type, instanceId);
   if (values.length) {
     const effect = service.getState().effects.at(-1)!;
-    const typed: Record<string, number | string> = {};
+    const typed: Record<string, number | string> = Object.create(null);
     const entries = new Map(paramEntries(effect).map((entry) => [entry.key, entry.definition]));
     for (const [rawKey, raw] of values) {
       const key = resolveParamKey(effect, rawKey);
