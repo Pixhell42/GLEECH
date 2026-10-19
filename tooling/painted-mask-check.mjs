@@ -150,6 +150,11 @@ async function paint(points, cancel = false) {
       stayAwake: true,
     });
   });
+  // View transforms are applied on animation frames; capturePage alone can
+  // complete before a queued zoom update, leaving the pointer coordinates stale.
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
   const surface = page.getByRole('application', { name: 'Paint effect mask', exact: true });
   const rect = await surface.boundingBox();
   assert.ok(rect);
