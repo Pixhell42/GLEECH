@@ -19,6 +19,8 @@
     "dev": "pnpm --filter @gleech/desktop dev",
     "build": "pnpm --filter @gleech/desktop build",
     "start": "pnpm --filter @gleech/desktop start",
+    "build:cli": "pnpm --filter @gleech/desktop build:cli",
+    "cli": "node apps/desktop/out/cli/gleech.cjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
@@ -49,7 +51,7 @@
     "native:release:check": "node tooling/native-release-check.mjs",
     "native:attribution:check": "node tooling/native-attribution-check.mjs",
     "native:source:check": "node tooling/native-source-review-check.mjs",
-    "ci:plan:test": "node --test tooling/windows-ci-plan.test.mjs tooling/mac-build-plan.test.mjs tooling/linux-build-plan.test.mjs",
+    "ci:plan:test": "node --test tooling/windows-ci-plan.test.mjs tooling/mac-build-plan.test.mjs tooling/linux-build-plan.test.mjs tooling/cli-launcher.test.mjs",
     "pack:win": "pnpm build && pnpm --filter @gleech/desktop pack:win",
     "dist:win": "pnpm build && pnpm --filter @gleech/desktop dist:win",
     "pack:mac": "pnpm build && pnpm --filter @gleech/desktop pack:mac",
@@ -114,7 +116,8 @@
     "test:ui-color": "pnpm build && node tooling/ui-color-check.mjs",
     "test:beta-ui": "pnpm build && node tooling/beta-ui-check.mjs && node tooling/beta-ui-check.mjs --cpu",
     "pack:linux": "pnpm build && pnpm --filter @gleech/desktop pack:linux",
-    "dist:linux": "pnpm build && pnpm --filter @gleech/desktop dist:linux"
+    "dist:linux": "pnpm build && pnpm --filter @gleech/desktop dist:linux",
+    "test:cli": "pnpm build && node tooling/cli-check.mjs --cpu && node tooling/cli-check.mjs --require-gpu"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

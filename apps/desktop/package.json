@@ -7,7 +7,8 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev --watch",
-    "build": "electron-vite build && vite build --config mcp.vite.config.ts",
+    "build": "electron-vite build && vite build --config mcp.vite.config.ts && vite build --config cli.vite.config.ts",
+    "build:cli": "vite build --config cli.vite.config.ts",
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "pack:win": "electron-builder --win --dir",

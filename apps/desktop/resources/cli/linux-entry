@@ -1,0 +1,13 @@
+#!/bin/sh
+# GLEECH AppImage/unpacked entry. Keep terminal file descriptors and the mount alive.
+set -e
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+# AppRun may prepend its sandbox fallback before the user's --cli argument.
+if [ "${1:-}" = "--cli" ]; then
+  shift
+  ELECTRON_RUN_AS_NODE=1 exec "$here/gleech-bin" "$here/resources/cli/gleech.cjs" "$@"
+elif [ "${1:-}" = "--no-sandbox" ] && [ "${2:-}" = "--cli" ]; then
+  shift 2
+  ELECTRON_RUN_AS_NODE=1 exec "$here/gleech-bin" "$here/resources/cli/gleech.cjs" "$@"
+fi
+exec "$here/gleech-bin" "$@"

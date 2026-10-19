@@ -1,3 +1,4 @@
+afterPack: build/cli-after-pack.mjs
 appId: com.gleech.desktop
 productName: GLEECH
 directories:
@@ -19,6 +20,10 @@ extraResources:
     to: licenses
   - from: out/mcp
     to: mcp
+  - from: out/cli
+    to: cli
+  - from: resources/cli
+    to: cli
   - from: resources/shaders
     to: shaders
   - from: resources/vector-maps

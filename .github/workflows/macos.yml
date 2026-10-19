@@ -12,6 +12,16 @@ on:
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - tooling/mac-*.mjs
+      - tooling/cli-*.mjs
+      - apps/desktop/build/cli-after-pack.mjs
+      - apps/desktop/resources/cli/**
+      - apps/desktop/src/cli/**
+      - apps/desktop/src/main/cli-gpu-main.ts
+      - apps/desktop/src/preload/cli-gpu.ts
+      - apps/desktop/src/renderer/cli-gpu.html
+      - apps/desktop/src/renderer/src/cli-gpu.ts
+      - apps/desktop/src/shared/cli-gpu-api.ts
+      - apps/desktop/cli.vite.config.ts
 
 permissions:
   contents: read
@@ -70,6 +80,8 @@ jobs:
           node tooling/image-check.mjs "$gleech_executable" --cpu
           node tooling/mcp-check.mjs "$gleech_executable" --cpu
           node tooling/mcp-clients-check.mjs "$gleech_executable"
+          node tooling/cli-check.mjs "$gleech_executable" --cpu
+          node tooling/cli-launcher-check.mjs "$GLEECH_MAC_APP"
       - name: Upload verified alpha package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

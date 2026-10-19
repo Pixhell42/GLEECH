@@ -1,0 +1,26 @@
+#!/bin/sh
+# GLEECH terminal CLI and TUI, run with the app's embedded runtime (no Node.js
+# install needed). Symlink this file onto your PATH, e.g.
+#   ln -s "/Applications/GLEECH.app/Contents/Resources/cli/gleech" /usr/local/bin/gleech
+set -e
+script=$0
+while [ -L "$script" ]; do
+  target=$(readlink "$script")
+  case $target in
+    /*) script=$target ;;
+    *) script=$(dirname "$script")/$target ;;
+  esac
+done
+here=$(CDPATH= cd -- "$(dirname -- "$script")" && pwd -P)
+resources=$(dirname "$here")
+if [ -x "$resources/../MacOS/GLEECH" ]; then
+  app="$resources/../MacOS/GLEECH"
+elif [ -x "$resources/../gleech-bin" ]; then
+  app="$resources/../gleech-bin"
+elif [ -x "$resources/../gleech" ]; then
+  app="$resources/../gleech"
+else
+  echo "gleech: cannot find the GLEECH executable beside $resources" >&2
+  exit 1
+fi
+ELECTRON_RUN_AS_NODE=1 exec "$app" "$here/gleech.cjs" "$@"

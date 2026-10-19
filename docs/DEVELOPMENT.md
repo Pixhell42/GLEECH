@@ -14,7 +14,7 @@ pnpm dev
 ```
 
 `pnpm dev` watches source. `pnpm build` builds main/preload/renderer and the bundled
-MCP server. `pnpm start` launches the last build, so rebuild after source changes.
+MCP server and terminal CLI/TUI. `pnpm start` launches the last build, so rebuild after source changes.
 
 ## Checks
 
@@ -80,7 +80,7 @@ separately from Windows and Apple Silicon.
 ## CI
 
 Routine PRs/main pushes run static/unit checks followed by one build and the
-essential smoke/image/editing/project/preset-transfer/MCP/UI-color workflows.
+essential smoke/image/editing/project/preset-transfer/MCP/UI-color/CLI workflows.
 Core image checks use CPU so hosted runners need no promised hardware GPU.
 Docs-only changes retain static/unit checks but skip desktop build/integration.
 Code and quick desktop jobs each allow 60 minutes. The final `validate` check
