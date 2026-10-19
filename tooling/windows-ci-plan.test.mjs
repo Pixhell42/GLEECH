@@ -80,21 +80,12 @@ test('stable validation gate requires code checks and the selected desktop suite
   assert.deepEqual(Object.keys(workflow.jobs), ['checks', 'desktop', 'full', 'validate']);
   assert.equal(workflow.on.workflow_dispatch.inputs.suite.default, 'quick');
   assert.deepEqual(workflow.on.workflow_dispatch.inputs.suite.options, ['quick', 'full']);
-  assert.deepEqual(workflow.on.push.tags, ['v*']);
   const steps = workflow.jobs.desktop.steps;
   assert.equal(steps.filter((step) => step.run === 'pnpm build').length, 1);
   assert.ok(!steps.some((step) => step.run?.includes('pack:win')));
   assert.ok(workflow.jobs.checks.steps.find((step) => step.run === 'pnpm check'));
   assert.deepEqual(workflow.jobs.validate.needs, ['checks', 'desktop', 'full']);
-  assert.equal(workflow.jobs.validate.if, 'always()');
-  assert.equal(
-    workflow.jobs.full.if,
-    "inputs.suite == 'full' || startsWith(github.ref, 'refs/tags/')",
-  );
-  assert.equal(
-    workflow.jobs.desktop.if,
-    "inputs.suite != 'full' && !startsWith(github.ref, 'refs/tags/')",
-  );
+  assert.equal(workflow.jobs.validate.if, '${{ !cancelled() }}');
   assert.equal(workflow.jobs.full.strategy['fail-fast'], false);
   assert.equal(workflow.jobs.full.strategy['max-parallel'], 6);
   assert.deepEqual(
@@ -111,6 +102,29 @@ test('stable validation gate requires code checks and the selected desktop suite
   assert.equal(workflow.permissions.contents, 'read');
   assert.ok(scripts.check.includes('pnpm build:tool:check'));
 });
+test('release publication never triggers duplicate CI and full validation is explicit', () => {
+  assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push', 'workflow_dispatch']);
+  assert.deepEqual(workflow.on.push, { branches: ['main'] });
+  assert.equal(workflow.env.CI_SUITE, "${{ inputs.suite || 'quick' }}");
+  assert.equal(
+    workflow.jobs.full.if,
+    "github.event_name == 'workflow_dispatch' && inputs.suite == 'full'",
+  );
+  // Manual quick runs remain quick even when targeting a tag.
+  assert.equal(workflow.jobs.desktop.if, "inputs.suite != 'full'");
+});
+
+test('manual full validation is isolated from automatic quick-run cancellation', () => {
+  assert.equal(
+    workflow.concurrency.group,
+    "windows-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'quick' }}",
+  );
+  assert.equal(
+    workflow.concurrency['cancel-in-progress'],
+    "${{ github.event_name == 'pull_request' || github.event_name == 'push' }}",
+  );
+});
+
 test('outside-contributor checks do not retain credentials or run in privileged contexts', () => {
   assert.equal(workflow.on.pull_request_target, undefined);
   assert.deepEqual(workflow.permissions, { contents: 'read' });
@@ -231,7 +245,11 @@ test(
     for (const [suite, checks, desktop, full, success] of [
       ['quick', 'success', 'success', 'skipped', true],
       ['full', 'success', 'skipped', 'success', true],
+      ['quick', 'failure', 'success', 'skipped', false],
+      ['quick', 'success', 'failure', 'skipped', false],
+      ['quick', 'success', 'cancelled', 'skipped', false],
       ['full', 'failure', 'skipped', 'success', false],
+      ['full', 'cancelled', 'skipped', 'success', false],
       ['full', 'success', 'skipped', 'failure', false],
       ['full', 'success', 'skipped', 'cancelled', false],
       ['full', 'success', 'skipped', 'skipped', false],

@@ -86,6 +86,9 @@ Docs-only changes retain static/unit checks but skip desktop build/integration.
 Code and quick desktop jobs each allow 60 minutes. The final `validate` check
 requires the code checks and the selected desktop suite to succeed; skipped,
 cancelled or failed required jobs cannot produce a passing validation result.
+A canceled workflow skips the final gate instead of launching another job that
+fails solely because its dependencies were canceled. Genuine failures still run
+the gate and fail validation.
 
 Actions → Windows development checks → Run workflow → **full** runs supported
 development and packaged integration scripts across twelve shards, with at most
@@ -116,13 +119,18 @@ Production launches are unchanged. To use the same test-only mode locally, set
 `$env:GLEECH_TEST_NATIVE_FRAMES='1'` before running checks. Without that opt-in,
 local smoke windows remain hidden. Window/frame behavior is never mocked.
 
-Version tags matching `v*` also select hosted full mode. Quick mode stops
-at its first integration failure. Full mode records failures and continues the
+Publishing a release tag does not start another CI run. Complete hosted full
+validation and physical-GPU acceptance for the intended release tree before
+publishing; retain the results with the release artifacts. Full validation is
+selected only through **Run workflow → suite: full**. Manual runs default to
+quick even when targeting a tag; the ref name never selects the suite.
+
+Quick mode stops at its first integration failure. Full mode records failures and continues the
 remaining checks; every shard must pass the final validation gate. This reports
 multiple failures without repeatedly waiting through the same prefix of tests.
 Per-shard failure diagnostics expire after three
-days. Package upload is off by default, including tag-triggered runs. For an
-explicit manual full run, enable **upload_package** only after reviewing binary
+days. Package upload is off by default. For an explicit manual full run, enable
+**upload_package** only after reviewing binary
 redistribution requirements; uploaded package artifacts expire after seven days.
 These are development artifacts, not an automatic public release/publishing pipeline.
 
