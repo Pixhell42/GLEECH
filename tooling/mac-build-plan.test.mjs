@@ -143,6 +143,8 @@ test('Mac upload follows advisory, native package and runtime checks', () => {
     'node tooling/image-check.mjs',
     'node tooling/mcp-check.mjs',
     'node tooling/mcp-clients-check.mjs',
+    'node tooling/cli-check.mjs',
+    'node tooling/cli-launcher-check.mjs',
   ]) {
     const check = steps.findIndex((step) => step.run?.includes(command));
     assert.ok(check >= 0 && check < upload, `Missing pre-upload check: ${command}`);

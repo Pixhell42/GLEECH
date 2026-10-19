@@ -1,3 +1,4 @@
+import { startCliGpu } from './cli-gpu-main';
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { join } from 'node:path';
 import { registerImageHandlers } from './images';
@@ -96,10 +97,17 @@ function createWindow(): void {
   }
 }
 
-void app.whenReady().then(() => {
-  app.setAppUserModelId('com.gleech.desktop');
-  Menu.setApplicationMenu(null);
-  createWindow();
-});
+if (process.argv.includes('--gleech-cli-gpu')) {
+  void startCliGpu().catch((error) => {
+    process.stderr.write(String(error) + '\n');
+    app.exit(1);
+  });
+} else {
+  void app.whenReady().then(() => {
+    app.setAppUserModelId('com.gleech.desktop');
+    Menu.setApplicationMenu(null);
+    createWindow();
+  });
 
-app.on('window-all-closed', () => app.quit());
+  app.on('window-all-closed', () => app.quit());
+}

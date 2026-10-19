@@ -197,6 +197,8 @@ self.onmessage = (event: MessageEvent<EffectRequest>) => {
       if (hasIsf && isf === undefined) isf = IsfRenderer.create();
       let gpu = hasWgsl && !shaderFailure ? await shaderRenderer() : null;
       if (token.cancelled) throw new RenderCancelledError();
+      if (request.shaderMode === 'gpu' && ((hasWgsl && !gpu) || (hasIsf && !isf)))
+        throw new Error(shaderFailure ?? 'The requested GPU shader backend is unavailable.');
       let result: PixelImage;
       let shaderBackend: PixelImage['shaderBackend'] =
         hasIsf && isf ? (gpu ? 'mixed-gpu' : 'webgl2') : gpu ? 'webgpu' : 'cpu';
@@ -242,6 +244,7 @@ self.onmessage = (event: MessageEvent<EffectRequest>) => {
         if (token.cancelled || error instanceof RenderCancelledError)
           throw new RenderCancelledError();
         if (
+          request.shaderMode === 'gpu' ||
           !gpu ||
           request.effects.some(
             (effect) =>

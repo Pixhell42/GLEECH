@@ -1,10 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "lib": ["ES2022", "DOM"], "types": ["node"], "resolveJsonModule": true },
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "@webgpu/types"],
+    "resolveJsonModule": true
+  },
   "include": [
     "electron.vite.config.ts",
     "mcp.vite.config.ts",
+    "cli.vite.config.ts",
     "src/main/**/*.ts",
+    "src/cli/**/*.ts",
     "src/preload/**/*.ts"
   ]
 }
