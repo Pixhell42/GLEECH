@@ -17,6 +17,16 @@ on:
       - tooling/mac-native-review.mjs
       - tooling/appimage-check.mjs
       - tooling/run-linux-webgpu.sh
+      - tooling/cli-*.mjs
+      - apps/desktop/build/cli-after-pack.mjs
+      - apps/desktop/resources/cli/**
+      - apps/desktop/src/cli/**
+      - apps/desktop/src/main/cli-gpu-main.ts
+      - apps/desktop/src/preload/cli-gpu.ts
+      - apps/desktop/src/renderer/cli-gpu.html
+      - apps/desktop/src/renderer/src/cli-gpu.ts
+      - apps/desktop/src/shared/cli-gpu-api.ts
+      - apps/desktop/cli.vite.config.ts
 
 permissions:
   contents: read
@@ -63,6 +73,8 @@ jobs:
         run: |
           xvfb-run -a node tooling/image-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
           xvfb-run -a node tooling/mcp-clients-check.mjs apps/desktop/release/linux-unpacked/gleech
+          xvfb-run -a node tooling/cli-check.mjs apps/desktop/release/linux-unpacked/gleech-bin --cpu
+          node tooling/cli-launcher-check.mjs apps/desktop/release/linux-unpacked/gleech
       - name: Test actual AppImage startup, MCP and remount
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
@@ -71,6 +83,7 @@ jobs:
           xvfb-run -a node tooling/smoke.mjs "$GLEECH_APPIMAGE"
           xvfb-run -a node tooling/mcp-check.mjs "$GLEECH_APPIMAGE" --cpu
           xvfb-run -a node tooling/appimage-check.mjs "$GLEECH_APPIMAGE"
+          node tooling/cli-launcher-check.mjs "$GLEECH_APPIMAGE"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gleech-linux-omarchy-alpha-x64-${{ github.sha }}

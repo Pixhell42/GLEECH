@@ -4,3 +4,4 @@
 *.ico binary
 *.onnx binary
 LICENSES/** -text -whitespace
+*.cmd text eol=crlf

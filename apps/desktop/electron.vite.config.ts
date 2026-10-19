@@ -21,8 +21,25 @@ export default defineConfig({
       },
     },
   },
-  preload: {},
+  preload: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          'cli-gpu': resolve('src/preload/cli-gpu.ts'),
+        },
+      },
+    },
+  },
   renderer: {
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          'cli-gpu': resolve('src/renderer/cli-gpu.html'),
+        },
+      },
+    },
   },
 });

@@ -30,8 +30,8 @@ test('native test frames require an isolated smoke profile and explicit test env
 });
 test('routine changes keep critical workflows without rebuilding or packaging', () => {
   const plan = createWindowsPlan('quick', scripts);
-  assert.equal(plan.length, 7);
-  for (const name of ['image', 'editing', 'project', 'preset-transfer', 'mcp'])
+  assert.equal(plan.length, 8);
+  for (const name of ['image', 'editing', 'project', 'preset-transfer', 'mcp', 'cli'])
     assert.ok(
       plan.some(({ args }) => args[0] === `tooling/${name}-check.mjs` && args.includes('--cpu')),
     );
@@ -268,4 +268,18 @@ test('nonstandard future test commands cannot silently disappear from full verif
   );
   assert.throws(() => createWindowsPlan('quick', scripts, 'GLEECH.exe'), /Packaging/);
   assert.throws(() => createWindowsPlan('unknown', scripts), /quick or full/);
+});
+
+test('terminal CPU checks stay hosted and required shader checks use the GPU lane', () => {
+  const plan = createWindowsPlan('full', scripts, 'GLEECH.exe');
+  const hosted = selectWindowsLane(plan, 'hosted').filter(
+    (entry) => entry.args[0] === 'tooling/cli-check.mjs',
+  );
+  const gpu = selectWindowsLane(plan, 'gpu').filter(
+    (entry) => entry.args[0] === 'tooling/cli-check.mjs',
+  );
+  assert.equal(hosted.length, 2);
+  assert.ok(hosted.every((entry) => entry.args.includes('--cpu')));
+  assert.equal(gpu.length, 2);
+  assert.ok(gpu.every((entry) => entry.args.includes('--require-gpu')));
 });

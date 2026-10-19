@@ -15,6 +15,7 @@ const nativeOnly = new Set([
 // their GPU variants on a physical adapter before accepting a release.
 const physicalGpuChecks = new Set(
   [
+    'cli',
     'shader',
     'shader-import',
     'shader-paste',
@@ -72,7 +73,7 @@ export function createWindowsPlan(mode, scripts, packagedPath) {
   }
   add(['tooling/smoke.mjs']);
   if (mode === 'quick') {
-    for (const script of ['image', 'editing', 'project', 'preset-transfer', 'mcp'])
+    for (const script of ['image', 'editing', 'project', 'preset-transfer', 'mcp', 'cli'])
       add([`tooling/${script}-check.mjs`, '--cpu']);
     add(['tooling/ui-color-check.mjs']);
     return commands;

@@ -12,6 +12,7 @@ export default defineConfig({
     include: [
       'packages/*/src/**/*.test.ts',
       'apps/desktop/src/main/**/*.test.ts',
+      'apps/desktop/src/cli/**/*.test.ts',
       'apps/desktop/src/renderer/**/*.test.ts',
     ],
     environment: 'node',
