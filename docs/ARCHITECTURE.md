@@ -3,7 +3,8 @@
 ## Workspace boundaries
 
 `apps/desktop` owns Electron main/preload, React UI, image/file services,
-preferences, GitHub reporting and the local MCP bridge. Shared packages are
+preferences, GitHub reporting, the local MCP bridge and the terminal CLI/TUI
+(`src/cli`, bundled to `out/cli/gleech.cjs`). Shared packages are
 bundled from TypeScript source and are not independently published packages.
 
 - `project-model`: validated effects, defaults, project/stage schemas, masks,
@@ -58,6 +59,24 @@ recent-file lists are per-user data outside project history.
 The image worker handles Sharp codecs and local U²-Net inference with ONNX Runtime.
 The bundled model and its Apache license remain separate from GLEECH's MIT code.
 File contracts and size budgets are documented in [FILE_FORMATS.md](FILE_FORMATS.md).
+
+## Terminal CLI and TUI
+
+The CLI drives the shared command service and CPU effects directly. Auto mode
+starts one isolated hidden Electron helper when a shader stack needs WebGPU or
+WebGL2; GPU mode requires the requested backend, and CPU mode never starts it.
+The helper reuses the desktop effect worker, including masks, embedded images,
+JPEG passes, cancellation and device recovery. A sandboxed renderer loads only
+bundled local code. Private parent/child IPC carries small control messages;
+cached raw image files avoid large JSON copies and Node/Electron V8 version
+mismatches. Temporary profiles/assets are removed when the command or TUI exits.
+It never opens the desktop editor or connects to the user's active project.
+
+Projects, presets, export metadata and lazy Sharp/ONNX codecs are shared with
+the desktop. The fallback PNG codec bounds decompression and retains metadata.
+Imported shaders fail clearly when unsupported; skipping requires an explicit
+option. The TUI uses diffed ANSI cells or supported terminal image protocols,
+with the same command history and reusable renderer. See [CLI.md](CLI.md).
 
 ## MCP and feedback
 

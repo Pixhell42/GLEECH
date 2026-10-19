@@ -6,6 +6,8 @@ export interface EffectContext {
   masterSeed: number;
   reference: { width: number; height: number };
   purpose: 'preview' | 'export';
+  /** CLI strict GPU mode forbids retrying built-in shaders on CPU. */
+  shaderMode?: 'auto' | 'gpu';
   previewMaxDimension?: number;
   /** Keep the active brush's rasterizer resident in long masked stacks. */
   activeMaskId?: string;
