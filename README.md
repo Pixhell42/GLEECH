@@ -101,6 +101,22 @@ open. The bundled stdio server controls the active project through the same
 editing and rendering engine as the UI. See [MCP setup](docs/MCP.md).
 HTTP transport and hosted/cloud integrations are deferred.
 
+## Terminal CLI and TUI
+
+GLEECH also runs in a terminal, with the same engine, presets and `.gleech`
+projects as the app. Render and batch from scripts, roll reproducible GLEECH
+stacks, or edit interactively with a live truecolor preview:
+
+```sh
+pnpm build
+pnpm cli tui photo.jpg
+pnpm cli render shots/ -p signal-burn -o out/
+pnpm cli gleech photo.jpg -n 9 --sheet sheet.png
+```
+
+Builds from the CLI/TUI branch include GPU/CPU rendering and a `gleech` launcher under `resources/cli`. See the
+[CLI and TUI guide](docs/CLI.md).
+
 ## Community and contributions
 
 - [Discord Community](https://discord.gg/b7Mq8fjvk)

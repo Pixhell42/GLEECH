@@ -74,6 +74,8 @@ test('Linux artifact upload requires native, advisory, code, actual AppImage and
     'node tooling/smoke.mjs',
     'node tooling/mcp-check.mjs',
     'node tooling/mcp-clients-check.mjs',
+    'node tooling/cli-check.mjs',
+    'node tooling/cli-launcher-check.mjs',
     'node tooling/appimage-check.mjs',
   ]) {
     const index = steps.findIndex((step) => step.run?.includes(command));
