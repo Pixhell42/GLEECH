@@ -33,7 +33,7 @@ On Linux, make the AppImage executable first with `chmod +x <file>.AppImage`.
 The AppImage also accepts direct commands: `./GLEECH.AppImage --cli tui photo.jpg`.
 It uses the app's embedded runtime with the mount kept alive for the terminal
 session; no extraction or Node installation is needed. On systems without FUSE,
-prefix the command with `APPIMAGE_EXTRACT_AND_RUN=1`.
+prefix the install command with `APPIMAGE_EXTRACT_AND_RUN=1`. The installed launcher keeps extraction output separate from CLI output, including JSON and interactive terminal rendering. Direct scripted no-FUSE invocations can use `GLEECH_CLI_RESTORE_STDOUT=1 ./GLEECH.AppImage --cli <command> 3>&1 >/dev/null` alongside that environment variable.
 
 Close and reopen your terminal application after installation, then run
 `gleech --help` or `gleech tui sample`. Windows adds a managed launcher in

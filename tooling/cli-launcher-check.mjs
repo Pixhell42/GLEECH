@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, access } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -40,6 +40,29 @@ delete env.ELECTRON_RUN_AS_NODE;
 if (appimage) env.APPIMAGE_EXTRACT_AND_RUN = '1';
 async function invoke(args, command = launcher) {
   const prefix = command === app && appimage ? ['--cli'] : [];
+  if (command === app && appimage) {
+    // Keep the legacy runtime extraction listing separate from the CLI stream,
+    // just as the installed launcher does. fd 3 remains a terminal for real TUI use.
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, [...prefix, ...args], {
+        env: { ...env, GLEECH_CLI_RESTORE_STDOUT: '1' },
+        stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
+        timeout: 90000,
+      });
+      let stdout = '',
+        stderr = '';
+      child.stdio[3].on('data', (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+      });
+      child.on('error', reject);
+      child.on('close', (code) =>
+        code === 0 ? resolve(stdout) : reject(new Error('AppImage CLI failed: ' + stderr)),
+      );
+    });
+  }
   const result =
     process.platform === 'win32'
       ? await run(

@@ -187,7 +187,15 @@ export async function installCli(
         MARKER +
         '\n' +
         (platform === 'linux' && appImage
-          ? 'unset ELECTRON_RUN_AS_NODE\nexec ' + shellQuote(resolve(appImage)) + ' --cli "$@"\n'
+          ? 'unset ELECTRON_RUN_AS_NODE\n' +
+            'if [ "${APPIMAGE_EXTRACT_AND_RUN+x}" = x ]; then\n' +
+            '  exec 3>&1\n' +
+            '  GLEECH_CLI_RESTORE_STDOUT=1 exec ' +
+            shellQuote(resolve(appImage)) +
+            ' --cli "$@" >/dev/null\n' +
+            'fi\nexec ' +
+            shellQuote(resolve(appImage)) +
+            ' --cli "$@"\n'
           : 'ELECTRON_RUN_AS_NODE=1 exec ' +
             shellQuote(executable) +
             ' ' +

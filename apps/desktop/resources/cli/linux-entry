@@ -2,6 +2,12 @@
 # GLEECH AppImage/unpacked entry. Keep terminal file descriptors and the mount alive.
 set -e
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+# Extract-and-run in the bundled legacy runtime writes a file listing to stdout.
+# The installed wrapper preserves the real terminal/pipe on fd 3 first.
+if [ "${GLEECH_CLI_RESTORE_STDOUT:-}" = 1 ]; then
+  exec 1>&3 3>&-
+  unset GLEECH_CLI_RESTORE_STDOUT
+fi
 # AppRun may prepend its sandbox fallback before the user's --cli argument.
 if [ "${1:-}" = "--cli" ]; then
   shift

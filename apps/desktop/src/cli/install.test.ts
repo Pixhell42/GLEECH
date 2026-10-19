@@ -34,6 +34,8 @@ describe('per-user CLI installation', () => {
     expect(await readFile(profile, 'utf8')).toBe(before);
     const launcher = await readFile(join(options.home, '.local/bin/gleech'), 'utf8');
     expect(launcher).toContain('--cli "$@"');
+    expect(launcher).toContain('exec 3>&1');
+    expect(launcher).toContain('GLEECH_CLI_RESTORE_STDOUT=1');
     expect(launcher).not.toContain('/tmp/.mount');
     await installCli(false, options);
     expect(await readFile(profile, 'utf8')).toBe('# keep my settings\nexport CUSTOM=1\n');

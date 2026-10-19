@@ -33,6 +33,14 @@ test('Linux package keeps the native executable and installs an executable entry
       assert.ok(run.stdout.includes(join(directory, 'resources/cli/gleech.cjs')));
       assert.ok(!run.stdout.includes('--no-sandbox'));
     }
+    const redirected = spawnSync(join(directory, 'gleech'), ['--cli', '--version'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+      env: { ...process.env, GLEECH_CLI_RESTORE_STDOUT: '1' },
+    });
+    assert.equal(redirected.status, 7, redirected.stderr);
+    assert.equal(redirected.stdout, '');
+    assert.match(redirected.output[3], /runtime=1/);
     const run = spawnSync(join(directory, 'gleech'), ['--some-gui-flag', 'a b.gleech'], {
       encoding: 'utf8',
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
