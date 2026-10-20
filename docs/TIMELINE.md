@@ -60,8 +60,10 @@ shows the frame rate), then refines the frame at full resolution when paused.
    small arrows beside it jump to the previous or next key.
 
 Selecting an animated control opens its **Animation** card: the ease for its
-keys, Add LFO, Link to audio and Clear. Number controls ease between keys;
-colors blend; choices and switches step at each key.
+keys, Add LFO, Link to audio and Clear. Clicking a parameter's name in the Keys
+or Curves view brings that card into view, or opens the control's Audio/LFO
+stack when it has modulators. Number controls ease between keys; colors blend;
+choices and switches step at each key.
 
 In the **Keys** view, drag diamonds to retime them (Shift-click selects several).
 Snap pulls keys to frames, other keys, markers and beats. Double-click a lane to
@@ -70,18 +72,19 @@ Snap to nearest beat and Delete. The transport's ease buttons apply Linear,
 Ease in-out or Hold to the selected keys.
 
 The **Curves** view draws every animated parameter on one graph, normalized to
-0–100% of each control's range. Solid lines are editable keys; dashed lines are
-live modulation. Drag a key in time and value. A selected Bezier key shows two
-handles; dragging a handle turns that segment into a custom Bezier curve. The
-list on the left filters to the selected effect or all effects and hides
-individual curves.
+0–100% of each control's range, with the Audio track (waveform, mute and volume)
+kept above it. Solid lines are editable keys; dashed lines are live modulation.
+Drag a key in time and value. A selected Bezier key shows two handles; dragging
+a handle turns that segment into a custom Bezier curve. The list on the left
+filters to the selected effect or all effects and hides individual curves.
 
 ## Audio and LFO modulators
 
 Modulators drive a numeric control automatically, on top of its keys. Click the
-Audio or LFO tag beside a modulated control to open its stack: base value, live
-value at the playhead and one card per modulator. Cards apply top to bottom
-after keyframes, and the result is clamped to the control's range.
+Audio or LFO tag beside a modulated control (or its name in the timeline) to
+open its stack: base value, live value at the playhead and one card per
+modulator. Cards apply top to bottom after keyframes, and the result is clamped
+to the control's range.
 
 - **Audio** follows a band of the audio track (Low 40–160 Hz, Mid, High or a
   custom range), with attack and release smoothing and an output range. Replace

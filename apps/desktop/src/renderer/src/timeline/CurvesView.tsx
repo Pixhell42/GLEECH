@@ -56,6 +56,7 @@ export function CurvesView({
   beginGesture,
   endGesture,
   ruler,
+  audioRow,
 }: {
   project: ProjectState;
   timeline: Timeline;
@@ -69,11 +70,13 @@ export function CurvesView({
   tracksRef: RefObject<HTMLDivElement | null>;
   snapTo(frame: number, exclude?: ReadonlySet<number>): { frame: number; snapped: boolean };
   onSeek(frame: number): void;
-  onSelectParam(parameter: SelectedParameter | null): void;
+  onSelectParam(parameter: SelectedParameter | null, options?: { reveal?: boolean }): void;
   onAnimation(effectId: string, key: string, animation: ParameterAnimation | null): void;
   beginGesture(): void;
   endGesture(): void;
   ruler: ReactNode;
+  /** The audio track row, so the waveform and track controls stay in view. */
+  audioRow?: ReactNode;
 }) {
   const fps = timeline.fps;
   const lastFrame = frameCount(timeline) - 1;
@@ -403,6 +406,7 @@ export function CurvesView({
         </div>
         {ruler}
       </div>
+      {audioRow}
       <div className="curves-body">
         <div className="curves-list" style={{ width: TRACK_HEADER_WIDTH }}>
           {groups.map((group) => (
@@ -440,7 +444,10 @@ export function CurvesView({
                       <button
                         className="track-name"
                         onClick={() =>
-                          onSelectParam({ effectId: entry.effect.instanceId, key: entry.key })
+                          onSelectParam(
+                            { effectId: entry.effect.instanceId, key: entry.key },
+                            { reveal: true },
+                          )
                         }
                       >
                         {entry.parameter.label}

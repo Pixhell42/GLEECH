@@ -1187,6 +1187,15 @@ export function App() {
       setModulatorParam({ effectId: effect.instanceId, key });
     },
   });
+  /** Scroll the inspector to the selected control's Animation card once it renders. */
+  const revealAnimationCard = () =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        window.document
+          .querySelector('.detail-panel .animation-card')
+          ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+      ),
+    );
   const animationCardFor = (effect: EffectInstance) => {
     if (!selectedParam || selectedParam.effectId !== effect.instanceId) return null;
     const key = selectedParam.key;
@@ -3979,12 +3988,25 @@ export function App() {
               setSelectedId(id);
               setInspectorTab('controls');
             }}
-            onSelectParam={(parameter) => {
+            onSelectParam={(parameter, options) => {
               setSelectedParam(parameter);
-              if (parameter) {
-                setSelectedId(parameter.effectId);
-                setInspectorTab('controls');
+              if (!parameter) return;
+              setSelectedId(parameter.effectId);
+              setInspectorTab('controls');
+              if (!options?.reveal) return;
+              // A click on a parameter's name shows its audio/LFO stack when it has
+              // modulators, else its Animation card (ease, Add LFO, Link to audio).
+              const lane = commands
+                .getState()
+                .effects.find((effect) => effect.instanceId === parameter.effectId)?.animation?.[
+                parameter.key
+              ];
+              if (lane?.modulators?.length) {
+                setModulatorParam(parameter);
+                return;
               }
+              setModulatorParam(null);
+              revealAnimationCard();
             }}
             onToggleEffect={(id, enabled) => commands.updateEffect(id, { enabled })}
             onLock={commands.setEffectLocked}

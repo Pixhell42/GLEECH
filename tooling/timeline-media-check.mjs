@@ -169,6 +169,27 @@ try {
   );
   await page.locator('.live-modulation').waitFor();
 
+  // Clicking a modulated parameter's name opens its audio stack, in the Keys
+  // view and in the Curves view, which also keeps the audio track in view.
+  const dock = page.locator('.timeline-dock');
+  const backToControls = page.getByRole('button', { name: 'Back to effect controls', exact: true });
+  await dock
+    .locator('.parameter-track-header')
+    .getByRole('button', { name: 'Opacity', exact: true })
+    .click();
+  await page.locator('.modulator-card.audio').waitFor();
+  await backToControls.click();
+  await dock.getByRole('button', { name: 'Curves', exact: true }).click();
+  await page.locator('.curves-view .audio-row').waitFor();
+  assert.equal(
+    await page.locator('.curves-view').getByRole('slider', { name: 'Audio track volume' }).count(),
+    1,
+  );
+  await page.locator('.curves-item').getByRole('button', { name: 'Opacity', exact: true }).click();
+  await page.locator('.modulator-card.audio').waitFor();
+  await backToControls.click();
+  await dock.getByRole('button', { name: 'Keys', exact: true }).click();
+
   // Changing the track volume while playing keeps the play clock running.
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   const advanced = await page.evaluate(async () => {

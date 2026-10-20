@@ -102,7 +102,8 @@ export interface TimelineDockProps {
   onTogglePlay(): void;
   onTimeline(change: TimelineChange): void;
   onSelectEffect(id: string): void;
-  onSelectParam(parameter: SelectedParameter | null): void;
+  /** `reveal` (a click on the name) also shows its modulators or Animation card. */
+  onSelectParam(parameter: SelectedParameter | null, options?: { reveal?: boolean }): void;
   onToggleEffect(id: string, enabled: boolean): void;
   onLock(id: string, locked: boolean): void;
   onMoveEffect(id: string, index: number): void;
@@ -345,6 +346,48 @@ export function TimelineDock(props: TimelineDockProps) {
     const release = () => {};
     trackPointer(event.pointerId, pointerMove, release);
   };
+
+  // The audio track row (waveform, tempo, the track's mute and volume) shows in
+  // both the Keys and Curves views.
+  const audioRow = timeline.audio ? (
+    <TrackRow
+      className={`audio-row${timeline.audio.muted ? ' muted' : ''}`}
+      header={
+        <>
+          <div className="track-header-line">
+            <WaveformIcon />
+            <span
+              className="track-name"
+              title={
+                audioIsClipSound(timeline)
+                  ? `${timeline.audio.name} (the clip’s own sound)`
+                  : timeline.audio.name
+              }
+            >
+              Audio · {timeline.audio.name}
+            </span>
+            <span className="track-meta">
+              {timeline.audio.analysis
+                ? timeline.audio.analysis.bpm
+                  ? `${timeline.audio.analysis.bpm} BPM`
+                  : 'No steady beat'
+                : 'Analyzing…'}
+            </span>
+          </div>
+          <AudioTrackLevel
+            audio={timeline.audio}
+            disabled={disabled}
+            onChange={(change) => onTimeline({ audio: { ...timeline.audio!, ...change } })}
+            beginGesture={beginGesture}
+            endGesture={endGesture}
+          />
+        </>
+      }
+      onLanePointerDown={seekFromLane}
+    >
+      <Waveform timeline={timeline} view={view} laneWidth={laneWidth} />
+    </TrackRow>
+  ) : null;
 
   return (
     <section
@@ -687,6 +730,7 @@ export function TimelineDock(props: TimelineDockProps) {
           onAnimation={props.onAnimation}
           beginGesture={beginGesture}
           endGesture={endGesture}
+          audioRow={audioRow}
           ruler={
             <Ruler
               timeline={timeline}
@@ -821,47 +865,7 @@ export function TimelineDock(props: TimelineDockProps) {
                   filmstrip={props.filmstrip}
                 />
               </TrackRow>
-              {timeline.audio && (
-                <TrackRow
-                  className={`audio-row${timeline.audio.muted ? ' muted' : ''}`}
-                  header={
-                    <>
-                      <div className="track-header-line">
-                        <WaveformIcon />
-                        <span
-                          className="track-name"
-                          title={
-                            audioIsClipSound(timeline)
-                              ? `${timeline.audio.name} (the clip’s own sound)`
-                              : timeline.audio.name
-                          }
-                        >
-                          Audio · {timeline.audio.name}
-                        </span>
-                        <span className="track-meta">
-                          {timeline.audio.analysis
-                            ? timeline.audio.analysis.bpm
-                              ? `${timeline.audio.analysis.bpm} BPM`
-                              : 'No steady beat'
-                            : 'Analyzing…'}
-                        </span>
-                      </div>
-                      <AudioTrackLevel
-                        audio={timeline.audio}
-                        disabled={disabled}
-                        onChange={(change) =>
-                          onTimeline({ audio: { ...timeline.audio!, ...change } })
-                        }
-                        beginGesture={beginGesture}
-                        endGesture={endGesture}
-                      />
-                    </>
-                  }
-                  onLanePointerDown={seekFromLane}
-                >
-                  <Waveform timeline={timeline} view={view} laneWidth={laneWidth} />
-                </TrackRow>
-              )}
+              {audioRow}
               {displayed.map((effect, index) => (
                 <EffectTracks
                   key={effect.instanceId}
@@ -1478,7 +1482,8 @@ function EffectTracks({
   snapTo(frame: number, exclude?: ReadonlySet<number>): { frame: number; snapped: boolean };
   onExpand(open: boolean): void;
   onSelect(): void;
-  onSelectParam(parameter: SelectedParameter | null): void;
+  /** `reveal` (a click on the name) also shows its modulators or Animation card. */
+  onSelectParam(parameter: SelectedParameter | null, options?: { reveal?: boolean }): void;
   onKeySelection(selection: KeySelection | null): void;
   onToggle(): void;
   onLock(): void;
@@ -1700,7 +1705,9 @@ function EffectTracks({
             >
               <div
                 className="track-header parameter-track-header"
-                onClick={() => onSelectParam({ effectId: effect.instanceId, key })}
+                onClick={() =>
+                  onSelectParam({ effectId: effect.instanceId, key }, { reveal: true })
+                }
               >
                 <span className={`parameter-icon${audio ? ' audio' : lfo ? ' lfo' : ''}`}>
                   {audio ? (
@@ -1720,7 +1727,7 @@ function EffectTracks({
                   title={parameter.label}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onSelectParam({ effectId: effect.instanceId, key });
+                    onSelectParam({ effectId: effect.instanceId, key }, { reveal: true });
                   }}
                 >
                   {parameter.label}
