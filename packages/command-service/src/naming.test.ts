@@ -11,7 +11,7 @@ describe('project naming', () => {
     format: 'png' as const,
     hasAlpha: true,
   };
-  it('groups renaming into an undoable edit and preserves a custom name when importing another image', () => {
+  it('groups renaming into an undoable edit; opening another image names the project after it', () => {
     const commands = createCommandService(createProject('Untitled'));
     commands.setSource(source);
     expect(commands.getState().name).toBe('photo.png');
@@ -26,7 +26,7 @@ describe('project naming', () => {
     commands.redo();
     expect(commands.getState()).toBe(renamed);
     commands.setSource({ ...source, id: 'next', name: 'next.png' });
-    expect(commands.getState().name).toBe('My work');
+    expect(commands.getState().name).toBe('next.png');
     expect(() => commands.renameProject(' ')).toThrow();
     expect(() => commands.renameProject('x'.repeat(121))).toThrow();
   });
