@@ -142,3 +142,221 @@ export const IdeaIcon = () => (
     <path d="M8 16c0-3-3-3-3-7a7 7 0 0 1 14 0c0 4-3 4-3 7zM9 20h6" />
   </Icon>
 );
+
+// Timeline and render icons. Transport glyphs are filled, like media controls.
+function Solid({ size = 14, children }: { size?: number; children: ReactNode }) {
+  return (
+    <svg
+      className="ui-icon"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+export const ImageModeIcon = () => (
+  <Icon size={14}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+    <path d="m3.5 16 5-5 4 4 3-3 5 5" />
+  </Icon>
+);
+
+export const TimelineModeIcon = () => (
+  <Icon size={14}>
+    <path d="M4 7h16M4 12h10M4 17h13" />
+    <path d="M17 10v4" className="icon-accent" />
+  </Icon>
+);
+
+export const PlayIcon = () => (
+  <Solid>
+    <path d="M7 4.5v15l12.5-7.5z" />
+  </Solid>
+);
+
+export const PauseIcon = () => (
+  <Solid>
+    <rect x="6" y="5" width="4" height="14" rx="1" />
+    <rect x="14" y="5" width="4" height="14" rx="1" />
+  </Solid>
+);
+
+export const GoToStartIcon = () => (
+  <Solid>
+    <path d="M6 5h2v14H6zM19 5v14L9 12z" />
+  </Solid>
+);
+
+export const GoToEndIcon = () => (
+  <Solid>
+    <path d="M16 5h2v14h-2zM5 5v14l10-7z" />
+  </Solid>
+);
+
+export const PreviousKeyIcon = () => (
+  <Solid>
+    <path d="M15 5v14L6 12z" />
+    <path d="M18 9l3 3-3 3-3-3z" opacity=".55" />
+  </Solid>
+);
+
+export const NextKeyIcon = () => (
+  <Solid>
+    <path d="M9 5v14l9-7z" />
+    <path d="M6 9l3 3-3 3-3-3z" opacity=".55" />
+  </Solid>
+);
+
+export const StepBackIcon = () => (
+  <Solid>
+    <path d="M7 6h2v12H7zM18 6v12l-8-6z" />
+  </Solid>
+);
+
+export const StepForwardIcon = () => (
+  <Solid>
+    <path d="M15 6h2v12h-2zM6 6v12l8-6z" />
+  </Solid>
+);
+
+export const LoopIcon = () => (
+  <Icon size={15}>
+    <path d="M17 3l3 3-3 3" />
+    <path d="M4 12V9a3 3 0 0 1 3-3h13" />
+    <path d="M7 21l-3-3 3-3" />
+    <path d="M20 12v3a3 3 0 0 1-3 3H4" />
+  </Icon>
+);
+
+export const SnapIcon = () => (
+  <Icon size={15}>
+    <path d="M6 4v7a6 6 0 0 0 12 0V4" />
+    <path d="M6 8h3M15 8h3" />
+  </Icon>
+);
+
+export const FitWidthIcon = () => (
+  <Icon size={14}>
+    <path d="M3 12h18" />
+    <path d="M7 8l-4 4 4 4M17 8l4 4-4 4" />
+  </Icon>
+);
+
+export const RenderIcon = () => (
+  <Icon size={14}>
+    <rect x="3" y="5" width="18" height="14" rx="2.5" />
+    <path d="M3 9h18M3 15h18M8 5v4M16 5v4M8 15v4M16 15v4" />
+  </Icon>
+);
+
+export const VideoIcon = () => (
+  <Icon size={14}>
+    <rect x="3" y="6" width="13" height="12" rx="2.5" />
+    <path d="m16 10 5-3v10l-5-3" />
+  </Icon>
+);
+
+export const WaveformIcon = ({ size = 14 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" />
+  </Icon>
+);
+
+export const SineIcon = ({ size = 14 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0" />
+  </Icon>
+);
+
+export const ChevronIcon = ({ open }: { open: boolean }) => (
+  <Icon size={12}>
+    <path d={open ? 'm6 9 6 6 6-6' : 'm9 6 6 6-6 6'} />
+  </Icon>
+);
+
+export const PopupChevronIcon = () => (
+  <Icon size={9}>
+    <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+  </Icon>
+);
+
+export const LockIcon = ({ locked }: { locked: boolean }) => (
+  <Icon size={14}>
+    <rect x="5" y="10" width="14" height="11" rx="2" />
+    <path d={locked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'} />
+    <path d="M12 14v3" />
+  </Icon>
+);
+
+export const SeedIcon = () => (
+  <Icon size={14}>
+    <rect x="4" y="4" width="16" height="16" rx="4" />
+    <circle cx="9" cy="9" r="0.9" fill="currentColor" />
+    <circle cx="15" cy="15" r="0.9" fill="currentColor" />
+  </Icon>
+);
+
+export const EaseLinearIcon = () => (
+  <Icon size={15}>
+    <path d="M5 19 19 5" />
+  </Icon>
+);
+
+export const EaseInOutIcon = () => (
+  <Icon size={15}>
+    <path d="M5 19c7 0 7-14 14-14" />
+  </Icon>
+);
+
+export const EaseHoldIcon = () => (
+  <Icon size={15}>
+    <path d="M5 19h7V5h7" />
+  </Icon>
+);
+
+export const FolderIcon = () => (
+  <Icon size={14}>
+    <path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+  </Icon>
+);
+
+export const SequenceIcon = () => (
+  <Icon size={14}>
+    <rect x="7" y="7" width="13" height="13" rx="2" />
+    <path d="M4 16V6a2 2 0 0 1 2-2h10" />
+  </Icon>
+);
+
+/** Keyframe diamond: outline when animated without a key here, solid at a key. */
+export const DiamondIcon = ({ filled, size = 12 }: { filled: boolean; size?: number }) => (
+  <svg
+    className="ui-icon keyframe-diamond-icon"
+    width={size}
+    height={size}
+    viewBox="0 0 12 12"
+    aria-hidden="true"
+  >
+    {filled ? (
+      <path d="M6 .8 11.2 6 6 11.2.8 6z" fill="currentColor" />
+    ) : (
+      <path d="M6 1.5 10.5 6 6 10.5 1.5 6z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    )}
+  </svg>
+);
+
+export const TriangleLeftIcon = () => (
+  <svg className="ui-icon" width="8" height="10" viewBox="0 0 8 10" aria-hidden="true">
+    <path d="M6 0v10L0 5z" fill="currentColor" />
+  </svg>
+);
+
+export const TriangleRightIcon = () => (
+  <svg className="ui-icon" width="8" height="10" viewBox="0 0 8 10" aria-hidden="true">
+    <path d="M2 0v10l6-5z" fill="currentColor" />
+  </svg>
+);
