@@ -19,7 +19,7 @@ export function createGleechMcpServer(
     { name: 'GLEECH', version: mcpPackage.version },
     {
       instructions:
-        'Control the open GLEECH desktop project. Enable MCP in the app first. Observe mode allows inspection and previews; Edit mode enables reversible project/stack edits. Full Control also permits file I/O inside folders approved in the app. Read get_project_state and pass expectedRevision when editing or rendering. Stack indexes follow the visible top-to-bottom order, with index 0 at the top. Use instanceId, never titles, to target layers. All values use the exact units and limits returned by get_effect_parameters. Locked layers must be explicitly unlocked before changing them. File paths must be absolute; matching folder grants are required. Exports and project saves default to refusing existing destinations unless overwrite is explicitly true.',
+        'Control the open GLEECH desktop project. Enable MCP in the app first. Observe mode allows inspection and previews; Edit mode enables reversible project/stack edits. Full Control also permits file I/O inside folders approved in the app. Read get_project_state and pass expectedRevision when editing or rendering. Stack indexes follow the visible top-to-bottom order, with index 0 at the top. Use instanceId, never titles, to target layers. All values use the exact units and limits returned by get_effect_parameters. Locked layers must be explicitly unlocked before changing them. Timeline times are seconds from the timeline start, snapped to frames; keyframe values use the parameter units. File paths must be absolute; matching folder grants are required. Exports and project saves default to refusing existing destinations unless overwrite is explicitly true.',
     },
   );
   function register(
@@ -44,6 +44,7 @@ export function createGleechMcpServer(
             'export_batch',
             'batch',
             'request_folder_access',
+            'render_video',
           ].includes(name),
           openWorldHint: false,
         },
@@ -154,7 +155,7 @@ export function createGleechMcpServer(
         apply_variation:
           'Apply a generated variation as one Undo step. The stack must still match the project used to generate it; locked layers remain unchanged.',
         get_project_state:
-          'Inspect the current project, revision, seed, visible stack, snapshots and history availability. Image bytes, mask strokes and shader source are omitted.',
+          'Inspect the current project, revision, seed, timeline summary, visible stack (with each layer’s keys, modulators and active range), snapshots and history availability. Image bytes, mask strokes, shader source, media paths and audio analysis data are omitted.',
         list_snapshots:
           'List saved snapshot IDs, parent lineage, input and rendered dimensions, and the active baked stage.',
         get_snapshot:
@@ -189,14 +190,24 @@ export function createGleechMcpServer(
         list_effect_types:
           'List built-in filters and shaders. Supply a type to inspect its parameter definitions, units, defaults, choices and application controls.',
         get_effect_parameters:
-          'Read a layer’s current parameters and definitions, including imported shader controls and procedural application masks.',
+          'Read a layer’s current parameters and definitions, including imported shader controls and procedural application masks, plus which keys can be animated and the layer’s keys, modulators and active range.',
         apply_operations:
-          'Atomically apply up to 64 stack edits as one Undo step. Invalid edits leave the stack and history untouched. add_effect and duplicate_effect return generated IDs; supply a UUID to target a new layer later in the same batch.',
+          'Atomically apply up to 64 stack and timeline edits as one Undo step. Invalid edits leave the project and history untouched. add_effect and duplicate_effect return generated IDs; supply a UUID to target a new layer later in the same batch. A set_timeline placed earlier in the batch creates the timeline that later keyframe, modulator and range edits need.',
         undo: 'Undo one edit through GLEECH’s existing history.',
         redo: 'Redo one edit through GLEECH’s existing history.',
         render_preview:
           'Render the current edited image as a PNG, using the same CPU/GPU pipeline as the app. Returns the exact project revision; errors if the project changes while rendering.',
-      }[name],
+        get_timeline:
+          'Inspect Timeline mode: fps, duration, frame count, loop, work area, In/Out points, seed track, tempo, markers, media names, and every layer with keys, modulators or an active range (key counts, first/last key times, interpolations, modulator kinds). Includes the current playhead. Times are seconds; frames are zero-based. Never changes the project.',
+        set_playhead:
+          'Move the Timeline playhead to a zero-based frame, or to a time in seconds snapped to the nearest frame; values past the end clamp to the last frame. Stops playback and returns frame, time and MM:SS:FF timecode. Changes only the view, not the project or Undo. Requires Edit or Full Control and an existing timeline.',
+        list_render_presets:
+          'List the Render dialog choices: Video presets (8K to Custom) and GIF & Loops presets with labels and hints, output formats with file extensions, compression levels, loop formats and styles, upscale methods and engines, the work/whole/inout ranges in seconds, ffmpeg availability, and the complete default settings that render_video overrides merge onto. Never changes the project.',
+        render_video:
+          'Queue a background render of the timeline, exactly like the Render dialog. tab "video" writes a movie, PNG sequence, flip book or sprite sheet; tab "gif" writes a GIF, WebP, APNG or MP4 loop. preset defaults to 1080p-social / social; overrides deep-merge onto that preset’s settings (see list_render_presets; unknown keys are rejected). range is "work", "whole", "inout" or {start, end} seconds (default: the work area if set, else the whole timeline). path must be absolute, inside an approved Exports folder and end in the output’s extension; for separate-file PNG sequences it is the folder that receives the frames directly, which must be new or empty. Existing outputs are refused unless overwrite=true. Requires Full Control. Returns the jobId, output, frame count and size estimate at once; wait=true also waits for the result (about five minutes at most, holding other MCP requests), and cancelling a waiting call cancels its render. Command-line and MCP upscalers are not available. Never changes the project.',
+        render_status:
+          'List background render jobs, or one jobId: status (queued, rendering, encoding, done, failed, canceled), frames done/total, progress, the final output path, bytes, file count, notes and errors. Full paths are shown for renders started through MCP; renders started in the app show their file name only. cancel=true with a jobId stops that render and requires Full Control.',
+      }[name]!,
       Object.fromEntries(Object.entries(schema.shape).filter(([key]) => key !== 'action')),
       (args) => ({ action: name, ...args }),
       [
@@ -227,9 +238,18 @@ export function createGleechMcpServer(
         'redo',
         'copy_to_clipboard',
         'revert_to_operation',
+        'set_playhead',
+        'render_video',
+        'render_status',
       ].includes(name),
     );
   }
+  const operationShape = (name: string): z.ZodRawShape =>
+    Object.fromEntries(
+      Object.entries(
+        operationSchema.options.find((option) => option.shape.action.value === name)!.shape,
+      ).filter(([key]) => key !== 'action'),
+    );
   const aliases: [string, string, z.ZodRawShape][] = [
     [
       'create_mask',
@@ -330,6 +350,26 @@ export function createGleechMcpServer(
       'duplicate_effect',
       'Duplicate an unlocked layer directly above the original.',
       { instanceId, newId: z.string().uuid().optional() },
+    ],
+    [
+      'set_timeline',
+      'Create the project timeline if it is missing (Timeline mode; defaults 30 fps, 10 s, loop on), or change it: fps 1–120 (existing keys on every layer re-time onto the new frames, as in the UI), duration in seconds up to 3600, loop, workArea {start, end} or null, inOut {start, end} or null, seed {mode: fixed | every-frame | every-n, every} and bpm 20–400 (null follows the audio analysis, else 120). Ranges snap to frames. One Undo step.',
+      operationShape('set_timeline'),
+    ],
+    [
+      'set_keyframes',
+      'Replace the keyframes of one parameter or application.* key on an unlocked layer, or clear them with keys=null (modulators stay). Each key: time in seconds (snapped to the nearest frame, within the timeline), value in exactly the get_effect_parameters units, choices or #RRGGBB colors, interpolation linear | ease-in | ease-out | ease-in-out (default) | hold | bezier, and optional bezier inHandle/outHandle {dt seconds, dv fraction of the parameter range}. merge=true keeps existing keys on other frames. The static parameter value stays the base. Requires a timeline; one Undo step.',
+      operationShape('set_keyframes'),
+    ],
+    [
+      'set_modulators',
+      'Replace the ordered modulators of one numeric parameter on an unlocked layer; an empty list removes them and keeps keys. lfo: shape, sync to the tempo with a division or a free rate in Hz, depth (± fraction of the range), phase in degrees, combine add | multiply. audio: follows a band of the timeline’s analyzed audio (low, mid, high, or custom lowHz–highHz) with attackMs/releaseMs, mapped to outMin–outMax (fractions of the range), combine replace | add | multiply; it has no effect without an audio track. Applied after keys, top to bottom, then clamped. Omitted fields use the UI defaults; an omitted id keeps the id of the existing modulator in that position. Requires a timeline; one Undo step.',
+      operationShape('set_modulators'),
+    ],
+    [
+      'set_active_range',
+      'Limit an unlocked layer to {start, end} seconds of the timeline (snapped to frames); outside it the layer renders as disabled. range=null removes the limit so the layer runs for the whole timeline. One Undo step.',
+      operationShape('set_active_range'),
     ],
   ];
   for (const [name, description, schema] of aliases)
