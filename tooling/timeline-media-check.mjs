@@ -354,6 +354,31 @@ try {
   await page.getByRole('tab', { name: 'Timeline', exact: true }).click();
   assert.match(await page.locator('.source-row .track-meta').textContent(), /Video/);
 
+  // Save and reopen: the clip still drives the picture. Opening gives project
+  // images new IDs, and the clip's poster frame must follow its image.
+  const projectPath = join(work, 'clip.gleech');
+  await choose(projectPath);
+  await fileAction(page, 'Save project as… Ctrl+Shift+S');
+  await page.locator('.operation-banner').waitFor({ state: 'hidden' });
+  await page.keyboard.press('Control+o');
+  await page.locator('.operation-banner').waitFor({ state: 'hidden', timeout: 120000 });
+  await page.getByRole('tab', { name: 'Timeline', exact: true }).click();
+  await page.locator('.timeline-dock').waitFor();
+  await settle();
+  await page.locator('.ruler-header').click();
+  await page.keyboard.press('Home');
+  for (let step = 0; step < 9; step++) await page.keyboard.press('Shift+ArrowRight');
+  assert.equal(await page.locator('.timecode').textContent(), '00:03:00');
+  const reopened = await renderSource();
+  await page.getByRole('tab', { name: 'Image', exact: true }).click();
+  await page.waitForFunction(
+    (id) => document.querySelector('.image-layer')?.dataset.renderSource !== id,
+    reopened,
+  );
+  await page.locator('.operation-banner').waitFor({ state: 'hidden' });
+  assert.match(await page.locator('.mode-chip-time').textContent(), /00:03:00/);
+  await page.getByRole('tab', { name: 'Timeline', exact: true }).click();
+
   // Opening an image removes the clip, keeps the rest of the timeline and
   // names the project after the image.
   await fileAction(page, 'Open sample image');

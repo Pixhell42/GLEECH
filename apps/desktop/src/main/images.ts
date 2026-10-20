@@ -383,6 +383,10 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
       });
     }
     const remap = (source: ImageSource) => prepared.get(source.id)!.asset.source;
+    // The clip names the source image made from one of its frames by ID; follow
+    // it to the new ID, or the clip would no longer drive playback.
+    const video = saved.project.timeline?.video;
+    const poster = video?.posterId === undefined ? undefined : prepared.get(video.posterId);
     const project = {
       ...saved.project,
       source: remap(saved.project.source!),
@@ -392,6 +396,14 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
         source: remap(snapshot.source),
         rendered: remap(snapshot.rendered),
       })),
+      ...(saved.project.timeline && video && poster
+        ? {
+            timeline: {
+              ...saved.project.timeline,
+              video: { ...video, posterId: poster.asset.source.id },
+            },
+          }
+        : {}),
     };
     assertProject(project);
     for (const { asset } of prepared.values()) assets.set(asset.source.id, asset);
