@@ -104,6 +104,11 @@ match exactly. During playback a small card on the canvas shows live meters.
 Audio is green and LFOs are pink everywhere; these signal colors never follow
 the UI color.
 
+**Copy to keyframes** (in a control's modulator stack) turns the modulated curve
+into keyframes that follow it, so you can edit it with points, Bezier handles
+and easing. It removes the modulators; **Link to audio** later puts the original
+link and its settings back, after a warning that the edited keys are replaced.
+
 ## Video clips and audio tracks
 
 **Open video…** in the hamburger menu (or Video clip… in the Tracks menu) opens

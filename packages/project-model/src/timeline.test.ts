@@ -13,7 +13,9 @@ import {
 import {
   adjacentKeyFrame,
   applyModulators,
+  assertParameterAnimation,
   assertTimeline,
+  bakeModulation,
   audioIsClipSound,
   audioTrackLevel,
   audioValue,
@@ -30,6 +32,7 @@ import {
   mixColor,
   moveKeys,
   removeKeyAtFrame,
+  restoreBaked,
   shapedAudioValue,
   seedChangeFrames,
   setKeysInterpolation,
@@ -273,6 +276,38 @@ describe('modulators', () => {
     expect(applyModulators(0.5, [subtract], 0.1, context)).toBeCloseTo(0.1);
     expect(applyModulators(0.5, [subtract], 0, context)).toBeCloseTo(0.5);
     expect(applyModulators(0.5, [{ ...audio, intensity: 3 }], 0.1, context)).toBe(1);
+  });
+});
+
+describe('copy to keyframes', () => {
+  const lfo = { ...createLfo('l'), sync: false, rate: 1, depth: 0.25, shape: 'triangle' as const };
+  const context = { bpm: 120, seed: 0 };
+  const timeline = { fps: 30, duration: 2 };
+  it('turns a modulated curve into thinned editable keys and restores the link', () => {
+    const animation = { keys: keys([0, 0.5]), modulators: [lfo] };
+    const baked = bakeModulation(animation, 0.5, number, context, timeline);
+    expect(baked.modulators).toBeUndefined();
+    expect(baked.baked).toEqual({ keys: animation.keys, modulators: [lfo] });
+    expect(baked.keys.length).toBeGreaterThan(2);
+    expect(baked.keys.length).toBeLessThan(60);
+    expect(baked.keys.every((key) => key.interpolation === 'linear')).toBe(true);
+    expect(() => assertParameterAnimation(baked, number, 'phase')).not.toThrow();
+    // Every frame of the new keys stays within the tolerance of the live curve.
+    for (let frame = 0; frame < 60; frame++) {
+      const t = frame / 30;
+      const live =
+        Number(evaluateKeys(animation.keys, t, number)) + lfoValue(lfo, t, context) * 0.25;
+      const copied = Number(evaluateKeys(baked.keys, t, number));
+      expect(Math.abs(copied - Math.min(1, Math.max(0, live)))).toBeLessThan(0.011);
+    }
+    expect(restoreBaked(baked)).toEqual({ keys: animation.keys, modulators: [lfo] });
+    // Copying again keeps the original link to restore.
+    expect(bakeModulation(baked, 0.5, number, context, timeline).baked).toEqual(baked.baked);
+  });
+  it('restores to nothing when the link had no keys or modulators left', () => {
+    expect(restoreBaked({ keys: keys([0, 1]), baked: { keys: [], modulators: [] } })).toBeNull();
+    const plain = { keys: keys([0, 1]) };
+    expect(restoreBaked(plain)).toBe(plain);
   });
 });
 

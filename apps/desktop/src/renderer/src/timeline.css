@@ -1506,6 +1506,29 @@
   padding: 0 10px;
   font-size: 12px;
 }
+/* Copy the modulated curve to editable keyframes. */
+.modulator-bake {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.modulator-bake button {
+  justify-self: start;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--separator);
+  border-radius: 7px;
+  color: var(--text-1);
+  background: var(--fill-2);
+  font-size: 12px;
+}
+.modulator-bake button:hover:not(:disabled) {
+  background: var(--fill-3);
+}
+.modulator-bake p {
+  margin: 0;
+  font-size: 11px;
+}
 .modulator-hint {
   margin: 0 4px;
   font-size: 11px;

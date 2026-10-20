@@ -108,6 +108,14 @@ export type Modulator = AudioModulator | LfoModulator;
 export interface ParameterAnimation {
   readonly keys: readonly Keyframe[];
   readonly modulators?: readonly Modulator[];
+  /**
+   * The keys and modulators a "Copy to keyframes" replaced. Link to audio puts
+   * them back (after a warning), discarding the edited curve.
+   */
+  readonly baked?: {
+    readonly keys: readonly Keyframe[];
+    readonly modulators: readonly Modulator[];
+  };
 }
 export type EffectAnimation = Readonly<Record<string, ParameterAnimation>>;
 export interface ActiveRange {
@@ -528,10 +536,24 @@ export function assertParameterAnimation(
     throw new RangeError(`Parameter ${key} cannot be animated.`);
   if (!animation || typeof animation !== 'object') throw new RangeError('Invalid animation.');
   const value = animation as ParameterAnimation;
-  if (!Array.isArray(value.keys) || value.keys.length > MAX_KEYS_PER_PARAMETER)
+  assertKeys(value.keys, definition);
+  assertModulators(value.modulators, definition);
+  if (value.baked !== undefined) {
+    if (!value.baked || typeof value.baked !== 'object')
+      throw new RangeError('Invalid copied animation.');
+    assertKeys(value.baked.keys, definition);
+    assertModulators(value.baked.modulators, definition);
+    if (value.baked.modulators === undefined) throw new RangeError('Invalid copied animation.');
+  }
+  if (!value.keys.length && !value.modulators?.length)
+    throw new RangeError('An animated parameter needs a key or modulator.');
+}
+
+function assertKeys(keys: unknown, definition: ParameterDefinition): void {
+  if (!Array.isArray(keys) || keys.length > MAX_KEYS_PER_PARAMETER)
     throw new RangeError('Invalid animation keys.');
   let previous = -1;
-  for (const keyframe of value.keys) {
+  for (const keyframe of keys as Keyframe[]) {
     if (!keyframe || typeof keyframe !== 'object') throw new RangeError('Invalid keyframe.');
     assertTime(keyframe.t, 'keyframe time');
     if (keyframe.t <= previous) throw new RangeError('Keyframes must be sorted by time.');
@@ -542,20 +564,20 @@ export function assertParameterAnimation(
     if (keyframe.inHandle !== undefined) assertHandle(keyframe.inHandle, 'in');
     if (keyframe.outHandle !== undefined) assertHandle(keyframe.outHandle, 'out');
   }
-  if (value.modulators !== undefined) {
-    if (!Array.isArray(value.modulators) || value.modulators.length > MAX_MODULATORS_PER_PARAMETER)
-      throw new RangeError('Invalid modulators.');
-    if (value.modulators.length && definition.kind !== 'number')
-      throw new RangeError('Only numeric parameters can use modulators.');
-    const ids = new Set<string>();
-    for (const modulator of value.modulators) {
-      assertModulator(modulator);
-      if (ids.has(modulator.id)) throw new RangeError('Duplicate modulator.');
-      ids.add(modulator.id);
-    }
+}
+
+function assertModulators(modulators: unknown, definition: ParameterDefinition): void {
+  if (modulators === undefined) return;
+  if (!Array.isArray(modulators) || modulators.length > MAX_MODULATORS_PER_PARAMETER)
+    throw new RangeError('Invalid modulators.');
+  if (modulators.length && definition.kind !== 'number')
+    throw new RangeError('Only numeric parameters can use modulators.');
+  const ids = new Set<string>();
+  for (const modulator of modulators as Modulator[]) {
+    assertModulator(modulator);
+    if (ids.has(modulator.id)) throw new RangeError('Duplicate modulator.');
+    ids.add(modulator.id);
   }
-  if (!value.keys.length && !value.modulators?.length)
-    throw new RangeError('An animated parameter needs a key or modulator.');
 }
 
 export function assertEffectAnimation(
@@ -577,23 +599,29 @@ export function freezeAnimation(animation: EffectAnimation): EffectAnimation {
     ),
   );
 }
+const freezeKeys = (keys: readonly Keyframe[]) =>
+  Object.freeze(
+    keys.map((key) =>
+      Object.freeze({
+        ...key,
+        ...(key.inHandle ? { inHandle: Object.freeze({ ...key.inHandle }) } : {}),
+        ...(key.outHandle ? { outHandle: Object.freeze({ ...key.outHandle }) } : {}),
+      }),
+    ),
+  );
+const freezeModulators = (modulators: readonly Modulator[]) =>
+  Object.freeze(modulators.map((modulator) => Object.freeze({ ...modulator })));
 export function freezeParameterAnimation(animation: ParameterAnimation): ParameterAnimation {
   if (Object.isFrozen(animation) && Object.isFrozen(animation.keys)) return animation;
   return Object.freeze({
-    keys: Object.freeze(
-      animation.keys.map((key) =>
-        Object.freeze({
-          ...key,
-          ...(key.inHandle ? { inHandle: Object.freeze({ ...key.inHandle }) } : {}),
-          ...(key.outHandle ? { outHandle: Object.freeze({ ...key.outHandle }) } : {}),
-        }),
-      ),
-    ),
-    ...(animation.modulators
+    keys: freezeKeys(animation.keys),
+    ...(animation.modulators ? { modulators: freezeModulators(animation.modulators) } : {}),
+    ...(animation.baked
       ? {
-          modulators: Object.freeze(
-            animation.modulators.map((modulator) => Object.freeze({ ...modulator })),
-          ),
+          baked: Object.freeze({
+            keys: freezeKeys(animation.baked.keys),
+            modulators: freezeModulators(animation.baked.modulators),
+          }),
         }
       : {}),
   });
@@ -1069,6 +1097,90 @@ export function evaluateParameter(
     denormalized(applyModulators(normalized(Number(keyed), range), modulators, t, context), range),
     definition,
   );
+}
+
+/**
+ * Indices of the samples a polyline needs so every dropped sample stays within
+ * `tolerance` (a fraction of the range) of the straight line between kept ones.
+ */
+function simplifyCurve(
+  values: Float64Array,
+  range: { min: number; max: number },
+  tolerance: number,
+): number[] {
+  if (!values.length) return [];
+  const span = range.max - range.min || 1;
+  const keep = new Uint8Array(values.length);
+  keep[0] = 1;
+  keep[values.length - 1] = 1;
+  const stack: [number, number][] = [[0, values.length - 1]];
+  while (stack.length) {
+    const [from, to] = stack.pop()!;
+    let worst = -1;
+    let worstError = tolerance;
+    for (let index = from + 1; index < to; index++) {
+      const expected =
+        values[from]! + ((values[to]! - values[from]!) * (index - from)) / (to - from);
+      const error = Math.abs(values[index]! - expected) / span;
+      if (error > worstError) {
+        worstError = error;
+        worst = index;
+      }
+    }
+    if (worst >= 0) {
+      keep[worst] = 1;
+      stack.push([from, worst], [worst, to]);
+    }
+  }
+  const kept: number[] = [];
+  keep.forEach((flag, index) => {
+    if (flag) kept.push(index);
+  });
+  return kept;
+}
+
+/**
+ * Copy a modulated control's curve (keys, then modulators) to editable keys:
+ * one sample per frame, thinned to the keys needed to stay within `tolerance`
+ * of the curve (a fraction of the control's range). The modulators are removed
+ * and kept in `baked` with the original keys, so the link can be restored.
+ */
+export function bakeModulation(
+  animation: ParameterAnimation,
+  base: number | string,
+  definition: ParameterDefinition,
+  context: ModulationContext,
+  timeline: Pick<Timeline, 'fps' | 'duration'>,
+  tolerance = 0.005,
+): ParameterAnimation {
+  if (definition.kind !== 'number')
+    throw new RangeError('Only numeric controls can be copied to keyframes.');
+  const frames = frameCount(timeline);
+  const values = new Float64Array(frames);
+  for (let frame = 0; frame < frames; frame++)
+    values[frame] = Number(
+      evaluateParameter(animation, base, frameTime(frame, timeline.fps), definition, context),
+    );
+  const range = { min: definition.min, max: definition.max };
+  let kept = simplifyCurve(values, range, tolerance);
+  for (let wider = tolerance * 2; kept.length > MAX_KEYS_PER_PARAMETER; wider *= 2)
+    kept = simplifyCurve(values, range, wider);
+  return {
+    keys: kept.map((frame) => ({
+      t: frameTime(frame, timeline.fps),
+      value: values[frame]!,
+      interpolation: 'linear' as const,
+    })),
+    baked: animation.baked ?? { keys: animation.keys, modulators: animation.modulators ?? [] },
+  };
+}
+
+/** Undo a Copy to keyframes: the original keys and modulators come back. */
+export function restoreBaked(animation: ParameterAnimation): ParameterAnimation | null {
+  if (!animation.baked) return animation;
+  const { keys, modulators } = animation.baked;
+  if (!keys.length && !modulators.length) return null;
+  return { keys, ...(modulators.length ? { modulators } : {}) };
 }
 
 // ---------------------------------------------------------------------------

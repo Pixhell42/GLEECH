@@ -190,6 +190,51 @@ try {
   await backToControls.click();
   await dock.getByRole('button', { name: 'Keys', exact: true }).click();
 
+  // Shape the audio curve, copy it to editable keyframes, then restore the link
+  // (accepting the warning) with its settings.
+  await dock
+    .locator('.parameter-track-header')
+    .getByRole('button', { name: 'Opacity', exact: true })
+    .click();
+  const audioCard = page.locator('.modulator-card.audio');
+  await audioCard.waitFor();
+  await audioCard.getByRole('radio', { name: 'Subtract', exact: true }).click();
+  await audioCard.getByRole('switch', { name: 'Invert audio curve', exact: true }).check();
+  await audioCard.getByRole('slider', { name: 'Intensity', exact: true }).fill('2');
+  await page.getByRole('button', { name: 'Copy to keyframes', exact: true }).click();
+  await page
+    .locator('.animation-card')
+    .getByText(/Copied from modulation/)
+    .waitFor();
+  assert.equal(await audioCard.count(), 0);
+  assert.ok((await dock.locator('.lane-key').count()) > 2, 'the curve became keyframes');
+  await app.evaluate(({ dialog }) => {
+    globalThis.warnings = [];
+    dialog.showMessageBox = async (_window, options) => {
+      globalThis.warnings.push(`${options.message} ${options.detail}`);
+      // Restore the link; any other prompt keeps the earlier answer (Discard).
+      return { response: options.title === 'Restore audio link' ? 0 : 1, checkboxChecked: false };
+    };
+  });
+  await page
+    .locator('.animation-card')
+    .getByRole('button', { name: 'Link to audio', exact: true })
+    .click();
+  await audioCard.waitFor();
+  assert.match((await app.evaluate(() => globalThis.warnings))[0] ?? '', /edited curve/);
+  assert.equal(
+    await audioCard
+      .getByRole('radio', { name: 'Subtract', exact: true })
+      .getAttribute('aria-checked'),
+    'true',
+  );
+  assert.equal(
+    await audioCard.getByRole('switch', { name: 'Invert audio curve', exact: true }).isChecked(),
+    true,
+  );
+  await audioCard.getByRole('radio', { name: 'Replace', exact: true }).click();
+  await backToControls.click();
+
   // Changing the track volume while playing keeps the play clock running.
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   const advanced = await page.evaluate(async () => {

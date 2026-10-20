@@ -1260,6 +1260,23 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
     });
     return (['save', 'discard', 'cancel'] as const)[answer.response] ?? 'cancel';
   });
+  // A warning before an edit that replaces work, such as restoring an audio link.
+  handle('document:confirm-action', async (title, message, detail, action) => {
+    for (const value of [title, message, detail, action])
+      if (typeof value !== 'string' || value.length > 1024)
+        throw new Error('Invalid confirmation.');
+    const answer = await dialog.showMessageBox(window, {
+      type: 'warning',
+      title: title as string,
+      message: message as string,
+      detail: detail as string,
+      buttons: [action as string, 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    return answer.response === 0;
+  });
   handle('image:release', (id) => {
     if (typeof id === 'string') assets.delete(id);
   });

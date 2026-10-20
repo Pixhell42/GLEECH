@@ -291,6 +291,13 @@ export interface DesktopBridge {
   importPreset(): Promise<Result<EffectPreset | null>>;
   exportPreset(id: string): Promise<Result<string | null>>;
   confirmDiscard(name: string): Promise<Result<'save' | 'discard' | 'cancel'>>;
+  /** A warning with an action button and Cancel; true when the action was chosen. */
+  confirmAction(
+    title: string,
+    message: string,
+    detail: string,
+    action: string,
+  ): Promise<Result<boolean>>;
   onCloseRequested(handler: () => void): () => void;
   resolveClose(allow: boolean): Promise<void>;
   requestClose(): Promise<void>;

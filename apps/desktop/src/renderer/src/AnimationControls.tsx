@@ -106,6 +106,7 @@ export function AnimationCard({
   interpolation,
   keyCount,
   canLinkAudio,
+  copied = false,
   disabled,
   onEase,
   onAddLfo,
@@ -116,6 +117,8 @@ export function AnimationCard({
   interpolation: Interpolation | 'mixed' | null;
   keyCount: number;
   canLinkAudio: boolean;
+  /** The keys were copied from audio/LFO modulation; Link to audio restores it. */
+  copied?: boolean;
   disabled: boolean;
   onEase(interpolation: Interpolation): void;
   onAddLfo(): void;
@@ -152,9 +155,13 @@ export function AnimationCard({
           </button>
           <button
             type="button"
-            disabled={disabled || !canLinkAudio}
+            disabled={disabled || (!canLinkAudio && !copied)}
             title={
-              canLinkAudio ? 'Drive this control from the audio track' : 'Add an audio track first'
+              copied
+                ? 'Restore the link these keys were copied from, replacing them'
+                : canLinkAudio
+                  ? 'Drive this control from the audio track'
+                  : 'Add an audio track first'
             }
             onClick={onLinkAudio}
           >
@@ -164,6 +171,12 @@ export function AnimationCard({
             Clear
           </button>
         </div>
+        {copied && (
+          <p className="modulation-note">
+            Copied from modulation. Link to audio restores the original link and replaces these
+            keys.
+          </p>
+        )}
       </div>
     </section>
   );

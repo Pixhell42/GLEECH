@@ -31,6 +31,8 @@ import {
   activeVideo,
   audioIsClipSound,
   audioTrackLevel,
+  bakeModulation,
+  restoreBaked,
   type Timeline,
   clampTimelineRanges,
   evaluateKeys,
@@ -1187,6 +1189,60 @@ export function App() {
       setModulatorParam({ effectId: effect.instanceId, key });
     },
   });
+  /** Copy a modulated control's curve to editable keys; the link is kept to restore. */
+  const bakeCurve = (effectId: string, key: string) => {
+    const state = commands.getState();
+    const effect = state.effects.find((entry) => entry.instanceId === effectId);
+    const animation = effect?.animation?.[key];
+    const definition = effect && animationDefinition(effect, key);
+    if (!effect || !animation || !definition || !state.timeline) return;
+    try {
+      const baked = bakeModulation(
+        animation,
+        parameterBaseValue(effect, key),
+        definition,
+        modulation,
+        state.timeline,
+      );
+      commands.endHistoryGroup();
+      commands.updateEffect(effectId, { animation: { [key]: baked } });
+      setModulatorParam(null);
+      setSelectedParam({ effectId, key });
+      revealAnimationCard();
+      setNotice(`Copied ${definition.label} to ${baked.keys.length} keyframes`);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not copy the curve.');
+    }
+  };
+  /** Put back the link a copy replaced, after warning that the edited keys go. */
+  const restoreLink = async (effectId: string, key: string) => {
+    const before = commands.getState().effects.find((entry) => entry.instanceId === effectId)
+      ?.animation?.[key];
+    if (!before?.baked) return;
+    try {
+      const confirmed = unwrap(
+        await window.gleech.confirmAction(
+          'Restore audio link',
+          'Restore the audio link?',
+          `The edited curve (${before.keys.length} keyframe${
+            before.keys.length === 1 ? '' : 's'
+          }) will be replaced by the original link and its settings.`,
+          'Restore',
+        ),
+      );
+      const animation = commands.getState().effects.find((entry) => entry.instanceId === effectId)
+        ?.animation?.[key];
+      if (!confirmed || !animation?.baked) return;
+      const restored = restoreBaked(animation);
+      commands.endHistoryGroup();
+      commands.updateEffect(effectId, { animation: { [key]: restored } });
+      setSelectedParam({ effectId, key });
+      setModulatorParam(restored?.modulators?.length ? { effectId, key } : null);
+      setNotice('Restored the audio link');
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not restore the link.');
+    }
+  };
   /** Scroll the inspector to the selected control's Animation card once it renders. */
   const revealAnimationCard = () =>
     requestAnimationFrame(() =>
@@ -1223,6 +1279,7 @@ export function App() {
         }
         keyCount={animation.keys.length}
         canLinkAudio={Boolean(timeline?.audio) && definition.kind === 'number'}
+        copied={Boolean(animation.baked)}
         disabled={busy !== null}
         onEase={(interpolation) => update(setKeysInterpolation(animation, 'all', interpolation))}
         onAddLfo={() => {
@@ -1237,6 +1294,10 @@ export function App() {
           setModulatorParam({ effectId: effect.instanceId, key });
         }}
         onLinkAudio={() => {
+          if (animation.baked) {
+            void restoreLink(effect.instanceId, key);
+            return;
+          }
           update({
             ...animation,
             modulators: [
@@ -3663,6 +3724,8 @@ export function App() {
                           params: { [modulatorParam.key]: value },
                         })
                   }
+                  onBake={() => bakeCurve(selected.instanceId, modulatorParam.key)}
+                  onRestoreLink={() => void restoreLink(selected.instanceId, modulatorParam.key)}
                   beginGesture={commands.beginHistoryGroup}
                   endGesture={commands.endHistoryGroup}
                 />

@@ -11,7 +11,8 @@ effect stacks, masks, snapshots/baked sources and embedded attachments.
 Projects that have opened Timeline mode add a `timeline` (frame rate, duration,
 work area, In/Out, loop, seed track, markers, tempo, and optional video clip and
 audio track) and effects may add `animation` (keyframes and modulators per
-control key, with times in seconds) and `activeRange`. Video clips and audio
+control key, with times in seconds; a curve copied to keyframes keeps the keys
+and modulators it replaced in `baked`) and `activeRange`. Video clips and audio
 tracks are referenced by file path, not embedded (when the audio track is the
 clip's own sound, both name the clip file). The audio track may add `volume`
 (0–1) and `muted`, which renders use. The clip's `posterId` and `posterTime`

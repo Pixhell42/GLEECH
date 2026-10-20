@@ -142,6 +142,8 @@ const bridge: DesktopBridge = {
   importPreset: () => ipcRenderer.invoke('preset:import'),
   exportPreset: (id) => ipcRenderer.invoke('preset:export', id),
   confirmDiscard: (name) => ipcRenderer.invoke('document:confirm-discard', name),
+  confirmAction: (title, message, detail, action) =>
+    ipcRenderer.invoke('document:confirm-action', title, message, detail, action),
   onCloseRequested: (handler) => {
     const listener = () => handler();
     ipcRenderer.on('document:close-requested', listener);

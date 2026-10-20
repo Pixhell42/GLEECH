@@ -236,6 +236,8 @@ export function ModulatorPanel({
   onBack,
   onChange,
   onBase,
+  onBake,
+  onRestoreLink,
   beginGesture,
   endGesture,
 }: {
@@ -251,6 +253,10 @@ export function ModulatorPanel({
   onBack(): void;
   onChange(animation: ParameterAnimation | null): void;
   onBase(value: number): void;
+  /** Copy the modulated curve to editable keyframes, removing the modulators. */
+  onBake(): void;
+  /** Put back the link a Copy to keyframes replaced (the caller warns first). */
+  onRestoreLink(): void;
   beginGesture(): void;
   endGesture(): void;
 }) {
@@ -260,8 +266,15 @@ export function ModulatorPanel({
   const number = definition.kind === 'number' ? definition : null;
   const update = (next: readonly Modulator[]) => {
     const keys = animation?.keys ?? [];
+    // Keep a copied curve's original link so it can still be restored.
     onChange(
-      keys.length || next.length ? { keys, ...(next.length ? { modulators: next } : {}) } : null,
+      keys.length || next.length
+        ? {
+            keys,
+            ...(next.length ? { modulators: next } : {}),
+            ...(animation?.baked ? { baked: animation.baked } : {}),
+          }
+        : null,
     );
   };
   const patch = (id: string, change: Partial<AudioModulator> | Partial<LfoModulator>) =>
@@ -591,13 +604,39 @@ export function ModulatorPanel({
         </button>
         <button
           type="button"
-          disabled={disabled || modulators.length >= 8 || !hasAudio}
-          title={hasAudio ? 'Follow a band of the audio track' : 'Add an audio track first'}
-          onClick={() => update([...modulators, createAudioModulator(crypto.randomUUID())])}
+          disabled={disabled || modulators.length >= 8 || (!hasAudio && !animation?.baked)}
+          title={
+            animation?.baked
+              ? 'Restore the link this curve was copied from, replacing its keyframes'
+              : hasAudio
+                ? 'Follow a band of the audio track'
+                : 'Add an audio track first'
+          }
+          onClick={() =>
+            animation?.baked
+              ? onRestoreLink()
+              : update([...modulators, createAudioModulator(crypto.randomUUID())])
+          }
         >
           <PlusIcon /> Link to audio
         </button>
       </div>
+      {number && modulators.length > 0 && (
+        <div className="modulator-bake">
+          <button
+            type="button"
+            disabled={disabled}
+            title="Turn this curve into keyframes you can edit with points, Bezier handles and easing"
+            onClick={onBake}
+          >
+            Copy to keyframes
+          </button>
+          <p className="quiet">
+            Replaces the modulators with editable keys that follow the same curve. Link to audio
+            brings the link back later.
+          </p>
+        </div>
+      )}
       <p className="quiet modulator-hint">
         Modulators apply top to bottom after keyframes, and the result is clamped to the control’s
         range, so audio and an LFO can drive the same control together.
