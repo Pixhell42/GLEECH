@@ -183,6 +183,11 @@
 .canvas-comparison .compare-controls button {
   height: 24px;
 }
+/* The Original badge sits below the canvas Edited / Original toggle. */
+.workspace.timeline-mode .comparison-badge {
+  top: 50px;
+  left: 12px;
+}
 
 /* Effects panel: animation badge. */
 .effect-animation-badge {

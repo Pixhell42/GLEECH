@@ -169,9 +169,49 @@ try {
   );
   await page.locator('.live-modulation').waitFor();
 
-  // Play the clip, then render a loop from it.
+  // Changing the track volume while playing keeps the play clock running.
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await page.waitForTimeout(2000);
+  const advanced = await page.evaluate(async () => {
+    const slider = document.querySelector('[aria-label="Audio track volume"]');
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    const frameNow = () => {
+      const [minutes, secs, frames] = document
+        .querySelector('.timecode')
+        .textContent.split(':')
+        .map(Number);
+      return (minutes * 60 + secs) * 30 + frames;
+    };
+    const start = frameNow();
+    const began = performance.now();
+    for (let step = 0; performance.now() - began < 1000; step++) {
+      setValue.call(slider, String(0.4 + (step % 2) * 0.2));
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 8));
+    }
+    // The 4 s clip loops at 30 fps.
+    return (frameNow() - start + 120) % 120;
+  });
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  assert.ok(advanced >= 15, `the playhead kept moving (${advanced} frames in 1 s)`);
+
+  // Play the clip, then render a loop from it. Playback renders every frame
+  // without flashing the "Updating preview" status.
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  const statusDuringPlayback = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        let seen = false;
+        const end = performance.now() + 2000;
+        const tick = () => {
+          if (/Updating preview/.test(document.querySelector('.detail-loading')?.textContent ?? ''))
+            seen = true;
+          if (performance.now() < end) setTimeout(tick, 10);
+          else resolve(seen);
+        };
+        tick();
+      }),
+  );
+  assert.equal(statusDuringPlayback, false, 'no Updating preview status while playing');
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await captureTestWindow(app, join(output, 'timeline-media.png'));
   const gifPath = join(work, 'clip-loop.gif');

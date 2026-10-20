@@ -769,21 +769,27 @@ export function App() {
     };
   }, []);
 
+  // The play clock restarts only when timing changes. Other timeline edits made
+  // while playing (track volume, markers, tempo) must not move the playhead.
+  const hasTimeline = Boolean(timeline);
+  const playLoop = timeline?.loop ?? false;
+  const playRange =
+    timeline?.loop && timeline.workArea
+      ? workRange(timeline)
+      : { start: 0, end: totalFrames / fps };
+  const playStart = playRange.start;
+  const playEnd = playRange.end;
   useEffect(() => {
-    if (!playing || !timeline) return;
-    const range =
-      timeline.loop && timeline.workArea
-        ? workRange(timeline)
-        : { start: 0, end: totalFrames / timeline.fps };
-    const first = timeFrame(range.start, timeline.fps);
-    const last = Math.max(first + 1, Math.min(totalFrames, timeFrame(range.end, timeline.fps)));
+    if (!playing || !hasTimeline) return;
+    const first = timeFrame(playStart, fps);
+    const last = Math.max(first + 1, Math.min(totalFrames, timeFrame(playEnd, fps)));
     const current = frameContext.current.frame;
     const start = current >= first && current < last - 1 ? current : first;
     const origin = performance.now();
     let request = requestAnimationFrame(function tick(now) {
-      let target = start + Math.floor(((now - origin) / 1000) * timeline.fps);
+      let target = start + Math.floor(((now - origin) / 1000) * fps);
       if (target >= last) {
-        if (!timeline.loop) {
+        if (!playLoop) {
           setPlayhead(last - 1);
           setPlaying(false);
           return;
@@ -794,7 +800,7 @@ export function App() {
       request = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(request);
-  }, [playing, timeline, totalFrames, clockEpoch]);
+  }, [playing, hasTimeline, fps, playLoop, playStart, playEnd, totalFrames, clockEpoch]);
 
   const [renderDialog, setRenderDialog] = useState<'video' | 'gif' | null>(null);
   const [renderMemory, setRenderMemory] = useState<RenderSettingsMemory>({

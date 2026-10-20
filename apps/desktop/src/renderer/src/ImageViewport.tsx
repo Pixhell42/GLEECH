@@ -844,7 +844,8 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
         {source && (originalView || heldOriginal) && (
           <div className="comparison-badge">Original</div>
         )}
-        {(feedback || loadingDetail || previewBusy) && source && (
+        {/* Playback renders every frame; the header chip shows its rate instead. */}
+        {(feedback || loadingDetail || (previewBusy && !playback)) && source && (
           <div className="detail-loading" role="status">
             {feedback ? (
               <span key={feedback.id} data-feedback-id={feedback.id}>

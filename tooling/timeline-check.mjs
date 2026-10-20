@@ -90,6 +90,13 @@ try {
     await page.locator('.canvas-comparison').getByRole('button', { name: 'Edited' }).count(),
     1,
   );
+  // The Original badge shows below the canvas toggle, not under it.
+  const comparison = page.locator('.canvas-comparison');
+  await comparison.getByRole('button', { name: 'Original', exact: true }).click();
+  const toggleBox = await comparison.boundingBox();
+  const badgeBox = await page.locator('.comparison-badge').boundingBox();
+  assert.ok(badgeBox.y >= toggleBox.y + toggleBox.height, 'Original badge clears the toggle');
+  await comparison.getByRole('button', { name: 'Edited', exact: true }).click();
   assert.match(await page.locator('.mode-chip').textContent(), /preview/);
   assert.equal(await timecode(), '00:00:00');
   assert.equal(await renderMenu(), false);
