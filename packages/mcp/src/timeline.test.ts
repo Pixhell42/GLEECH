@@ -76,7 +76,10 @@ describe('MCP timeline protocol', () => {
           action: 'set_modulators',
           instanceId: 'a',
           parameter: 'amount',
-          modulators: [{ kind: 'lfo' }],
+          modulators: [
+            { kind: 'lfo' },
+            { kind: 'audio', combine: 'subtract', invert: true, intensity: 2.5, offset: -0.2 },
+          ],
         },
       ],
     });
@@ -86,10 +89,24 @@ describe('MCP timeline protocol', () => {
         {
           modulators: [
             { kind: 'lfo', enabled: true, shape: 'sine', sync: true, division: '1/2', depth: 0.12 },
+            { kind: 'audio', combine: 'subtract', invert: true, intensity: 2.5, offset: -0.2 },
           ],
         },
       ],
     });
+    expect(() =>
+      requestSchema.parse({
+        action: 'apply_operations',
+        operations: [
+          {
+            action: 'set_modulators',
+            instanceId: 'a',
+            parameter: 'amount',
+            modulators: [{ kind: 'audio', intensity: 5 }],
+          },
+        ],
+      }),
+    ).toThrow();
     for (const operation of [
       { action: 'set_keyframes', instanceId: 'a', parameter: 'amount', keys: [] },
       { action: 'set_keyframes', instanceId: 'a', parameter: '__proto__', keys: null },

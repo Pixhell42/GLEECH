@@ -37,7 +37,7 @@ export interface Keyframe {
   readonly outHandle?: KeyHandle;
 }
 
-export type ModulatorCombine = 'replace' | 'add' | 'multiply';
+export type ModulatorCombine = 'replace' | 'add' | 'subtract' | 'multiply';
 export const AUDIO_BANDS = [
   { value: 'low', label: 'Low', low: 40, high: 160 },
   { value: 'mid', label: 'Mid', low: 160, high: 2000 },
@@ -59,6 +59,15 @@ export interface AudioModulator {
   readonly outMin: number;
   readonly outMax: number;
   readonly combine: ModulatorCombine;
+  /** Peaks become valleys and valleys become peaks. */
+  readonly invert?: boolean;
+  /**
+   * 0–4 around the middle of the analyzed range: 0 flattens the curve, 1 is as
+   * analyzed, more pushes peaks and valleys past it. Absent means 1.
+   */
+  readonly intensity?: number;
+  /** −1–1: moves the whole curve, as a fraction of the output range. Absent means 0. */
+  readonly offset?: number;
 }
 export const LFO_SHAPES = [
   { value: 'sine', label: 'Sine' },
@@ -92,7 +101,7 @@ export interface LfoModulator {
   readonly depth: number;
   /** Degrees. */
   readonly phase: number;
-  readonly combine: Exclude<ModulatorCombine, 'replace'>;
+  readonly combine: 'add' | 'multiply';
 }
 export type Modulator = AudioModulator | LfoModulator;
 
@@ -457,7 +466,12 @@ export function assertModulator(modulator: unknown): asserts modulator is Modula
       value.outMin < 0 ||
       value.outMax > 1 ||
       value.outMin > value.outMax ||
-      !['replace', 'add', 'multiply'].includes(value.combine)
+      !['replace', 'add', 'subtract', 'multiply'].includes(value.combine) ||
+      (value.invert !== undefined && typeof value.invert !== 'boolean') ||
+      (value.intensity !== undefined &&
+        (!isFiniteNumber(value.intensity) || value.intensity < 0 || value.intensity > 4)) ||
+      (value.offset !== undefined &&
+        (!isFiniteNumber(value.offset) || value.offset < -1 || value.offset > 1))
     )
       throw new RangeError('Invalid audio modulator.');
     return;
@@ -954,6 +968,44 @@ export function audioValue(
   return envelope[index]! + (envelope[index + 1]! - envelope[index]!) * fraction;
 }
 
+const envelopeCenters = new WeakMap<Float32Array, number>();
+/** Middle of an envelope's analyzed range, the pivot Intensity scales around. */
+function envelopeCenter(envelope: Float32Array): number {
+  let center = envelopeCenters.get(envelope);
+  if (center === undefined) {
+    let low = Infinity;
+    let high = -Infinity;
+    for (const value of envelope) {
+      low = Math.min(low, value);
+      high = Math.max(high, value);
+    }
+    center = envelope.length ? (low + high) / 2 : 0.5;
+    envelopeCenters.set(envelope, center);
+  }
+  return center;
+}
+
+/**
+ * The audio envelope after Invert, Intensity and Position: 0–1 as analyzed,
+ * and past that range when exaggerated or moved.
+ */
+export function shapedAudioValue(
+  modulator: AudioModulator,
+  t: number,
+  context: ModulationContext,
+): number {
+  let value = audioValue(modulator, t, context);
+  const intensity = modulator.intensity ?? 1;
+  let center = 0.5;
+  if (intensity !== 1 && context.audio)
+    center = envelopeCenter(audioEnvelope(context.audio, modulator));
+  if (modulator.invert) {
+    value = 1 - value;
+    center = 1 - center;
+  }
+  return center + (value - center) * intensity + (modulator.offset ?? 0);
+}
+
 /** Apply modulators top to bottom to a normalized value, then clamp to 0–1. */
 export function applyModulators(
   base: number,
@@ -969,14 +1021,17 @@ export function applyModulators(
       value = modulator.combine === 'multiply' ? value * (1 + wave) : value + wave;
     } else {
       if (!context.audio) continue;
-      const energy = audioValue(modulator, t, context);
-      const output = modulator.outMin + (modulator.outMax - modulator.outMin) * energy;
+      const energy = shapedAudioValue(modulator, t, context);
+      const span = modulator.outMax - modulator.outMin;
+      const output = modulator.outMin + span * energy;
       value =
         modulator.combine === 'replace'
           ? output
           : modulator.combine === 'multiply'
             ? value * output
-            : value + energy * (modulator.outMax - modulator.outMin);
+            : modulator.combine === 'subtract'
+              ? value - energy * span
+              : value + energy * span;
     }
   }
   return Math.min(1, Math.max(0, value));

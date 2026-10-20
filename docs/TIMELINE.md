@@ -88,8 +88,12 @@ to the control's range.
 
 - **Audio** follows a band of the audio track (Low 40–160 Hz, Mid, High or a
   custom range), with attack and release smoothing and an output range. Replace
-  sets the value from the audio; Add and Multiply combine it with the keyed
-  value. A control fully driven by Replace is read-only on the slider.
+  sets the value from the audio; Add, Subtract and Multiply combine it with the
+  keyed value. A control fully driven by Replace is read-only on the slider.
+  **Invert** turns peaks into valleys. **Intensity** reshapes the curve around
+  the middle of its analyzed range: 0% flattens it, 100% follows the audio as
+  analyzed and more exaggerates peaks and valleys (the control's range still
+  limits the result). **Position** moves the whole curve up or down.
 - **LFO** shapes are sine, triangle, square, saw and random steps, synced to the
   tempo (bars and beats) or free in Hz, with depth and phase. LFOs are computed
   from time and tempo, and random steps follow the project seed.

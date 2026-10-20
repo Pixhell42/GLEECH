@@ -30,6 +30,7 @@ import {
   mixColor,
   moveKeys,
   removeKeyAtFrame,
+  shapedAudioValue,
   seedChangeFrames,
   setKeysInterpolation,
   snapAnimationToRate,
@@ -258,6 +259,20 @@ describe('modulators', () => {
     expect(audioValue(audio, 0.1, context)).toBe(1);
     expect(applyModulators(0.5, [audio], 0.1, context)).toBe(1);
     expect(applyModulators(0.5, [audio], 0, context)).toBeCloseTo(0.4);
+
+    // Invert swaps peaks and valleys; Intensity scales around the middle of the
+    // analyzed range (0–1 here), 0 flattening it; Position moves the curve.
+    expect(shapedAudioValue({ ...audio, invert: true }, 0, context)).toBe(1);
+    expect(shapedAudioValue({ ...audio, invert: true }, 0.1, context)).toBe(0);
+    expect(shapedAudioValue({ ...audio, intensity: 0 }, 0.1, context)).toBe(0.5);
+    expect(shapedAudioValue({ ...audio, intensity: 2 }, 0.1, context)).toBe(1.5);
+    expect(shapedAudioValue({ ...audio, intensity: 2 }, 0, context)).toBe(-0.5);
+    expect(shapedAudioValue({ ...audio, offset: -0.25 }, 0.1, context)).toBe(0.75);
+    // Subtract takes the band away from the keyed value; results stay clamped.
+    const subtract = { ...audio, combine: 'subtract' as const, outMin: 0, outMax: 0.4 };
+    expect(applyModulators(0.5, [subtract], 0.1, context)).toBeCloseTo(0.1);
+    expect(applyModulators(0.5, [subtract], 0, context)).toBeCloseTo(0.5);
+    expect(applyModulators(0.5, [{ ...audio, intensity: 3 }], 0.1, context)).toBe(1);
   });
 });
 

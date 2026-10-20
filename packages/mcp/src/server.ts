@@ -363,7 +363,7 @@ export function createGleechMcpServer(
     ],
     [
       'set_modulators',
-      'Replace the ordered modulators of one numeric parameter on an unlocked layer; an empty list removes them and keeps keys. lfo: shape, sync to the tempo with a division or a free rate in Hz, depth (± fraction of the range), phase in degrees, combine add | multiply. audio: follows a band of the timeline’s analyzed audio (low, mid, high, or custom lowHz–highHz) with attackMs/releaseMs, mapped to outMin–outMax (fractions of the range), combine replace | add | multiply; it has no effect without an audio track. Applied after keys, top to bottom, then clamped. Omitted fields use the UI defaults; an omitted id keeps the id of the existing modulator in that position. Requires a timeline; one Undo step.',
+      'Replace the ordered modulators of one numeric parameter on an unlocked layer; an empty list removes them and keeps keys. lfo: shape, sync to the tempo with a division or a free rate in Hz, depth (± fraction of the range), phase in degrees, combine add | multiply. audio: follows a band of the timeline’s analyzed audio (low, mid, high, or custom lowHz–highHz) with attackMs/releaseMs, mapped to outMin–outMax (fractions of the range), combine replace | add | subtract | multiply, optional invert (peaks become valleys), intensity 0–4 (0 flattens, 1 as analyzed, more exaggerates peaks and valleys) and offset −1–1 (moves the curve, as a fraction of the output range); it has no effect without an audio track. Applied after keys, top to bottom, then clamped. Omitted fields use the UI defaults; an omitted id keeps the id of the existing modulator in that position. Requires a timeline; one Undo step.',
       operationShape('set_modulators'),
     ],
     [

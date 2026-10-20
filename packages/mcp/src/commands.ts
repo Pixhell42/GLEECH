@@ -270,7 +270,10 @@ function checkKeyValue(value: number | string, definition: ParameterDefinition, 
   }
 }
 function modelModulator(input: McpModulator, id: string): Modulator {
-  return { ...input, id };
+  // Omitted optional settings (invert, intensity, offset) stay absent.
+  return Object.fromEntries(
+    Object.entries({ ...input, id }).filter(([, value]) => value !== undefined),
+  ) as unknown as Modulator;
 }
 
 export function createMcpCommands(

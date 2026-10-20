@@ -60,7 +60,8 @@ function Choice<T extends string>({
 }: {
   label: string;
   value: T;
-  options: readonly { value: T; label: string }[];
+  /** `title` is the full name for tooltips and screen readers when `label` is short. */
+  options: readonly { value: T; label: string; title?: string }[];
   onChange(value: T): void;
   disabled?: boolean;
 }) {
@@ -72,6 +73,8 @@ function Choice<T extends string>({
           type="button"
           role="radio"
           aria-checked={option.value === value}
+          aria-label={option.title ?? option.label}
+          title={option.title}
           disabled={disabled}
           onClick={() => onChange(option.value)}
         >
@@ -403,15 +406,52 @@ export function ModulatorPanel({
               disabled={disabled}
               onChange={(outMin, outMax) => patch(modulator.id, { outMin, outMax })}
             />
+            <div className="modulator-pair">
+              <Slider
+                label="Intensity"
+                value={modulator.intensity ?? 1}
+                min={0}
+                max={4}
+                step={0.05}
+                text={`${Math.round((modulator.intensity ?? 1) * 100)}%`}
+                disabled={disabled}
+                onChange={(intensity) => patch(modulator.id, { intensity })}
+              />
+              <Slider
+                label="Position"
+                value={modulator.offset ?? 0}
+                min={-1}
+                max={1}
+                step={0.01}
+                text={`${(modulator.offset ?? 0) > 0 ? '+' : ''}${Math.round((modulator.offset ?? 0) * 100)}%`}
+                disabled={disabled}
+                onChange={(offset) => patch(modulator.id, { offset })}
+              />
+            </div>
+            <p className="modulation-note">
+              Intensity 0% flattens the curve, 100% follows the audio as analyzed, and more
+              exaggerates peaks and valleys. Position moves the whole curve up or down.
+            </p>
+            <div className="modulator-row">
+              <span>Invert</span>
+              <Toggle
+                label="Invert audio curve"
+                color={SIGNAL_COLORS.audio}
+                checked={modulator.invert ?? false}
+                disabled={disabled}
+                onChange={(invert) => patch(modulator.id, { invert })}
+              />
+            </div>
             <div className="modulator-row">
               <span>Mode</span>
               <Choice
                 label="Combine"
                 value={modulator.combine}
                 options={[
-                  { value: 'replace', label: 'Replace' },
+                  { value: 'replace', label: 'Rep', title: 'Replace' },
                   { value: 'add', label: 'Add' },
-                  { value: 'multiply', label: 'Multiply' },
+                  { value: 'subtract', label: 'Sub', title: 'Subtract' },
+                  { value: 'multiply', label: 'Multi', title: 'Multiply' },
                 ]}
                 disabled={disabled}
                 onChange={(combine) => patch(modulator.id, { combine })}
@@ -452,7 +492,12 @@ export function ModulatorPanel({
             <Choice
               label="Shape"
               value={modulator.shape}
-              options={LFO_SHAPES.map((shape) => ({ value: shape.value, label: shape.label }))}
+              options={LFO_SHAPES.map((shape) =>
+                // "Random steps" is too wide for the card; the full name is the tooltip.
+                shape.value === 'random'
+                  ? { value: shape.value, label: 'Random', title: shape.label }
+                  : { value: shape.value, label: shape.label },
+              )}
               disabled={disabled}
               onChange={(shape) => patch(modulator.id, { shape })}
             />
@@ -527,7 +572,7 @@ export function ModulatorPanel({
                 value={modulator.combine}
                 options={[
                   { value: 'add', label: 'Add' },
-                  { value: 'multiply', label: 'Multiply' },
+                  { value: 'multiply', label: 'Multi', title: 'Multiply' },
                 ]}
                 disabled={disabled}
                 onChange={(combine) => patch(modulator.id, { combine })}

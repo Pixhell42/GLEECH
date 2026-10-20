@@ -192,7 +192,10 @@ export const modulatorSchema = z.discriminatedUnion('kind', [
       releaseMs: z.number().min(0).max(10000).default(180),
       outMin: z.number().min(0).max(1).default(0.4),
       outMax: z.number().min(0).max(1).default(1),
-      combine: z.enum(['replace', 'add', 'multiply']).default('replace'),
+      combine: z.enum(['replace', 'add', 'subtract', 'multiply']).default('replace'),
+      invert: z.boolean().optional(),
+      intensity: z.number().min(0).max(4).optional(),
+      offset: z.number().min(-1).max(1).optional(),
     })
     .strict()
     .refine((value) => value.highHz > value.lowHz, {
