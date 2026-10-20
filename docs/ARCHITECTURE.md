@@ -42,6 +42,19 @@ viewport until committed; cursor updates avoid rerendering the editor. Mask
 rasterizers recompose dirty segment bounds while preserving exact coverage,
 opacity, erasing, cancellation and Undo behavior.
 
+Timeline rendering stays per frame: every animated parameter is evaluated at time
+t (keys, then modulators, then a clamp to the control's range), effects outside
+their active range switch off, the seed track derives the frame's seed, and the
+resolved stack goes to the same renderer as stills. Audio is analyzed once into
+per-frame band energy, beats and tempo stored in the project, and LFOs are
+computed from time and tempo, so preview, scrubbing and renders agree. Playback
+renders reduced drafts into a bounded frame cache and refines when paused. Renders
+run in the renderer with a dedicated effect worker per job and stream RGBA frames
+to the main process, which fits, mattes and upscales them and pipes them to
+ffmpeg (or writes PNG sequences, PDF flip books and sprite sheets directly).
+Video clips preview through Chromium's player on a range-capable `gleech-media://`
+protocol and decode exactly through ffmpeg for renders.
+
 CPU/effect outputs use straight RGBA; image sampling accounts for alpha.
 Source/procedural/imported scalar and vector fields use normalized image-space
 placement so previews and exports agree. Preview/cache limits are implementation

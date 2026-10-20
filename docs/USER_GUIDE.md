@@ -4,7 +4,8 @@
 
 Open PNG, JPEG or WebP images through the hamburger menu, drag/drop or Ctrl+V.
 The bundled unfiltered statue is available from the empty canvas and Library menu.
-Click the project name to edit it. Save an editable `.gleech` project through
+Opening an image, video clip or project names the project after it; click the
+project name to edit it. Save an editable `.gleech` project through
 Save → Save project / Save project as. Saving embeds the images needed by the
 project. Changing the name alone does not rename an existing file on disk.
 
@@ -106,6 +107,14 @@ Projects, portable presets and exported images record GLEECH's release version,
 developer URL and repository URL; other software may strip image metadata.
 The hamburger menu's version footer copies the release label.
 
+## Timeline, video and GIF
+
+The Image | Timeline switch in the title bar opens Timeline mode, where any
+control can be keyframed or driven by audio and LFOs, and the Render dialog
+makes videos, GIFs and loops, image sequences and flip books. Image mode always
+shows the frame at the playhead; with a video clip, that frame becomes the source
+image. See [Timeline, video and GIF](TIMELINE.md).
+
 ## Support and feedback
 
 Community groups Support GLEECH, Discord, Bug Report and Feature Request.
@@ -121,6 +130,9 @@ attachment checkbox. See [reporting setup and privacy](GITHUB_FEEDBACK.md).
 - Ctrl+C / Ctrl+V: copy edited image / paste image, when a text field is not active.
 - Ctrl+Z: Undo; Ctrl+Shift+Z or Ctrl+Y: Redo.
 - Ctrl+Shift+E: Quick PNG Export.
+- Ctrl+Shift+R: Render Video…; Ctrl+Shift+G: Export GIF… (once the project has a timeline).
+- Timeline mode: Space plays/pauses, Left/Right step frames, I/O set In/Out, M adds a
+  marker. See [Timeline shortcuts](TIMELINE.md#shortcuts-in-timeline-mode).
 - Home: Fit; 1: actual pixels, while the viewport has focus.
 - Alt+F4: guarded application close; Escape: close/cancel the active overlay.
 
