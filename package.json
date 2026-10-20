@@ -80,6 +80,7 @@
     "test:stack-drag": "pnpm build && node tooling/stack-drag-check.mjs",
     "test:ui-redesign": "pnpm build && node tooling/ui-redesign-check.mjs",
     "test:window-controls": "pnpm build && node tooling/window-controls-check.mjs",
+    "test:timeline": "pnpm build && node tooling/timeline-check.mjs && node tooling/timeline-media-check.mjs",
     "test:palette-family": "pnpm build && node tooling/palette-family-check.mjs && node tooling/palette-family-check.mjs --cpu",
     "test:glyph": "pnpm build && node tooling/glyph-check.mjs && node tooling/glyph-check.mjs --cpu",
     "test:glyph-library": "pnpm build && node tooling/glyph-library-check.mjs && node tooling/glyph-library-check.mjs --cpu",

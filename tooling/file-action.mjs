@@ -5,7 +5,12 @@ export async function fileAction(page, name, { waitForOperation = true } = {}) {
   const groups = {
     Save: ['Save project Ctrl+S', 'Save project as… Ctrl+Shift+S'],
     Edit: ['Copy Ctrl+C', 'Paste Ctrl+V'],
-    Export: ['Export image…', 'Quick PNG Export Ctrl+Shift+E'],
+    Export: [
+      'Export image…',
+      'Quick PNG Export Ctrl+Shift+E',
+      'Render Video… Ctrl+Shift+R',
+      'Export GIF… Ctrl+Shift+G',
+    ],
     Library: [
       'Filters and Presets',
       'Open sample image',

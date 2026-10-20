@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { parse as parseToml } from 'smol-toml';
-import { mkdir, mkdtemp, readFile, writeFile, access, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, access, stat, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,7 +115,7 @@ try {
     return actualCallTool(params, ...options);
   };
 
-  assert.equal((await client.listTools()).tools.length, 65);
+  assert.equal((await client.listTools()).tools.length, 74);
   assert.equal((await client.listResources()).resources.length, 9);
   assert.equal((await client.listResourceTemplates()).resourceTemplates.length, 3);
   const initial = (await call('get_project_state')).structuredContent;
@@ -725,6 +725,101 @@ try {
   assert.deepEqual((await call('get_project_state')).structuredContent, clipboardBefore);
   await page.evaluate(() => window.gleech.setMcpClipboardAllowed(false));
   assert.equal((await client.callTool({ name: 'copy_to_clipboard', arguments: {} })).isError, true);
+  // Timeline: keys, modulators, ranges, playhead, presets and a PNG-sequence render.
+  const timelineBefore = (await call('get_project_state')).structuredContent;
+  assert.equal(timelineBefore.timeline, null);
+  assert.equal((await call('get_timeline')).structuredContent.timeline, null);
+  const timelineLayer = randomUUID();
+  await call('set_timeline', {
+    fps: 10,
+    duration: 1,
+    workArea: { start: 0, end: 0.5 },
+    expectedRevision: timelineBefore.revision,
+  });
+  await call('add_effect', { type: 'rgb-split', instanceId: timelineLayer });
+  await call('set_keyframes', {
+    instanceId: timelineLayer,
+    parameter: 'horizontal',
+    keys: [
+      { time: 0, value: -4 },
+      { time: 0.92, value: 4, interpolation: 'linear' },
+    ],
+  });
+  await call('set_modulators', {
+    instanceId: timelineLayer,
+    parameter: 'horizontal',
+    modulators: [{ kind: 'lfo', depth: 0.2 }],
+  });
+  await call('set_active_range', { instanceId: timelineLayer, range: { start: 0, end: 0.8 } });
+  const animated = (await call('get_timeline')).structuredContent;
+  assert.equal(animated.timeline.frameCount, 10);
+  const animatedLayer = animated.layers.find((layer) => layer.instanceId === timelineLayer);
+  assert.deepEqual(animatedLayer.activeRange, { start: 0, end: 0.8 });
+  assert.equal(animatedLayer.parameters[0].keys, 2);
+  assert.equal(animatedLayer.parameters[0].lastKey, 0.9);
+  assert.equal(animatedLayer.parameters[0].modulators[0].kind, 'lfo');
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'set_keyframes',
+        arguments: { instanceId: timelineLayer, parameter: 'nonsense', keys: null },
+      })
+    ).isError,
+    true,
+  );
+  const moved = (await call('set_playhead', { time: 0.35 })).structuredContent;
+  assert.equal(moved.frame, 4);
+  assert.equal(moved.timecode, '00:00:04');
+  assert.equal((await call('get_timeline')).structuredContent.playhead.frame, 4);
+  const renderPresets = (await call('list_render_presets')).structuredContent;
+  assert.ok(renderPresets.video.presets.some((preset) => preset.id === '1080p-social'));
+  assert.deepEqual(renderPresets.ranges.work, { start: 0, end: 0.5 });
+  const framesFolder = resolve(output, `frames-${randomUUID()}`);
+  const sequence = {
+    path: framesFolder,
+    range: 'work',
+    overrides: {
+      output: 'sequence',
+      frame: { width: 96, height: 64 },
+      sequence: { depth: 8, separateAudio: false },
+    },
+  };
+  const rendered = (await call('render_video', { ...sequence, wait: true })).structuredContent;
+  assert.equal(rendered.finished, true);
+  assert.equal(rendered.framesRendered, 5);
+  assert.equal(rendered.job.status, 'done');
+  assert.equal((await readdir(framesFolder)).filter((name) => name.endsWith('.png')).length, 5);
+  const renderJob = (await call('render_status', { jobId: rendered.jobId })).structuredContent.job;
+  assert.equal(renderJob.files, 5);
+  assert.equal(renderJob.startedBy, 'mcp');
+  assert.ok((await call('render_status')).structuredContent.jobs.length >= 1);
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'render_status',
+        arguments: { jobId: rendered.jobId, cancel: true },
+      })
+    ).isError,
+    true,
+  );
+  assert.equal(
+    (await client.callTool({ name: 'render_video', arguments: sequence })).isError,
+    true,
+  );
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'render_video',
+        arguments: { path: resolve(output, '..', `outside-${randomUUID()}.mp4`) },
+      })
+    ).isError,
+    true,
+  );
+  await call('set_playhead', { frame: 0 });
+  for (let step = 0; step < 5; step++) await call('undo');
+  const timelineAfter = (await call('get_project_state')).structuredContent;
+  assert.equal(timelineAfter.timeline, null);
+  assert.deepEqual(timelineAfter.effects, timelineBefore.effects);
   const historyBefore = (await call('get_project_state')).structuredContent;
   await call('set_master_seed', { seed: 712412 });
   const operation = (await call('list_operations')).structuredContent.operations.at(-1);
@@ -995,7 +1090,7 @@ try {
   await page.getByRole('button', { name: 'Test Connection', exact: true }).click();
   await page
     .getByRole('status')
-    .filter({ hasText: 'Connection verified · 65 tools available' })
+    .filter({ hasText: 'Connection verified · 74 tools available' })
     .waitFor();
   await page.getByRole('button', { name: 'Close MCP panel' }).click();
   assert.deepEqual((await call('get_project_state')).structuredContent, cancellationBefore);
@@ -1061,7 +1156,7 @@ try {
     ),
   );
   console.log(
-    `MCP ${label}${executablePath ? ' packaged' : ''}: 65 tools, presets/recipes, nine variations, GLEECH modes, semantic controls, scoped file I/O, snapshots, previews, permissions and persistence passed (${backend}).`,
+    `MCP ${label}${executablePath ? ' packaged' : ''}: 74 tools, presets/recipes, timeline edits, video renders, nine variations, GLEECH modes, semantic controls, scoped file I/O, snapshots, previews, permissions and persistence passed (${backend}).`,
   );
 } catch (failure) {
   await recordDesktopFailure({ app, page, output, label, failure, errors: pageErrors }).catch(
