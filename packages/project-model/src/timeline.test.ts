@@ -14,6 +14,8 @@ import {
   adjacentKeyFrame,
   applyModulators,
   assertTimeline,
+  audioIsClipSound,
+  audioTrackLevel,
   audioValue,
   createAudioModulator,
   createLfo,
@@ -23,6 +25,7 @@ import {
   formatTimecode,
   frameCount,
   frameSeed,
+  freezeTimeline,
   lfoValue,
   mixColor,
   moveKeys,
@@ -71,6 +74,57 @@ describe('timeline time helpers', () => {
     expect(() =>
       assertTimeline({ ...timeline, markers: [{ id: 'a', t: 1, name: 'A' }] }),
     ).not.toThrow();
+  });
+  it('validates audio track level and knows when the track is the clip sound', () => {
+    const audio = {
+      path: 'C:\\media\\clip.mp4',
+      name: 'clip.mp4',
+      duration: 4,
+      sampleRate: 48000,
+      channels: 2,
+    };
+    const video = {
+      path: audio.path,
+      name: 'clip.mp4',
+      width: 64,
+      height: 36,
+      fps: 30,
+      duration: 4,
+      hasAudio: true,
+    };
+    const timeline = { ...createTimeline(), audio: { ...audio, volume: 0.5, muted: false } };
+    expect(() => assertTimeline(timeline)).not.toThrow();
+    expect(() => assertTimeline({ ...timeline, audio: { ...audio, volume: 1.5 } })).toThrow();
+    expect(() => assertTimeline({ ...timeline, audio: { ...audio, volume: -0.1 } })).toThrow();
+    expect(() =>
+      assertTimeline({ ...timeline, audio: { ...audio, muted: 'yes' as unknown as boolean } }),
+    ).toThrow();
+    expect(audioTrackLevel(audio)).toBe(1);
+    expect(audioTrackLevel({ ...audio, volume: 0.5 })).toBe(0.5);
+    expect(audioTrackLevel({ ...audio, volume: 0.5, muted: true })).toBe(0);
+    expect(audioIsClipSound(timeline)).toBe(false);
+    expect(audioIsClipSound({ ...timeline, video })).toBe(true);
+    expect(audioIsClipSound({ ...timeline, video: { ...video, path: 'C:\\other.mp4' } })).toBe(
+      false,
+    );
+  });
+  it('keeps the frozen audio analysis when the track level changes', () => {
+    const analysis = { bpm: 120, beats: [0.5, 1] } as unknown as AudioAnalysis;
+    const frozen = freezeTimeline({
+      ...createTimeline(),
+      audio: {
+        path: 'C:/a.wav',
+        name: 'a.wav',
+        duration: 4,
+        sampleRate: 48000,
+        channels: 2,
+        analysis,
+      },
+    });
+    const changed = freezeTimeline({ ...frozen, audio: { ...frozen.audio!, volume: 0.5 } });
+    expect(Object.isFrozen(frozen.audio!.analysis)).toBe(true);
+    expect(changed.audio!.analysis).toBe(frozen.audio!.analysis);
+    expect(changed.audio!.volume).toBe(0.5);
   });
 });
 

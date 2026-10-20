@@ -81,7 +81,12 @@ export function useTimelineMedia(
     registered(audioPath, 'audio')
       .then((opened) => {
         if (!active) return;
-        player = new TimelineAudio(opened.mediaId);
+        player = new TimelineAudio(opened.mediaId, () => {
+          if (active)
+            report.current(
+              `GLEECH can't play the sound of ${opened.name} in preview. Renders still include it.`,
+            );
+        });
         setAudio({ path: audioPath, mediaId: opened.mediaId, player });
       })
       .catch((failure: unknown) => {

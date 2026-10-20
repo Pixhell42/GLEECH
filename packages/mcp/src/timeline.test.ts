@@ -329,6 +329,26 @@ describe('MCP timeline editing', () => {
       /at least one frame/,
     );
   });
+  it('sets the audio track level and reports it with get_timeline', () => {
+    const { commands, adapter, apply } = setup(true);
+    expect(() => apply({ action: 'set_timeline', audioVolume: 0.5 })).toThrow(/no audio track/);
+    commands.updateTimeline({
+      audio: {
+        path: 'C:/music/song.wav',
+        name: 'song.wav',
+        duration: 4,
+        sampleRate: 48000,
+        channels: 2,
+      },
+    });
+    apply({ action: 'set_timeline', audioVolume: 0.4, audioMuted: true });
+    expect(commands.getState().timeline!.audio).toMatchObject({ volume: 0.4, muted: true });
+    expect(
+      (adapter.execute({ action: 'get_timeline' }) as { timeline: { audio: unknown } }).timeline
+        .audio,
+    ).toMatchObject({ name: 'song.wav', volume: 0.4, muted: true, fromClip: false });
+    expect(() => apply({ action: 'set_timeline', audioVolume: 1.2 })).toThrow();
+  });
   it('rejects bad keys with helpful errors and leaves the project untouched', () => {
     const { commands, apply } = setup(true);
     const before = commands.getState();

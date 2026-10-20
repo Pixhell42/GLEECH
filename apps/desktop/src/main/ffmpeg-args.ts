@@ -367,7 +367,7 @@ export function atempoChain(speed: number): string[] {
 
 /**
  * Audio inputs and filters: the chosen source(s) cut to the render range,
- * mixed, faded, normalized to −14 LUFS when asked and resampled to 48 kHz.
+ * set to their track level, mixed, faded, normalized to −14 LUFS when asked and resampled to 48 kHz.
  * `duration` is the output length; `tempo` speeds the audio up to match.
  */
 export function audioPlan(options: {
@@ -394,8 +394,12 @@ export function audioPlan(options: {
     inputs.push('-ss', seconds(source.start));
     if (Number.isFinite(length)) inputs.push('-t', seconds(length));
     inputs.push('-i', source.path);
+    const level =
+      source.volume !== undefined && source.volume < 1
+        ? `,volume=${Math.round(source.volume * 10000) / 10000}`
+        : '';
     parts.push(
-      `[${firstInput + index}:a]aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[a${index}]`,
+      `[${firstInput + index}:a]aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo${level}[a${index}]`,
     );
   });
   let current = 'a0';

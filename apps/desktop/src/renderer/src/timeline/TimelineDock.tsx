@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ANIMATABLE_APPLICATION_KEYS,
   animationDefinition,
+  audioIsClipSound,
   evaluateKeys,
   evaluateParameter,
   formatTimecode,
@@ -49,6 +50,7 @@ import {
   SeedIcon,
   SineIcon,
   SnapIcon,
+  SpeakerIcon,
   TrashIcon,
   VideoIcon,
   WaveformIcon,
@@ -114,10 +116,16 @@ export interface TimelineDockProps {
   onAddEffect(): void;
   onAddVideo(): void;
   onAddAudio(): void;
+  /** Make the video clip's own sound the audio track. */
+  onUseClipAudio(): void;
   onRemoveVideo(): void;
   onRemoveAudio(): void;
   onAddMarker(): void;
   onRemoveMarker(id: string): void;
+  /** Listening level for playback only: not saved in the project or rendered. */
+  playbackVolume: number;
+  playbackMuted: boolean;
+  onPlaybackAudio(change: { volume?: number; muted?: boolean }): void;
 }
 
 interface KeySelection {
@@ -426,6 +434,32 @@ export function TimelineDock(props: TimelineDockProps) {
             <LoopIcon />
           </button>
         </div>
+        <div className="transport-volume" role="group" aria-label="Playback volume">
+          <button
+            className="ib transport-toggle"
+            aria-label="Mute playback"
+            aria-pressed={props.playbackMuted}
+            title="Mute playback. Listening only: renders and the project are not affected."
+            onClick={() => props.onPlaybackAudio({ muted: !props.playbackMuted })}
+          >
+            <SpeakerIcon muted={props.playbackMuted || props.playbackVolume === 0} size={16} />
+          </button>
+          <input
+            type="range"
+            aria-label="Playback volume"
+            title={`Playback volume ${Math.round(props.playbackVolume * 100)}%. Listening only: renders and the project are not affected.`}
+            min={0}
+            max={1}
+            step={0.01}
+            value={props.playbackVolume}
+            onChange={(event) =>
+              props.onPlaybackAudio({
+                volume: event.target.valueAsNumber,
+                ...(props.playbackMuted && event.target.valueAsNumber > 0 ? { muted: false } : {}),
+              })
+            }
+          />
+        </div>
         <div className="transport-time">
           <output className="timecode" aria-label="Current time">
             {formatTimecode(frame, fps)}
@@ -709,6 +743,14 @@ export function TimelineDock(props: TimelineDockProps) {
                           label: timeline.audio ? 'Replace audio track…' : 'Audio track…',
                           onSelect: props.onAddAudio,
                         },
+                        ...(timeline.video?.hasAudio && !audioIsClipSound(timeline)
+                          ? [
+                              {
+                                label: timeline.audio ? 'Use clip audio instead' : 'Use clip audio',
+                                onSelect: props.onUseClipAudio,
+                              },
+                            ]
+                          : []),
                         { label: 'Marker at playhead', shortcut: 'M', onSelect: props.onAddMarker },
                         ...(timeline.video || timeline.audio
                           ? [{ label: '', separator: true }]
@@ -781,20 +823,38 @@ export function TimelineDock(props: TimelineDockProps) {
               </TrackRow>
               {timeline.audio && (
                 <TrackRow
-                  className="audio-row"
+                  className={`audio-row${timeline.audio.muted ? ' muted' : ''}`}
                   header={
                     <>
-                      <WaveformIcon />
-                      <span className="track-name" title={timeline.audio.name}>
-                        Audio · {timeline.audio.name}
-                      </span>
-                      <span className="track-meta">
-                        {timeline.audio.analysis
-                          ? timeline.audio.analysis.bpm
-                            ? `${timeline.audio.analysis.bpm} BPM`
-                            : 'No steady beat'
-                          : 'Analyzing…'}
-                      </span>
+                      <div className="track-header-line">
+                        <WaveformIcon />
+                        <span
+                          className="track-name"
+                          title={
+                            audioIsClipSound(timeline)
+                              ? `${timeline.audio.name} (the clip’s own sound)`
+                              : timeline.audio.name
+                          }
+                        >
+                          Audio · {timeline.audio.name}
+                        </span>
+                        <span className="track-meta">
+                          {timeline.audio.analysis
+                            ? timeline.audio.analysis.bpm
+                              ? `${timeline.audio.analysis.bpm} BPM`
+                              : 'No steady beat'
+                            : 'Analyzing…'}
+                        </span>
+                      </div>
+                      <AudioTrackLevel
+                        audio={timeline.audio}
+                        disabled={disabled}
+                        onChange={(change) =>
+                          onTimeline({ audio: { ...timeline.audio!, ...change } })
+                        }
+                        beginGesture={beginGesture}
+                        endGesture={endGesture}
+                      />
                     </>
                   }
                   onLanePointerDown={seekFromLane}
@@ -914,6 +974,58 @@ export function TimelineDock(props: TimelineDockProps) {
         />
       )}
     </section>
+  );
+}
+
+/** The audio track's own mute and volume: saved in the project, used by playback and renders. */
+function AudioTrackLevel({
+  audio,
+  disabled,
+  onChange,
+  beginGesture,
+  endGesture,
+}: {
+  audio: NonNullable<Timeline['audio']>;
+  disabled: boolean;
+  onChange(change: { volume?: number; muted?: boolean }): void;
+  beginGesture(): void;
+  endGesture(): void;
+}) {
+  const volume = audio.volume ?? 1;
+  const muted = audio.muted ?? false;
+  return (
+    <div className="track-header-line audio-level">
+      <button
+        className="ib transport-toggle"
+        aria-label="Mute audio track"
+        aria-pressed={muted}
+        title="Mute this track in playback and renders"
+        disabled={disabled}
+        onClick={() => onChange({ muted: !muted })}
+      >
+        <SpeakerIcon muted={muted || volume === 0} />
+      </button>
+      <input
+        type="range"
+        aria-label="Audio track volume"
+        title="Track volume, used by playback and renders"
+        min={0}
+        max={1}
+        step={0.01}
+        value={volume}
+        disabled={disabled}
+        onPointerDown={beginGesture}
+        onPointerUp={endGesture}
+        onBlur={endGesture}
+        onChange={(event) => {
+          const next = Math.round(event.target.valueAsNumber * 100) / 100;
+          onChange({ volume: next, ...(muted && next > 0 ? { muted: false } : {}) });
+        }}
+      />
+      <output className="track-value" aria-label="Audio track level">
+        {muted ? 'Muted' : `${Math.round(volume * 100)}%`}
+      </output>
+    </div>
   );
 }
 

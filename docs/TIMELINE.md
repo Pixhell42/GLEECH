@@ -24,7 +24,10 @@ the dock to change its height. Edited / Original moves to the canvas, top left.
 end and Loop. The timecode reads minutes:seconds:frames; click the total length
 to change the timeline duration, and the rate chip to change the frame rate
 (keys stay on frames when the rate changes). With an audio track, the tempo
-chip shows the detected BPM; choose a fixed tempo there for synced LFOs.
+chip shows the detected BPM; choose a fixed tempo there for synced LFOs. The
+speaker button and slider next to Loop set the playback volume. They only change
+what you hear while previewing: they are remembered in GLEECH, not saved in the
+project, and never change renders.
 
 **Ruler:** drag to scrub. The gold band at the top is the work area: drag its
 ends to set the range that loops and renders; double-click it to clear. A thin
@@ -32,10 +35,10 @@ green line marks frames already cached for instant playback. Markers and
 captured snapshots appear in cyan; beat ticks appear when a track is analyzed.
 
 **Tracks:** Source (the still image or video clip, as a filmstrip), Audio (the
-waveform), one track per effect (eye, name, animated count, lock and delete on
-hover; Alt+Up/Down reorders), its animated parameter lanes, **Animate parameter**,
-and Seed. The plus button in the Tracks header adds an effect, a video clip, an
-audio track or a marker.
+waveform, with the track's own mute and volume), one track per effect (eye,
+name, animated count, lock and delete on hover; Alt+Up/Down reorders), its
+animated parameter lanes, **Animate parameter**, and Seed. The plus button in
+the Tracks header adds an effect, a video clip, an audio track or a marker.
 
 **Effect ranges:** drag the ends of an effect's bar to keep it on for only part
 of the timeline. Double-click the bar to use the whole timeline again.
@@ -101,13 +104,22 @@ an MP4, MOV, M4V, WebM, MKV, AVI or GIF clip. Opening a clip works like opening
 an image: it replaces the current image or clip, names the project after the
 clip and keeps the effect stack and keys. Its first frame becomes the source
 image, the timeline takes the clip's length and rate, and every frame renders
-from the clip. Opening an image removes the clip and keeps the rest of the
-timeline. Audio track… adds a WAV, MP3, M4A, AAC, FLAC, OGG or Opus file.
+from the clip. If the clip has sound, it becomes the Audio track, analyzed for
+beats and audio modulators, unless you already added a separate audio track.
+Opening an image (or Remove video clip) removes the clip and its sound and keeps
+the rest of the timeline. Audio track… adds or replaces the track with a WAV,
+MP3, M4A, AAC, FLAC, OGG or Opus file; **Use clip audio** in the Tracks menu
+switches back to the clip's own sound.
+
+The Audio track's mute button and volume slider are part of the project: they
+change playback and the rendered audio. A muted track is left out of renders.
 
 Projects keep the clip and track file paths rather than embedding them. If a
 file moves, GLEECH reports it as offline; add it again from the Tracks menu.
 Codecs Chromium can't play directly (ProRes, AVI/MPEG-4 and similar) still work
-but scrub more slowly.
+but scrub more slowly. Preview plays a clip's sound from a small audio-only copy
+GLEECH makes with ffmpeg (cached in the temp folder), so it works for any clip
+and doesn't slow down the picture; renders read the clip itself.
 
 ## Rendering
 
@@ -140,7 +152,8 @@ interval, speed and fast start.
 - **Effects only** leaves the source out and keeps what the effects add, with
   alpha. MP4 can't store alpha, so the format switches to ProRes 4444.
 - **Audio** comes from the audio track, the clip's own audio or a mix, with
-  loudness normalization and fades.
+  loudness normalization and fades. The track's volume applies and a muted
+  track is left out; the playback volume never affects renders.
 
 **GIF & Loops** makes short looping files: GIF, animated WebP, APNG or an MP4
 loop. Presets: Social Loop, High Quality, Tiny, Sticker and Crunchy Pixels. Loop

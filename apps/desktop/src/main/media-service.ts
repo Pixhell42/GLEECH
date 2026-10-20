@@ -1,16 +1,24 @@
 // Timeline media: a registry of files the user imported (or a saved project
 // referenced), the gleech-media:// protocol that streams them into <video> and
 // <audio>, and ffmpeg-backed probing and decoding.
-import { dialog, ipcMain, protocol, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
-import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
-import { basename, extname, isAbsolute } from 'node:path';
+import {
+  app,
+  dialog,
+  ipcMain,
+  protocol,
+  type BrowserWindow,
+  type IpcMainInvokeEvent,
+} from 'electron';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, rename, stat, unlink } from 'node:fs/promises';
+import { basename, extname, isAbsolute, join } from 'node:path';
 import type { Result } from '../shared/image-api';
 import type { AudioProbe, OpenedMedia, RenderFrame, VideoProbe } from '../shared/render';
 import { runFfmpeg, spawnFfmpeg, type FfmpegLocator, type FfmpegProcess } from './ffmpeg';
 import {
   AUDIO_SAMPLE_RATE,
   MAX_AUDIO_SAMPLE_SECONDS,
+  audioProxyArgs,
   audioSampleArgs,
   ffmpegInput,
   fitFrameSize,
@@ -43,6 +51,11 @@ interface MediaEntry {
   /** Present when the file has a decodable video stream. */
   readonly video: ProbedVideoStream | null;
   readonly hasAudio: boolean;
+  /**
+   * For a video file used as audio (a clip's own sound): an audio-only copy the
+   * player streams instead, or null to fall back to the file itself.
+   */
+  readonly playback?: Promise<string | null>;
 }
 
 /** Call before app ready: lets gleech-media:// stream into <video>/<audio> and fetch(). */
@@ -225,8 +238,52 @@ export function registerMediaHandlers(window: BrowserWindow, ffmpeg: FfmpegLocat
     const entry =
       url.hostname === 'media' ? media.get(decodeURIComponent(url.pathname.slice(1))) : undefined;
     if (!entry) return new Response(null, { status: 404 });
-    return serveFile(request, entry.path);
+    const served = entry.playback ? ((await entry.playback) ?? entry.path) : entry.path;
+    return serveFile(request, served);
   });
+
+  /**
+   * An audio-only copy of a video file's sound, cached in the temp folder by
+   * path, size and modification time. Playing the video file itself as audio
+   * streams all of its picture data too, which starves the preview's frame
+   * player. Null when ffmpeg is missing or the copy fails.
+   */
+  async function audioProxy(path: string): Promise<string | null> {
+    let partial: string | null = null;
+    try {
+      const status = await ffmpeg.status();
+      if (!status.available || !status.path) return null;
+      const info = await stat(path);
+      const key = createHash('sha256')
+        .update(`${path}\0${info.size}\0${info.mtimeMs}`)
+        .digest('hex')
+        .slice(0, 32);
+      const folder = join(app.getPath('temp'), 'gleech-audio');
+      const output = join(folder, `${key}.m4a`);
+      const cached = await stat(output).then(
+        (file) => file.isFile() && file.size > 0,
+        () => false,
+      );
+      if (cached) return output;
+      await mkdir(folder, { recursive: true });
+      partial = join(folder, `${key}.${randomUUID()}.part`);
+      const child = spawnFfmpeg(status.path, audioProxyArgs(path, partial));
+      processes.add(child);
+      child.stdin.end();
+      child.stdout.resume();
+      child.stderr.resume();
+      const code = await new Promise<number | null>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', resolve);
+      }).finally(() => processes.delete(child));
+      if (code !== 0 || disposed) throw new Error('The audio copy failed.');
+      await rename(partial, output);
+      return output;
+    } catch {
+      if (partial) await unlink(partial).catch(() => {});
+      return null;
+    }
+  }
 
   async function ffmpegPath(missing: string): Promise<string> {
     const status = await ffmpeg.status();
@@ -307,7 +364,12 @@ export function registerMediaHandlers(window: BrowserWindow, ffmpeg: FfmpegLocat
       (entry) => entry.path === path && entry.kind === kind,
     );
     const id = existing?.id ?? randomUUID();
-    media.set(id, { id, path, kind, ...probed });
+    const playback =
+      kind === 'audio' &&
+      (VIDEO_EXTENSIONS as readonly string[]).includes(extname(path).slice(1).toLowerCase())
+        ? (existing?.playback ?? audioProxy(path))
+        : undefined;
+    media.set(id, { id, path, kind, ...probed, ...(playback ? { playback } : {}) });
     return { mediaId: id, path, name, info: probed.info };
   }
 
@@ -382,7 +444,11 @@ export function registerMediaHandlers(window: BrowserWindow, ffmpeg: FfmpegLocat
       throw new Error('Invalid media path.');
     // Only media files can be served, whatever a project file claims.
     const extension = extname(path).slice(1).toLowerCase();
-    const allowed: readonly string[] = kind === 'video' ? VIDEO_EXTENSIONS : AUDIO_EXTENSIONS;
+    // A clip's own sound is registered as audio from the video file itself.
+    const allowed: readonly string[] =
+      kind === 'video'
+        ? VIDEO_EXTENSIONS
+        : [...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS.filter((extension) => extension !== 'gif')];
     if (!allowed.includes(extension))
       throw new Error(`"${basename(path)}" is not a supported ${kind} file.`);
     return register(path, kind);

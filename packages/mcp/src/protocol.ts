@@ -449,6 +449,8 @@ export const operationSchema = z.discriminatedUnion('action', [
         .strict()
         .optional(),
       bpm: z.number().min(20).max(400).nullable().optional(),
+      audioVolume: z.number().min(0).max(1).optional(),
+      audioMuted: z.boolean().optional(),
     })
     .strict(),
   z

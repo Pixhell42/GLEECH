@@ -157,6 +157,10 @@ export interface AudioClip {
   readonly sampleRate: number;
   readonly channels: number;
   readonly analysis?: AudioAnalysis;
+  /** Track level 0–1, used by playback and renders. Absent means full level. */
+  readonly volume?: number;
+  /** A muted track is silent in playback and left out of renders. */
+  readonly muted?: boolean;
 }
 export interface Timeline {
   readonly version: typeof TIMELINE_VERSION;
@@ -402,6 +406,12 @@ export function assertTimeline(value: unknown): asserts value is Timeline {
     )
       throw new RangeError('Invalid audio clip.');
     if (audio.analysis !== undefined) assertAudioAnalysis(audio.analysis);
+    if (
+      (audio.volume !== undefined &&
+        (!isFiniteNumber(audio.volume) || audio.volume < 0 || audio.volume > 1)) ||
+      (audio.muted !== undefined && typeof audio.muted !== 'boolean')
+    )
+      throw new RangeError('Invalid audio track level.');
   }
   if (
     timeline.bpm !== undefined &&
@@ -574,6 +584,16 @@ export function freezeParameterAnimation(animation: ParameterAnimation): Paramet
       : {}),
   });
 }
+/** Whether the audio track is the video clip's own sound (the same file). */
+export function audioIsClipSound(timeline: Timeline): boolean {
+  return Boolean(timeline.audio && timeline.video && timeline.audio.path === timeline.video.path);
+}
+
+/** The audio track's playback and render level: 0 when muted, else its volume. */
+export function audioTrackLevel(audio: AudioClip): number {
+  return audio.muted ? 0 : (audio.volume ?? 1);
+}
+
 export function freezeTimeline(timeline: Timeline): Timeline {
   if (Object.isFrozen(timeline)) return timeline;
   return Object.freeze({
@@ -587,12 +607,15 @@ export function freezeTimeline(timeline: Timeline): Timeline {
       ? {
           audio: Object.freeze({
             ...timeline.audio,
+            // Reuse an already frozen analysis, so a level change keeps its identity.
             ...(timeline.audio.analysis
               ? {
-                  analysis: Object.freeze({
-                    ...timeline.audio.analysis,
-                    beats: Object.freeze([...timeline.audio.analysis.beats]),
-                  }),
+                  analysis: Object.isFrozen(timeline.audio.analysis)
+                    ? timeline.audio.analysis
+                    : Object.freeze({
+                        ...timeline.audio.analysis,
+                        beats: Object.freeze([...timeline.audio.analysis.beats]),
+                      }),
                 }
               : {}),
           }),

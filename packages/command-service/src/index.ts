@@ -38,6 +38,7 @@ import {
   type ParameterAnimation,
   type Timeline,
   activeVideo,
+  audioIsClipSound,
 } from '@gleech/project-model';
 import {
   pastedSettings,
@@ -74,7 +75,7 @@ export interface CommandService {
   updateTimeline(change: TimelineChange): void;
   /** Replace an already validated stack and seed as one reversible operation. */
   applyStackRecipe(recipe: PresetRecipe): void;
-  /** Open an image: it names the project and replaces any video clip. */
+  /** Open an image: it names the project and replaces any video clip and its sound. */
   setSource(source: ImageSource): void;
   /**
    * Make a frame of the video clip (at clip time t) the source image. Switching
@@ -422,9 +423,11 @@ export function createCommandService(initialState: ProjectState): CommandService
         origin: Object.freeze({ ...source }),
         sourceSnapshotId: null,
       };
-      // An image replaces the clip; the rest of the timeline (keys, audio) stays.
+      // An image replaces the clip and the clip's own sound; the rest of the
+      // timeline (keys, a separately added audio track) stays.
       if (state.timeline?.video) {
         const timeline: { -readonly [K in keyof Timeline]: Timeline[K] } = { ...state.timeline };
+        if (audioIsClipSound(state.timeline)) delete timeline.audio;
         delete timeline.video;
         next.timeline = freezeTimeline(timeline);
       }

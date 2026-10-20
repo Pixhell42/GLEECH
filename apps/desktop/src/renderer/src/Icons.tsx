@@ -267,6 +267,20 @@ export const WaveformIcon = ({ size = 14 }: { size?: number }) => (
   </Icon>
 );
 
+export const SpeakerIcon = ({ muted = false, size = 14 }: { muted?: boolean; size?: number }) => (
+  <Icon size={size}>
+    <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+    {muted ? (
+      <path d="m16 9.5 5 5m0-5-5 5" />
+    ) : (
+      <>
+        <path d="M15.5 9a4 4 0 0 1 0 6" />
+        <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+      </>
+    )}
+  </Icon>
+);
+
 export const SineIcon = ({ size = 14 }: { size?: number }) => (
   <Icon size={size}>
     <path d="M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0" />

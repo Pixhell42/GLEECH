@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   atempoChain,
+  audioPlan,
   buildAudioFileArgs,
   buildLoopArgs,
   buildVideoArgs,
@@ -229,6 +230,21 @@ describe('movie arguments', () => {
     expect(atempoChain(4)).toEqual(['atempo=2', 'atempo=2']);
     expect(atempoChain(0.25)).toEqual(['atempo=0.5', 'atempo=0.5']);
     expect(atempoChain(1.5)).toEqual(['atempo=1.5']);
+  });
+
+  it('applies each track level before mixing', () => {
+    const track = { path: 'C:/music/song.wav', start: 0, duration: 6, volume: 0.25 };
+    const clipSound = { path: 'C:/clips/clip.mp4', start: 0, duration: 6 };
+    const plan = audioPlan({
+      audio: { source: 'mix', normalize: false, fadeIn: 0, fadeOut: 0 },
+      track,
+      clip: clipSound,
+      duration: 6,
+      firstInput: 1,
+    })!;
+    expect(plan.filter).toContain('channel_layouts=stereo,volume=0.25[a0]');
+    expect(plan.filter).toContain('channel_layouts=stereo[a1]');
+    expect(plan.filter).toContain('amix=inputs=2');
   });
 });
 

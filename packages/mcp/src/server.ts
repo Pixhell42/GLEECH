@@ -198,7 +198,7 @@ export function createGleechMcpServer(
         render_preview:
           'Render the current edited image as a PNG, using the same CPU/GPU pipeline as the app. Returns the exact project revision; errors if the project changes while rendering.',
         get_timeline:
-          'Inspect Timeline mode: fps, duration, frame count, loop, work area, In/Out points, seed track, tempo, markers, media names, and every layer with keys, modulators or an active range (key counts, first/last key times, interpolations, modulator kinds). Includes the current playhead. Times are seconds; frames are zero-based. Never changes the project.',
+          'Inspect Timeline mode: fps, duration, frame count, loop, work area, In/Out points, seed track, tempo, markers, media names, the audio track’s volume, mute and whether it is the clip’s own sound, and every layer with keys, modulators or an active range (key counts, first/last key times, interpolations, modulator kinds). Includes the current playhead. Times are seconds; frames are zero-based. Never changes the project.',
         set_playhead:
           'Move the Timeline playhead to a zero-based frame, or to a time in seconds snapped to the nearest frame; values past the end clamp to the last frame. Stops playback and returns frame, time and MM:SS:FF timecode. Changes only the view, not the project or Undo. Requires Edit or Full Control and an existing timeline.',
         list_render_presets:
@@ -353,7 +353,7 @@ export function createGleechMcpServer(
     ],
     [
       'set_timeline',
-      'Create the project timeline if it is missing (Timeline mode; defaults 30 fps, 10 s, loop on), or change it: fps 1–120 (existing keys on every layer re-time onto the new frames, as in the UI), duration in seconds up to 3600, loop, workArea {start, end} or null, inOut {start, end} or null, seed {mode: fixed | every-frame | every-n, every} and bpm 20–400 (null follows the audio analysis, else 120). Ranges snap to frames. One Undo step.',
+      'Create the project timeline if it is missing (Timeline mode; defaults 30 fps, 10 s, loop on), or change it: fps 1–120 (existing keys on every layer re-time onto the new frames, as in the UI), duration in seconds up to 3600, loop, workArea {start, end} or null, inOut {start, end} or null, seed {mode: fixed | every-frame | every-n, every}, bpm 20–400 (null follows the audio analysis, else 120), and the audio track’s audioVolume 0–1 and audioMuted (saved in the project; they change playback and rendered audio). Ranges snap to frames. One Undo step.',
       operationShape('set_timeline'),
     ],
     [

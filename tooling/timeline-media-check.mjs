@@ -86,14 +86,62 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.filmstrip img').length > 0);
   await settle();
 
-  // Add the beat track; analysis finds its tempo.
+  // The clip's own sound becomes the audio track, and the player gets a small
+  // audio-only copy rather than streaming the whole video file again.
+  assert.match(await page.locator('.audio-row .track-name').textContent(), /clip\.mp4/);
+  const { video: videoBytes, audio: audioBytes } = await page.evaluate(async (path) => {
+    const size = async (kind) => {
+      const opened = await window.gleech.registerMedia(path, kind);
+      const response = await fetch(`gleech-media://media/${opened.value.mediaId}`);
+      return (await response.arrayBuffer()).byteLength;
+    };
+    return { video: await size('video'), audio: await size('audio') };
+  }, clip);
+  assert.ok(
+    audioBytes > 0 && audioBytes < videoBytes / 2,
+    `audio copy ${audioBytes} B of ${videoBytes} B`,
+  );
+  assert.doesNotMatch(await page.locator('.audio-row .track-meta').textContent(), /Analyzing/);
+
+  // Track mute and volume are project edits (undoable, used by renders).
+  const trackMute = page.getByRole('button', { name: 'Mute audio track', exact: true });
+  const trackLevel = page.locator('.audio-row .track-value');
+  await trackMute.click();
+  assert.equal(await trackMute.getAttribute('aria-pressed'), 'true');
+  assert.equal(await trackLevel.textContent(), 'Muted');
+  assert.equal(await page.locator('.audio-row.muted').count(), 1);
+  await page.keyboard.press('Control+z');
+  assert.equal(await trackMute.getAttribute('aria-pressed'), 'false');
+  await page.getByRole('slider', { name: 'Audio track volume', exact: true }).fill('0.5');
+  assert.equal(await trackLevel.textContent(), '50%');
+
+  // Playback volume is for listening only: remembered in GLEECH, not the project.
+  await page.getByRole('slider', { name: 'Playback volume', exact: true }).fill('0.3');
+  const playbackMute = page.getByRole('button', { name: 'Mute playback', exact: true });
+  await playbackMute.click();
+  assert.equal(await playbackMute.getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('gleech.timeline.playbackAudio'))),
+    { volume: 0.3, muted: true },
+  );
+  assert.equal(await trackLevel.textContent(), '50%');
+  await playbackMute.click();
+
+  // Replace it with the beat track; analysis finds its tempo, and the Tracks
+  // menu offers the clip's own sound again.
   await page.getByRole('button', { name: 'Add track', exact: true }).click();
+  assert.equal(await page.getByRole('menuitem', { name: /Use clip audio/ }).count(), 0);
   await choose(beat);
-  await page.getByRole('menuitem', { name: 'Audio track…', exact: true }).click();
-  await page.locator('.audio-row').waitFor();
+  await page.getByRole('menuitem', { name: 'Replace audio track…', exact: true }).click();
+  await page.waitForFunction(() =>
+    /beat\.wav/.test(document.querySelector('.audio-row .track-name')?.textContent ?? ''),
+  );
   await page.waitForFunction(() =>
     /BPM/.test(document.querySelector('.audio-row .track-meta')?.textContent ?? ''),
   );
+  await page.getByRole('button', { name: 'Add track', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Use clip audio instead', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
   const bpm = Number(
     (await page.locator('.audio-row .track-meta').textContent()).match(/[\d.]+/)[0],
   );

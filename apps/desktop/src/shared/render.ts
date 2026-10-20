@@ -177,6 +177,8 @@ export interface MediaInput {
   /** Seconds into the media file where the render range starts. */
   readonly start: number;
   readonly duration: number;
+  /** Track level 0–1 applied before mixing. Absent means full level. */
+  readonly volume?: number;
 }
 
 /** Everything the encoder service needs; frames arrive separately. */

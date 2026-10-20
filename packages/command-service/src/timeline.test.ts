@@ -56,6 +56,45 @@ describe('timeline commands', () => {
     expect(commands.getState().timeline?.video?.path).toBe('C:/clips/clip.mp4');
   });
 
+  it('opening an image removes the clip sound but keeps a separate audio track', () => {
+    const track = { name: 'clip.mp4', duration: 4, sampleRate: 48000, channels: 2 };
+    const commands = service();
+    commands.setTimeline({
+      ...createTimeline(),
+      video: { ...clip('s'), hasAudio: true },
+      audio: { ...track, path: 'C:/clips/clip.mp4', volume: 0.5 },
+    });
+    commands.setSource({ ...source, id: 'next', name: 'next.png' });
+    expect(commands.getState().timeline?.audio).toBeUndefined();
+    commands.setTimeline({
+      ...createTimeline(),
+      video: { ...clip('s'), hasAudio: true },
+      audio: { ...track, path: 'C:/music/song.wav', name: 'song.wav' },
+    });
+    commands.setSource({ ...source, id: 'again', name: 'again.png' });
+    expect(commands.getState().timeline?.audio?.name).toBe('song.wav');
+  });
+
+  it('changes the audio track level as one undoable edit', () => {
+    const commands = service();
+    commands.setTimeline({
+      ...createTimeline(),
+      audio: {
+        path: 'C:/music/song.wav',
+        name: 'song.wav',
+        duration: 4,
+        sampleRate: 48000,
+        channels: 2,
+      },
+    });
+    const audio = commands.getState().timeline!.audio!;
+    commands.updateTimeline({ audio: { ...audio, volume: 0.25, muted: true } });
+    expect(commands.getState().timeline?.audio).toMatchObject({ volume: 0.25, muted: true });
+    expect(() => commands.updateTimeline({ audio: { ...audio, volume: 2 } })).toThrow();
+    commands.undo();
+    expect(commands.getState().timeline?.audio?.volume).toBeUndefined();
+  });
+
   it('uses a clip frame as the source without an undo step', () => {
     const commands = service();
     commands.setTimeline({ ...createTimeline(), video: clip('s') });

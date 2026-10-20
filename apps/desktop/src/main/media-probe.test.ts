@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  audioProxyArgs,
   fitFrameSize,
   fpsRational,
   parseFfmpegProbe,
@@ -334,5 +335,15 @@ describe('decode helpers', () => {
     expect(
       videoReaderArgs('/a.mp4', { start: 0.25, fps: 24, count: 1, width: 2, height: 2 }),
     ).not.toContain('-ss');
+  });
+});
+
+describe('audio copy for playback', () => {
+  it('keeps only the first audio stream as fast-start stereo AAC', () => {
+    const args = audioProxyArgs('C:/clips/clip.mov', 'C:/temp/gleech-audio/abc.part').join(' ');
+    expect(args).toContain('-i file:C:/clips/clip.mov');
+    expect(args).toContain('-map 0:a:0 -vn -sn -dn');
+    expect(args).toContain('-ac 2 -ar 48000 -c:a aac -b:a 192k');
+    expect(args).toContain('-movflags +faststart -f mp4 file:C:/temp/gleech-audio/abc.part');
   });
 });

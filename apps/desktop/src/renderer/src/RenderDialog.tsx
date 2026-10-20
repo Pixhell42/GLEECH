@@ -52,9 +52,12 @@ import {
 import { renderRange, videoFrameTimes } from './render-plan';
 import type { RenderRequest } from './render-queue';
 import {
+  audibleTrack,
   buildRenderRequest,
   loopAudioAvailable,
   renderSourceSize,
+  separateClipSound,
+  videoAudioActive,
   videoAudioSources,
 } from './render-request';
 import { shortTime } from './timeline/timeline-math';
@@ -485,7 +488,8 @@ export function RenderDialog({
       : defaultPath;
 
   const hasTrack = Boolean(timeline.audio);
-  const hasClip = Boolean(timeline.video?.hasAudio);
+  // When the audio track is the clip's own sound, there is only one source.
+  const hasClip = separateClipSound(timeline);
   const videoAudioOn =
     video.audio.enabled &&
     (hasTrack || hasClip) &&
@@ -504,7 +508,12 @@ export function RenderDialog({
   const gifFrames = gifFrameCount(gif, seconds);
   const estimate =
     tab === 'video'
-      ? estimateVideoSize(video, videoTimes.length, video.fps, videoAudioOn)
+      ? estimateVideoSize(
+          video,
+          videoTimes.length,
+          video.fps,
+          videoAudioOn && videoAudioActive(video, timeline),
+        )
       : estimateGifSize(gif, gifFrames, sourceAspect);
   const summaryAudio =
     tab === 'video'
@@ -514,15 +523,19 @@ export function RenderDialog({
           ? hasTrack || hasClip
             ? 'Off'
             : 'No audio track'
-          : resolved.kind === 'files'
-            ? video.sequence.separateAudio
-              ? 'Separate WAV · 24-bit'
-              : 'Off'
-            : video.audio.codec === 'pcm'
-              ? 'PCM · 48 kHz 24-bit'
-              : `AAC · ${video.audio.bitrateKbps} kbps${video.audio.normalize ? ' · −14 LUFS' : ''}`
+          : resolved.kind === 'files' && !video.sequence.separateAudio
+            ? 'Off'
+            : !videoAudioActive(video, timeline)
+              ? 'Track muted'
+              : resolved.kind === 'files'
+                ? 'Separate WAV · 24-bit'
+                : video.audio.codec === 'pcm'
+                  ? 'PCM · 48 kHz 24-bit'
+                  : `AAC · ${video.audio.bitrateKbps} kbps${video.audio.normalize ? ' · −14 LUFS' : ''}`
       : gif.format === 'mp4' && gif.audio && hasTrack
-        ? 'AAC · 160 kbps'
+        ? audibleTrack(timeline)
+          ? 'AAC · 160 kbps'
+          : 'Track muted'
         : 'None';
   const overLimit = tab === 'gif' && Boolean((estimate as { overLimit?: boolean }).overLimit);
   const transparentOutput =
@@ -1978,9 +1991,11 @@ export function RenderDialog({
                   hint={
                     !hasTrack
                       ? 'Add an audio track in Timeline mode to include sound.'
-                      : gif.loop === 'concat' && gif.format === 'mp4'
-                        ? 'Concat loops jump between ranges, so they are silent.'
-                        : gifAudioHint(gif.format)
+                      : !audibleTrack(timeline)
+                        ? 'The audio track is muted in the timeline.'
+                        : gif.loop === 'concat' && gif.format === 'mp4'
+                          ? 'Concat loops jump between ranges, so they are silent.'
+                          : gifAudioHint(gif.format)
                   }
                 >
                   <Switch

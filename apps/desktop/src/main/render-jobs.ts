@@ -108,7 +108,8 @@ function checkMedia(value: unknown, label: string): void {
     typeof value['path'] !== 'string' ||
     !value['path'] ||
     !isNumber(value['start'], 0, 1e7) ||
-    !isNumber(value['duration'], 0, 1e7)
+    !isNumber(value['duration'], 0, 1e7) ||
+    (value['volume'] !== undefined && !isNumber(value['volume'], 0, 1))
   )
     fail(`Invalid ${label} for this render.`);
 }

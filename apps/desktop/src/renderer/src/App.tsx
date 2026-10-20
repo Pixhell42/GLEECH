@@ -29,6 +29,9 @@ import {
   type PaintedMask,
   createTimeline,
   activeVideo,
+  audioIsClipSound,
+  audioTrackLevel,
+  type Timeline,
   clampTimelineRanges,
   evaluateKeys,
   roundParameter,
@@ -70,7 +73,7 @@ import { rememberMedia, useTimelineMedia, useVideoFrame } from './timeline/use-m
 import { VideoFrameSource } from './video-frames';
 import { analyzeMediaAudio } from './timeline-audio';
 import type { FilmstripFrame } from './timeline/TimelineDock';
-import type { VideoProbe, AudioProbe } from '../../shared/render';
+import type { VideoProbe, AudioProbe, OpenedMedia } from '../../shared/render';
 import type { PixelImage, RenderInfo } from '@gleech/renderer-core';
 import { APP_IS_BETA, APP_VERSION_LABEL } from '../../shared/branding';
 import {
@@ -174,6 +177,8 @@ async function previewDataUrl(image: PixelImage, maxDimension = 640): Promise<st
   });
 }
 const DOCK_HEIGHT_KEY = 'gleech.timeline.dockHeight';
+/** Playback-only listening level; never saved in projects or used by renders. */
+const PLAYBACK_AUDIO_KEY = 'gleech.timeline.playbackAudio';
 /** Name for a source image made from a clip frame, e.g. "clip frame 75". */
 function clipFrameName(clip: string, frame: number): string {
   const base =
@@ -182,6 +187,42 @@ function clipFrameName(clip: string, frame: number): string {
       .trim()
       .slice(0, 96) || 'clip';
   return `${base} frame ${frame}`;
+}
+
+function readPlaybackAudio(): { volume: number; muted: boolean } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLAYBACK_AUDIO_KEY) ?? 'null') as {
+      volume?: unknown;
+      muted?: unknown;
+    } | null;
+    const volume = Number(saved?.volume);
+    return {
+      volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1,
+      muted: saved?.muted === true,
+    };
+  } catch {
+    return { volume: 1, muted: false };
+  }
+}
+
+/**
+ * Register a video file's own sound as audio and analyze it, ready to be the
+ * audio track. Analysis runs once so modulators stay deterministic.
+ */
+async function clipSoundTrack(path: string) {
+  const opened = unwrap(
+    await window.gleech.registerMedia(path, 'audio'),
+  ) as OpenedMedia<AudioProbe>;
+  rememberMedia('audio', opened);
+  const result = await analyzeMediaAudio(opened.mediaId);
+  return {
+    path: opened.path,
+    name: opened.name,
+    duration: opened.info.duration || result.duration,
+    sampleRate: opened.info.sampleRate || 48000,
+    channels: opened.info.channels || result.channels || 2,
+    analysis: result.analysis,
+  };
 }
 
 function readDockHeight(): number {
@@ -442,6 +483,17 @@ export function App() {
   const [mode, setMode] = useState<'image' | 'timeline'>('image');
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [playbackAudio, setPlaybackAudio] = useState(readPlaybackAudio);
+  const changePlaybackAudio = (change: Partial<{ volume: number; muted: boolean }>) =>
+    setPlaybackAudio((previous) => {
+      const next = { ...previous, ...change };
+      try {
+        localStorage.setItem(PLAYBACK_AUDIO_KEY, JSON.stringify(next));
+      } catch {
+        // The level still applies for this session.
+      }
+      return next;
+    });
   // Bumped by seeks while playing so the playback clock restarts from the new frame.
   const [clockEpoch, setClockEpoch] = useState(0);
   const [selectedParam, setSelectedParam] = useState<SelectedParameter | null>(null);
@@ -590,7 +642,16 @@ export function App() {
       active = false;
     };
   }, [media.video, clip, timeline]);
-  // Keep the clip's audio in step with playback.
+  // What you hear: the track level (saved, also used by renders) times the
+  // playback level (listening only).
+  const trackLevel = timeline?.audio ? audioTrackLevel(timeline.audio) : 1;
+  useEffect(() => {
+    const player = media.audio?.player;
+    if (!player) return;
+    player.setVolume(trackLevel * playbackAudio.volume);
+    player.setMuted(playbackAudio.muted || trackLevel === 0);
+  }, [media.audio, trackLevel, playbackAudio]);
+  // Keep the audio track in step with playback.
   useEffect(() => {
     const player = media.audio?.player;
     if (!player || !playing) return;
@@ -890,7 +951,22 @@ export function App() {
         ),
       );
       const state = commands.getState();
-      const base = state.timeline ?? createTimeline();
+      const previous = state.timeline ?? createTimeline();
+      // The clip's sound becomes the audio track, unless a separate track was added.
+      const base: { -readonly [K in keyof Timeline]: Timeline[K] } = { ...previous };
+      if (audioIsClipSound(previous)) delete base.audio;
+      if (info.hasAudio && !base.audio) {
+        setNotice(`Analyzing the sound of ${opened.name}…`);
+        try {
+          base.audio = await clipSoundTrack(opened.path);
+        } catch (failure) {
+          setError(
+            `${opened.name} opened without its sound: ${
+              failure instanceof Error ? failure.message : 'the audio could not be read.'
+            }`,
+          );
+        }
+      }
       const rate =
         FRAME_RATES.find((candidate) => Math.abs(candidate - info.fps) < 0.01) ??
         Math.min(120, Math.max(1, Math.round(info.fps * 1000) / 1000));
@@ -980,6 +1056,28 @@ export function App() {
       );
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not add this audio track.');
+      setNotice('Ready');
+    } finally {
+      locked.current = false;
+      setBusy(null);
+    }
+  };
+  /** Make the video clip's own sound the audio track again. */
+  const addClipAudio = async () => {
+    const clipInfo = commands.getState().timeline?.video;
+    if (locked.current || !clipInfo?.hasAudio) return;
+    locked.current = true;
+    setBusy('project');
+    setError(null);
+    setNotice(`Analyzing the sound of ${clipInfo.name}…`);
+    try {
+      const audio = await clipSoundTrack(clipInfo.path);
+      commands.updateTimeline({ audio });
+      setNotice(
+        `Using the sound of ${clipInfo.name}${audio.analysis.bpm ? ` · ${audio.analysis.bpm} BPM` : ''}`,
+      );
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not read the clip’s sound.');
       setNotice('Ready');
     } finally {
       locked.current = false;
@@ -3911,7 +4009,14 @@ export function App() {
             onAddEffect={() => openPicker()}
             onAddVideo={() => void addVideo()}
             onAddAudio={() => void addAudio()}
-            onRemoveVideo={() => commands.updateTimeline({ video: undefined })}
+            onUseClipAudio={() => void addClipAudio()}
+            onRemoveVideo={() =>
+              // The clip's own sound goes with it; a separate audio track stays.
+              commands.updateTimeline({
+                video: undefined,
+                ...(audioIsClipSound(timeline) ? { audio: undefined } : {}),
+              })
+            }
             onRemoveAudio={() => commands.updateTimeline({ audio: undefined })}
             onAddMarker={addMarker}
             onRemoveMarker={(id) =>
@@ -3919,6 +4024,9 @@ export function App() {
                 markers: timeline.markers.filter((marker) => marker.id !== id),
               })
             }
+            playbackVolume={playbackAudio.volume}
+            playbackMuted={playbackAudio.muted}
+            onPlaybackAudio={changePlaybackAudio}
           />
         </>
       )}

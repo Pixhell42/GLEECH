@@ -85,10 +85,13 @@ working project and use the desktop renderer and approved file scope.
 
 Timeline edits are reversible project edits (Edit mode) and also batch inside
 `apply_operations` as one Undo step: `set_timeline` (frame rate, duration, loop,
-work area, In/Out, seed track, tempo; creates the timeline when missing),
+work area, In/Out, seed track, tempo, and the audio track's `audioVolume` and
+`audioMuted`, which change playback and rendered audio; creates the timeline
+when missing),
 `set_keyframes` (times in seconds, snapped to frames; values in the units
 `get_effect_parameters` reports, which also lists `animatableParameters`),
-`set_modulators` (audio and LFO cards for numeric controls) and
+`set_modulators` (audio and LFO cards for numeric controls; audio cards also
+take subtract, invert, intensity and offset) and
 `set_active_range`. `get_timeline` reads the settings, markers, animated layers
 and the playhead; `set_playhead` moves it, which also changes the frame Image mode
 shows and that `render_preview` and `export_image` render.

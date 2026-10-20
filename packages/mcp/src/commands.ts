@@ -6,6 +6,7 @@ import {
   type VariationCandidate,
 } from '@gleech/command-service';
 import {
+  audioIsClipSound,
   ANIMATABLE_APPLICATION_KEYS,
   animationDefinition,
   assertParameterAnimation,
@@ -108,6 +109,9 @@ export function timelineSummary(timeline: Timeline) {
           analysis: timeline.audio.analysis
             ? { bpm: timeline.audio.analysis.bpm, beats: timeline.audio.analysis.beats.length }
             : null,
+          volume: timeline.audio.volume ?? 1,
+          muted: timeline.audio.muted ?? false,
+          fromClip: audioIsClipSound(timeline),
         }
       : null,
   };
@@ -388,6 +392,15 @@ export function createMcpCommands(
           mode: operation.seed.mode,
           every: operation.seed.every ?? current.seed.every,
         };
+      if (operation.audioVolume !== undefined || operation.audioMuted !== undefined) {
+        if (!current.audio)
+          throw new Error('This timeline has no audio track; audioVolume and audioMuted need one.');
+        change.audio = {
+          ...current.audio,
+          ...(operation.audioVolume === undefined ? {} : { volume: operation.audioVolume }),
+          ...(operation.audioMuted === undefined ? {} : { muted: operation.audioMuted }),
+        };
+      }
       service.updateTimeline(change);
       return;
     }

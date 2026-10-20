@@ -1,6 +1,12 @@
 // Builds a background render job from dialog (or MCP) settings. Shared so the
 // Render dialog and MCP render_video produce identical jobs.
-import { activeVideo, type ProjectState, type Timeline } from '@gleech/project-model';
+import {
+  activeVideo,
+  audioIsClipSound,
+  audioTrackLevel,
+  type ProjectState,
+  type Timeline,
+} from '@gleech/project-model';
 import type {
   GifRenderSettings,
   MediaInput,
@@ -30,16 +36,27 @@ export function projectBaseName(name: string): string {
   );
 }
 
+/** The clip's own sound as a source separate from the audio track. */
+export function separateClipSound(timeline: Timeline): boolean {
+  return Boolean(timeline.video?.hasAudio) && !audioIsClipSound(timeline);
+}
+
+/** Whether the audio track exists and isn't muted or silent. */
+export function audibleTrack(timeline: Timeline): boolean {
+  return Boolean(timeline.audio && audioTrackLevel(timeline.audio) > 0);
+}
+
 /**
  * Which audio the Video tab's source choice uses: the track, the clip's own
  * sound, or both. When the chosen source is missing, the other one is used.
+ * A muted track is still chosen; it just adds no sound.
  */
 export function videoAudioSources(
   settings: VideoRenderSettings,
   timeline: Timeline,
 ): { track: boolean; clip: boolean } {
   const track = Boolean(timeline.audio);
-  const clip = Boolean(timeline.video?.hasAudio);
+  const clip = separateClipSound(timeline);
   const want = settings.audio.source;
   const useClip = clip && (want !== 'track' || !track);
   const useTrack = track && (want !== 'clip' || !clip);
@@ -49,9 +66,10 @@ export function videoAudioSources(
 /** Whether the Video tab will carry audio for these settings. */
 export function videoAudioActive(settings: VideoRenderSettings, timeline: Timeline): boolean {
   const output = resolveVideoOutput(settings);
+  const sources = videoAudioSources(settings, timeline);
   return (
     settings.audio.enabled &&
-    Boolean(timeline.audio || timeline.video?.hasAudio) &&
+    ((sources.track && audibleTrack(timeline)) || sources.clip) &&
     output.kind !== 'pdf' &&
     output.kind !== 'sprite' &&
     (output.kind === 'movie' || settings.sequence.separateAudio)
@@ -70,11 +88,20 @@ function mediaInputs(
   wantClip: boolean,
 ): { audio?: MediaInput; clipAudio?: MediaInput } {
   const duration = Math.max(0, range.end - range.start);
+  // A muted track is left out; a quieter one carries its level.
+  const level = timeline.audio ? audioTrackLevel(timeline.audio) : 0;
   return {
-    ...(wantTrack && timeline.audio
-      ? { audio: { path: timeline.audio.path, start: range.start, duration } }
+    ...(wantTrack && timeline.audio && level > 0
+      ? {
+          audio: {
+            path: timeline.audio.path,
+            start: range.start,
+            duration,
+            ...(level < 1 ? { volume: level } : {}),
+          },
+        }
       : {}),
-    ...(wantClip && timeline.video?.hasAudio
+    ...(wantClip && timeline.video && separateClipSound(timeline)
       ? { clipAudio: { path: timeline.video.path, start: range.start, duration } }
       : {}),
   };

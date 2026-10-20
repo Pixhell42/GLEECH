@@ -358,6 +358,21 @@ export function videoReaderArgs(
   ];
 }
 
+/**
+ * Copy a video file's first audio stream into a small stereo AAC file for
+ * preview playback, so the audio player doesn't also stream the video data.
+ * Fast start puts the index first so playback can begin right away.
+ */
+export function audioProxyArgs(path: string, output: string): string[] {
+  return [
+    ...['-hide_banner', '-nostdin', '-loglevel', 'error', '-y'],
+    ...['-i', ffmpegInput(path)],
+    ...['-map', '0:a:0', '-vn', '-sn', '-dn'],
+    ...['-ac', '2', '-ar', '48000', '-c:a', 'aac', '-b:a', '192k'],
+    ...['-movflags', '+faststart', '-f', 'mp4', ffmpegInput(output)],
+  ];
+}
+
 /** Mono float32 PCM for analysis, capped at maxSeconds. */
 export function audioSampleArgs(
   path: string,

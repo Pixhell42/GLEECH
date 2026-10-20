@@ -18,10 +18,14 @@ export class TimelineAudio {
   private request = 0;
   private disposed = false;
 
-  constructor(mediaId: string) {
+  /** `onError` runs when Chromium can't load or decode the file's sound. */
+  constructor(mediaId: string, onError?: () => void) {
     const audio = (this.element = new Audio());
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
+    audio.addEventListener('error', () => {
+      if (!this.disposed) onError?.();
+    });
     audio.src = mediaUrl(mediaId);
   }
 

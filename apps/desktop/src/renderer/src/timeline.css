@@ -524,6 +524,22 @@
   display: flex;
   gap: 2px;
 }
+/* Playback volume: listening only, never saved or rendered. */
+.transport-volume {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.transport-volume input[type='range'] {
+  width: 72px;
+  height: 18px;
+}
+.transport-volume input[type='range']::-webkit-slider-thumb,
+.audio-level input[type='range']::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+}
 .timeline-zoom {
   display: flex;
   align-items: center;
@@ -672,8 +688,45 @@
   overflow: hidden;
 }
 .source-row,
+/* Audio track header: name and tempo above the track's mute and volume. */
 .audio-row {
-  min-height: 46px;
+  min-height: 52px;
+}
+.audio-row .track-header {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 1px;
+}
+.track-header-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.track-header-line > .ui-icon {
+  flex: none;
+  color: var(--text-2);
+}
+.timeline-dock .audio-level .ib {
+  width: 22px;
+  height: 22px;
+  margin-left: -4px;
+}
+.audio-level input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+}
+.audio-level .track-value {
+  min-width: 46px;
+  font-size: 11px;
+}
+.audio-row.muted .track-name {
+  color: var(--text-3);
+}
+.audio-row.muted .waveform {
+  opacity: 0.35;
 }
 .filmstrip {
   position: absolute;
