@@ -1,5 +1,6 @@
 import { createDepthMapLibrary } from './depth-maps';
 import type { McpAccess } from './mcp-access';
+import { renderOutputIsFolder } from '@gleech/mcp/protocol';
 import { mcpImageData } from './mcp-image-data';
 import { supportLink, supportCopyText } from '../shared/support';
 import { SUPPORT_REPOSITORY } from '../shared/support';
@@ -31,7 +32,7 @@ import {
 } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { release } from 'node:os';
-import { open, readFile, writeFile, rename, unlink } from 'node:fs/promises';
+import { open, readFile, writeFile, rename, unlink, lstat, readdir } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import {
@@ -668,6 +669,53 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
     for (const id of batchAssets.get(dispatchId)?.values() ?? []) assets.delete(id);
     batchAssets.delete(dispatchId);
   });
+  // render_video output: the exact file, or the folder a PNG sequence fills,
+  // checked against approved Exports folders. Renders replace existing files,
+  // so they are refused here unless the client allowed overwrite.
+  handle('mcp:render-target', async (dispatchId) => {
+    if (typeof dispatchId !== 'string') throw new Error('Invalid MCP operation.');
+    const request = mcpAccess.request(dispatchId);
+    if (request.action !== 'render_video')
+      throw new Error('This MCP operation cannot render a video.');
+    const missingParent = (error: unknown): never => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        throw new Error(
+          'The output’s parent folder does not exist. Choose a location inside an approved Exports folder.',
+        );
+      throw error;
+    };
+    if (!renderOutputIsFolder(request)) {
+      if (!/^\.(mp4|mov|mkv|webm|gif|webp|png|pdf)$/i.test(extname(request.path)))
+        throw new Error(
+          'Render to a .mp4, .mov, .mkv, .webm, .gif, .webp, .png or .pdf file. Separate-file PNG sequences take a folder path.',
+        );
+      const path = await mcpAccess
+        .output(dispatchId, 'exports', request.path, request.overwrite)
+        .catch(missingParent);
+      mcpAccess.request(dispatchId);
+      return path;
+    }
+    let folder: string;
+    try {
+      folder = await mcpAccess.read(dispatchId, 'exports', request.path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      // A new folder; the encoder creates it inside its approved parent.
+      folder = await mcpAccess
+        .output(dispatchId, 'exports', request.path, false)
+        .catch(missingParent);
+      mcpAccess.request(dispatchId);
+      return folder;
+    }
+    if (!(await lstat(folder)).isDirectory())
+      throw new Error('A separate-file PNG sequence needs a folder path, not a file.');
+    if (!request.overwrite && (await readdir(folder)).length)
+      throw new Error(
+        'The output folder is not empty. Use a new or empty folder, or explicitly allow overwrite.',
+      );
+    mcpAccess.request(dispatchId);
+    return folder;
+  });
   handle('project:save', async (value, documentId, saveAs) => {
     assertProject(value);
     if (!value.source) throw new Error('Open an image before saving a project.');
@@ -911,6 +959,37 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
         height: input.source.height,
         pixels,
       },
+    });
+    const source: ImageSource = {
+      id: randomUUID(),
+      name: name.trim() + '.png',
+      width: image.width,
+      height: image.height,
+      format: 'png',
+      hasAlpha: image.hasAlpha,
+    };
+    assets.set(source.id, { source, fullPixels: image.fullPixels });
+    return { source, preview: image.preview, thumbnail: image.thumbnail };
+  });
+  // A decoded video frame (the clip's poster) becomes the project's source image.
+  handle('image:from-pixels', async (width, height, pixels, name) => {
+    if (
+      !Number.isSafeInteger(width) ||
+      !Number.isSafeInteger(height) ||
+      (width as number) < 1 ||
+      (height as number) < 1 ||
+      (width as number) > 16384 ||
+      (height as number) > 16384 ||
+      !(pixels instanceof ArrayBuffer) ||
+      pixels.byteLength !== (width as number) * (height as number) * 4 ||
+      typeof name !== 'string' ||
+      !name.trim() ||
+      name.length > 120
+    )
+      throw new Error('Invalid video frame.');
+    const image = await run<DecodedImage>({
+      action: 'prepare',
+      image: { width: width as number, height: height as number, pixels },
     });
     const source: ImageSource = {
       id: randomUUID(),
