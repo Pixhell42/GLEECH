@@ -91,6 +91,8 @@ export interface DesktopBridge {
     extension: string,
   ): Promise<Result<string | null>>;
   defaultRenderFolder(): Promise<Result<string>>;
+  /** Whether a render output file already exists (only in folders renders may use). */
+  renderOutputExists(path: string): Promise<Result<boolean>>;
   beginRender(spec: import('./render').RenderJobSpec): Promise<Result<string>>;
   renderFrame(
     jobId: string,

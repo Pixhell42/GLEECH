@@ -288,7 +288,7 @@ try {
   await dialog.getByRole('button', { name: 'Tiny', exact: false }).click();
   await dialog.getByRole('button', { name: 'Change…', exact: true }).click();
   await page.waitForFunction(
-    (path) => document.querySelector('.render-save-row output')?.textContent === path,
+    (path) => document.querySelector('.render-save-name')?.title === path,
     gifPath,
   );
   await dialog.getByRole('button', { name: 'Export GIF', exact: true }).click();
@@ -315,7 +315,7 @@ try {
   await dialog.getByRole('switch', { name: 'Put in a subfolder', exact: true }).uncheck();
   await dialog.getByRole('button', { name: 'Change…', exact: true }).click();
   await page.waitForFunction(
-    (path) => document.querySelector('.render-save-row output')?.textContent === path,
+    (path) => document.querySelector('.render-save-folder')?.title === path,
     frames,
   );
   await dialog.getByRole('button', { name: /^Render \d+ Frames$/ }).click();

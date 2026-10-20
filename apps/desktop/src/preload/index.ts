@@ -7,6 +7,7 @@ const bridge: DesktopBridge = {
   chooseRenderOutput: (kind, name, extension) =>
     ipcRenderer.invoke('render:choose-output', kind, name, extension),
   defaultRenderFolder: () => ipcRenderer.invoke('render:default-folder'),
+  renderOutputExists: (path) => ipcRenderer.invoke('render:output-exists', path),
   beginRender: (spec) => ipcRenderer.invoke('render:begin', spec),
   renderFrame: (id, frame, original) => ipcRenderer.invoke('render:frame', id, frame, original),
   finishRender: (id) => ipcRenderer.invoke('render:finish', id),

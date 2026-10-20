@@ -1,5 +1,5 @@
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { FfmpegLocator } from './ffmpeg';
 import { createRenderJobs, safeName, validateSpec } from './render-jobs';
@@ -37,6 +37,8 @@ export function registerRenderHandlers(
     const offset = relative(folder, path);
     return offset === '' || (!offset.startsWith('..') && !isAbsolute(offset));
   };
+  const approved = (folder: string) =>
+    [...approvedFolders, ...extraFolders().map(normalize)].some((entry) => inside(folder, entry));
   function assertApproved(spec: RenderJobSpec): void {
     const folderOutput =
       spec.kind === 'video' &&
@@ -45,9 +47,7 @@ export function registerRenderHandlers(
     const path = normalize(spec.outputPath);
     if (!folderOutput && !OUTPUT_EXTENSIONS.test(path))
       throw new Error('Renders can only be saved as video, GIF, WebP, PNG or PDF files.');
-    const folder = folderOutput ? path : dirname(path);
-    const approved = [...approvedFolders, ...extraFolders().map(normalize)];
-    if (!approved.some((entry) => inside(folder, entry)))
+    if (!approved(folderOutput ? path : dirname(path)))
       throw new Error('Choose where to save the render again.');
   }
   async function defaultFolder(): Promise<string> {
@@ -133,6 +133,18 @@ export function registerRenderHandlers(
     return path;
   });
   handle('render:default-folder', () => defaultFolder());
+  // Lets the Render dialog warn before a render replaces a file. Answers only
+  // for output files in folders a render may write to.
+  handle('render:output-exists', async (path) => {
+    if (typeof path !== 'string' || !isAbsolute(path) || !OUTPUT_EXTENSIONS.test(path))
+      return false;
+    if (!approved(dirname(normalize(path)))) return false;
+    try {
+      return (await stat(path)).isFile();
+    } catch {
+      return false;
+    }
+  });
   handle('render:begin', async (value) => {
     const spec = validateSpec(value);
     // The default folder is always allowed, even if the dialog never asked for it.

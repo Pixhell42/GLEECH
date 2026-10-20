@@ -54,7 +54,10 @@ import type { RenderRequest } from './render-queue';
 import {
   audibleTrack,
   buildRenderRequest,
+  defaultOutputStem,
+  fileNameInput,
   loopAudioAvailable,
+  outputStem,
   renderSourceSize,
   separateClipSound,
   videoAudioActive,
@@ -154,19 +157,10 @@ function sizeRange(low: number, high: number): string {
   const unit = to.split(' ')[1];
   return from.split(' ')[1] === unit ? `${from.split(' ')[0]}–${to}` : `${from} – ${to}`;
 }
-function baseName(name: string): string {
-  return (
-    name
-      .replace(/\.[a-z0-9]{2,5}$/i, '')
-      .replace(/[\\/:*?"<>|]+/g, '_')
-      .trim() || 'GLEECH'
-  );
-}
-function withExtension(path: string, extension: string): string {
-  if (!extension) return path.replace(/\.[a-z0-9]{2,5}$/i, '');
-  return /\.[a-z0-9]{2,5}$/i.test(path)
-    ? path.replace(/\.[a-z0-9]{2,5}$/i, `.${extension}`)
-    : `${path}.${extension}`;
+/** Splits a chosen path into its folder and file name. */
+function splitPath(path: string): { folder: string; file: string } {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return { folder: path.slice(0, cut), file: path.slice(cut + 1) };
 }
 
 function Segmented<T extends string | number>({
@@ -405,6 +399,7 @@ function FramingDiagram({
 export function RenderDialog({
   initialTab,
   project,
+  projectFile,
   timeline,
   frame,
   preview,
@@ -416,6 +411,8 @@ export function RenderDialog({
 }: {
   initialTab: RenderTab;
   project: ProjectState;
+  /** The saved project's file name ("Name.gleech"), or null when unsaved. */
+  projectFile: string | null;
   timeline: Timeline;
   frame: number;
   preview: string | null;
@@ -437,7 +434,9 @@ export function RenderDialog({
   const [gif, setGif] = useState<GifRenderSettings>(() => memory.gif ?? defaultGifSettings());
   const [rangeKind, setRangeKind] = useState<RangeKind>(timeline.workArea ? 'work' : 'whole');
   const [folder, setFolder] = useState<string | null>(memory.outputFolder);
-  const [chosen, setChosen] = useState<{ tab: RenderTab; path: string } | null>(null);
+  // File names typed (or picked with Change…) per tab; otherwise the default.
+  const [names, setNames] = useState<Partial<Record<RenderTab, string>>>({});
+  const [existing, setExisting] = useState<string | null>(null);
   const [ffmpeg, setFfmpeg] = useState<FfmpegStatus | null>(null);
   const [aspectLock, setAspectLock] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -466,7 +465,6 @@ export function RenderDialog({
 
   const range = useMemo(() => renderRange(rangeKind, timeline), [rangeKind, timeline]);
   const seconds = Math.max(0, range.end - range.start);
-  const name = baseName(project.name);
   const separator = window.gleech.platform === 'win32' ? '\\' : '/';
   const resolved = resolveVideoOutput(video);
   const videoTimes = useMemo(
@@ -475,17 +473,43 @@ export function RenderDialog({
   );
   const extension = tab === 'video' ? resolved.extension : gifOutputExtension(gif);
   const sequenceFolder = tab === 'video' && resolved.kind === 'files';
-  const defaultPath = folder
-    ? sequenceFolder
-      ? folder
-      : `${folder}${separator}${name}_gleech${tab === 'gif' ? '_loop' : ''}.${extension}`
-    : null;
+  const defaultName = defaultOutputStem(
+    projectFile,
+    project.name,
+    sequenceFolder ? '' : tab === 'gif' ? '_gleech_loop' : '_gleech',
+  );
+  const typedName = names[tab];
+  const stem = typedName === undefined ? defaultName : outputStem(typedName);
   const outputPath =
-    chosen?.tab === tab && chosen.path
-      ? sequenceFolder
-        ? chosen.path
-        : withExtension(chosen.path, extension)
-      : defaultPath;
+    folder && stem ? (sequenceFolder ? folder : `${folder}${separator}${stem}.${extension}`) : null;
+  // Where the files land, shown under the name: sequences may add a subfolder.
+  const destination =
+    folder && sequenceFolder && video.sequence.subfolder && stem
+      ? `${folder}${separator}${stem}_frames`
+      : folder;
+  const nameSuffix = sequenceFolder
+    ? `${video.overlay.enabled ? '_fx' : ''}_${'1'.padStart(Math.max(4, String(videoTimes.length).length), '0')}.png`
+    : `.${extension}`;
+  // The full path of the file (or first frame) the render writes.
+  const savedAs = sequenceFolder
+    ? destination && stem && `${destination}${separator}${stem}${nameSuffix}`
+    : outputPath;
+
+  // Warn before a render replaces a file. Checked after typing pauses.
+  useEffect(() => {
+    if (!outputPath || sequenceFolder) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void window.gleech.renderOutputExists(outputPath).then((result) => {
+        if (active) setExisting(result.ok && result.value ? outputPath : null);
+      });
+    }, 200);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [outputPath, sequenceFolder]);
+  const replacesFile = !sequenceFolder && outputPath !== null && existing === outputPath;
 
   const hasTrack = Boolean(timeline.audio);
   // When the audio track is the clip's own sound, there is only one source.
@@ -567,6 +591,7 @@ export function RenderDialog({
         range,
         outputPath,
         videoMediaId,
+        ...(sequenceFolder ? { name: stem } : {}),
       });
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not prepare this render.');
@@ -640,8 +665,8 @@ export function RenderDialog({
           ))}
         </div>
         <span className="render-context">
-          {name} · {Number(timeline.fps.toFixed(3))} fps ·{' '}
-          {shortTime(timeline.duration).replace(/\.0$/, '')}
+          {defaultOutputStem(projectFile, project.name, '')} · {Number(timeline.fps.toFixed(3))} fps
+          · {shortTime(timeline.duration).replace(/\.0$/, '')}
         </span>
         <button type="button" className="render-close" aria-label="Close" onClick={onClose}>
           <CloseIcon />
@@ -722,19 +747,49 @@ export function RenderDialog({
           <div className="render-save">
             <h3>Save to</h3>
             <div className="render-save-row">
-              <output title={outputPath ?? ''}>{outputPath ?? 'Choosing a folder…'}</output>
+              <label className="render-save-name" title={savedAs ?? undefined}>
+                <input
+                  type="text"
+                  aria-label="File name"
+                  value={typedName ?? defaultName}
+                  placeholder={defaultName}
+                  maxLength={80}
+                  spellCheck={false}
+                  onChange={(event) =>
+                    setNames((previous) => ({
+                      ...previous,
+                      [tab]: fileNameInput(event.target.value),
+                    }))
+                  }
+                  onBlur={() =>
+                    setNames((previous) => {
+                      const typed = previous[tab];
+                      if (typed === undefined) return previous;
+                      // An empty name goes back to the default.
+                      const next = { ...previous };
+                      if (outputStem(typed)) next[tab] = outputStem(typed);
+                      else delete next[tab];
+                      return next;
+                    })
+                  }
+                />
+                <span className="render-save-extension">{nameSuffix}</span>
+              </label>
               <button
                 type="button"
                 onClick={() =>
                   void window.gleech
-                    .chooseRenderOutput(
-                      sequenceFolder ? 'folder' : 'file',
-                      `${name}_gleech${tab === 'gif' ? '_loop' : ''}`,
-                      extension,
-                    )
+                    .chooseRenderOutput(sequenceFolder ? 'folder' : 'file', stem, extension)
                     .then(unwrap)
                     .then((path) => {
-                      if (path) setChosen({ tab, path });
+                      if (!path) return;
+                      if (sequenceFolder) {
+                        setFolder(path);
+                        return;
+                      }
+                      const chosen = splitPath(path);
+                      setFolder(chosen.folder);
+                      setNames((previous) => ({ ...previous, [tab]: outputStem(chosen.file) }));
                     })
                     .catch((failure) =>
                       setError(
@@ -746,6 +801,14 @@ export function RenderDialog({
                 Change…
               </button>
             </div>
+            <output className="render-save-folder" title={destination ?? undefined}>
+              <span>{destination ?? 'Choosing a folder…'}</span>
+            </output>
+            {replacesFile && (
+              <p className="render-save-note">
+                A file with this name exists. Rendering replaces it.
+              </p>
+            )}
           </div>
         </aside>
         <div className="render-main">
@@ -1092,7 +1155,10 @@ export function RenderDialog({
                   {video.sequence.kind === 'files' && (
                     <>
                       <Row label="File names">
-                        <span className="render-mono">{name}_####.png</span>
+                        <span className="render-mono">
+                          {stem || defaultName}
+                          {video.overlay.enabled ? '_fx' : ''}_####.png
+                        </span>
                       </Row>
                       <Row label="Color depth">
                         <Segmented<8 | 16>

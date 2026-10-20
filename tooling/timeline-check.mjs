@@ -1,7 +1,7 @@
 // End-to-end check of Timeline mode: keyframes, playback, seeds, ranges,
 // renders (GIF, PNG sequence, MP4 when ffmpeg is available) and project reload.
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
@@ -53,6 +53,17 @@ try {
     app.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
     }, path);
+  // The Render dialog's Save to box: the file it writes, or the frames folder.
+  const savesTo = (path) =>
+    page.waitForFunction(
+      (path) => document.querySelector('.render-save-name')?.title === path,
+      path,
+    );
+  const framesGoTo = (path) =>
+    page.waitForFunction(
+      (path) => document.querySelector('.render-save-folder')?.title === path,
+      path,
+    );
 
   await page.getByRole('button', { name: 'Try sample image', exact: true }).click();
   await page.locator('.image-layer:not([hidden])').waitFor();
@@ -200,10 +211,7 @@ try {
   await dialog.waitFor();
   await dialog.getByRole('radio', { name: 'In / Out', exact: true }).click();
   await dialog.getByRole('button', { name: 'Change…', exact: true }).click();
-  await page.waitForFunction(
-    (path) => document.querySelector('.render-save-row output')?.textContent === path,
-    gifPath,
-  );
+  await savesTo(gifPath);
   const status = await page.evaluate(() => window.gleech.renderStatus(true));
   const ffmpeg = status.ok && status.value.available;
   if (ffmpeg) {
@@ -230,10 +238,7 @@ try {
   await dialog.getByRole('radio', { name: '8-bit', exact: true }).click();
   await dialog.getByRole('switch', { name: 'Put in a subfolder', exact: true }).uncheck();
   await dialog.getByRole('button', { name: 'Change…', exact: true }).click();
-  await page.waitForFunction(
-    (path) => document.querySelector('.render-save-row output')?.textContent === path,
-    sequence,
-  );
+  await framesGoTo(sequence);
   await dialog.getByRole('button', { name: /^Render \d+ Frames$/ }).click();
   await page.locator('.render-job[data-status="done"]').waitFor({ timeout: 240000 });
   const pngs = (await readdir(sequence)).filter((name) => name.endsWith('.png'));
@@ -253,10 +258,7 @@ try {
     await dialog.getByRole('radio', { name: 'Movie file', exact: true }).click();
     await dialog.getByRole('button', { name: 'Half-res Draft', exact: false }).click();
     await dialog.getByRole('button', { name: 'Change…', exact: true }).click();
-    await page.waitForFunction(
-      (path) => document.querySelector('.render-save-row output')?.textContent === path,
-      moviePath,
-    );
+    await savesTo(moviePath);
     await dialog.getByRole('button', { name: 'Render Video', exact: true }).click();
     await page.locator('.render-job[data-status="done"]').waitFor({ timeout: 240000 });
     const movie = await readFile(moviePath);
@@ -278,6 +280,56 @@ try {
   await page.locator('.timeline-dock').waitFor();
   assert.equal(await page.locator('.lane-key').count(), 2);
   assert.match(await page.getByRole('button', { name: 'Seed mode' }).textContent(), /Every 2/);
+
+  // Renders are named after the saved project, and the name can be typed.
+  await page.keyboard.press('Control+Shift+G');
+  await dialog.waitFor();
+  const fileName = dialog.getByRole('textbox', { name: 'File name', exact: true });
+  assert.equal(await fileName.inputValue(), 'timeline');
+  await stubSave(join(renders, 'picked.gif'));
+  await dialog.getByRole('button', { name: 'Change…', exact: true }).click();
+  await savesTo(join(renders, 'picked.gif'));
+  assert.equal(await fileName.inputValue(), 'picked');
+  const replaceNote = dialog.locator('.render-save-note');
+  await writeFile(join(renders, 'taken.gif'), 'not a render');
+  await fileName.fill('taken');
+  await savesTo(join(renders, 'taken.gif'));
+  await replaceNote.waitFor();
+  await fileName.fill('fresh / name');
+  assert.equal(await fileName.inputValue(), 'fresh  name');
+  await savesTo(join(renders, 'fresh  name.gif'));
+  await replaceNote.waitFor({ state: 'detached' });
+  // An emptied name goes back to the project's.
+  await fileName.fill('');
+  await fileName.press('Tab');
+  assert.equal(await fileName.inputValue(), 'timeline');
+  await savesTo(join(renders, 'timeline.gif'));
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  // A typed name also names image-sequence frames and their subfolder.
+  while (await page.locator('.render-job').count())
+    await page
+      .locator('.render-job')
+      .first()
+      .getByRole('button', { name: /^Dismiss/ })
+      .click();
+  const named = await mkdtemp(join(renders, 'named-'));
+  await stubFolder(named);
+  await page.keyboard.press('Control+Shift+R');
+  await dialog.waitFor();
+  await dialog.getByRole('radio', { name: 'In / Out', exact: true }).click();
+  await dialog.getByRole('radio', { name: 'Image sequence', exact: true }).click();
+  await dialog.getByRole('switch', { name: 'Put in a subfolder', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Change…', exact: true }).click();
+  await fileName.fill('shot 4');
+  await framesGoTo(join(named, 'shot 4_frames'));
+  await dialog.getByRole('button', { name: /^Render \d+ Frames$/ }).click();
+  await page.locator('.render-job[data-status="done"]').waitFor({ timeout: 240000 });
+  const shots = (await readdir(join(named, 'shot 4_frames'))).filter((name) =>
+    name.endsWith('.png'),
+  );
+  assert.equal(shots.length, 21, `named frames ${shots.join(', ')}`);
+  assert.ok(shots.includes('shot 4_0001.png'), `named frames ${shots.join(', ')}`);
 
   assert.deepEqual(errors, []);
   console.log('Timeline check passed');

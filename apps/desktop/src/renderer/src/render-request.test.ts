@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createProject, createTimeline, type Timeline } from '@gleech/project-model';
 import { defaultGifSettings, defaultVideoSettings } from '../../shared/render-presets';
 import type { VideoRenderSettings } from '../../shared/render';
-import { buildRenderRequest, videoAudioActive, videoAudioSources } from './render-request';
+import {
+  buildRenderRequest,
+  defaultOutputStem,
+  fileNameInput,
+  outputStem,
+  videoAudioActive,
+  videoAudioSources,
+} from './render-request';
 
 const clipPath = 'C:/clips/clip.mp4';
 const video = {
@@ -84,5 +91,57 @@ describe('render audio sources', () => {
     // Mixing still keeps the clip sound.
     expect(videoAudioActive(settings('mix'), timeline)).toBe(true);
     expect(request(timeline, 'mix').clipAudio).toEqual({ path: clipPath, start: 1, duration: 2 });
+  });
+});
+
+describe('render output names', () => {
+  it('names renders after the saved project file', () => {
+    expect(defaultOutputStem('Skate Night.gleech', 'photo.png', '_gleech')).toBe('Skate Night');
+    expect(defaultOutputStem('Skate Night.gleech', 'photo.png', '_gleech_loop')).toBe(
+      'Skate Night',
+    );
+  });
+
+  it('falls back to the project name when the project is unsaved', () => {
+    expect(defaultOutputStem(null, 'photo.png', '_gleech')).toBe('photo_gleech');
+    expect(defaultOutputStem(null, 'photo.png', '_gleech_loop')).toBe('photo_gleech_loop');
+    expect(defaultOutputStem(null, 'photo.png', '')).toBe('photo');
+  });
+
+  it('cleans typed names', () => {
+    expect(fileNameInput('a/b\\c:d*e?f"g<h>i|j\u0001k')).toBe('abcdefghijk');
+    expect(outputStem('  final cut.mp4 ')).toBe('final cut');
+    expect(outputStem('v1.2 take')).toBe('v1.2 take');
+    expect(outputStem('...')).toBe('');
+    expect(outputStem('con')).toBe('con_');
+    expect(outputStem('x'.repeat(100))).toHaveLength(80);
+  });
+
+  it('uses the typed name for image-sequence frames', () => {
+    const timeline = { ...createTimeline() };
+    const project = { ...createProject('Audio'), timeline };
+    const base = defaultVideoSettings({ width: 64, height: 36, fps: 30 });
+    const built = buildRenderRequest({
+      tab: 'video',
+      video: { ...base, output: 'sequence', sequence: { ...base.sequence, kind: 'files' } },
+      gif: defaultGifSettings(),
+      project: {
+        ...project,
+        source: {
+          id: 's',
+          name: 's.png',
+          width: 64,
+          height: 36,
+          format: 'png' as const,
+          hasAlpha: false,
+        },
+      },
+      timeline,
+      range: { start: 0, end: 1 },
+      outputPath: 'C:/out',
+      videoMediaId: null,
+      name: 'shot 4',
+    });
+    expect(built.spec.name).toBe('shot 4');
   });
 });

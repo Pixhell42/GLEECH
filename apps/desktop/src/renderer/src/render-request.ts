@@ -36,6 +36,42 @@ export function projectBaseName(name: string): string {
   );
 }
 
+/** Matches the main process's limit for frame and folder names. */
+const STEM_LIMIT = 80;
+const OUTPUT_EXTENSION = /\.(gleech|mp4|mov|mkv|webm|gif|webp|png|apng|pdf)$/i;
+
+/** Drops characters a file name can't contain, as the user types. */
+export function fileNameInput(text: string): string {
+  return Array.from(text)
+    .filter((character) => character.charCodeAt(0) >= 32 && !'<>:"/\\|?*'.includes(character))
+    .join('');
+}
+
+/** A typed or file name as a render name: no extension, safe on every platform. */
+export function outputStem(name: string): string {
+  const stem = fileNameInput(name)
+    .trim()
+    .replace(OUTPUT_EXTENSION, '')
+    .replace(/^[\s.]+/, '')
+    .slice(0, STEM_LIMIT)
+    .replace(/[\s.]+$/, '');
+  return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(stem) ? `${stem}_` : stem;
+}
+
+/**
+ * The name a render starts with: the saved project file's name, else the
+ * project name plus `suffix` ("_gleech" for movies, "_gleech_loop" for loops).
+ */
+export function defaultOutputStem(
+  projectFile: string | null,
+  projectName: string,
+  suffix: string,
+): string {
+  return (
+    (projectFile && outputStem(projectFile)) || outputStem(projectBaseName(projectName) + suffix)
+  );
+}
+
 /** The clip's own sound as a source separate from the audio track. */
 export function separateClipSound(timeline: Timeline): boolean {
   return Boolean(timeline.video?.hasAudio) && !audioIsClipSound(timeline);
@@ -116,6 +152,8 @@ export function buildRenderRequest(input: {
   range: Pick<RenderRange, 'start' | 'end'>;
   outputPath: string;
   videoMediaId: string | null;
+  /** Names image-sequence frames and their subfolder; defaults to the project name. */
+  name?: string;
 }): RenderRequest {
   const { tab, video, gif, project, timeline, range, outputPath, videoMediaId } = input;
   if (!(range.end > range.start)) throw new Error('The render range is empty.');
@@ -125,7 +163,7 @@ export function buildRenderRequest(input: {
       'The video clip is offline or still loading. Add it again from the Tracks menu.',
     );
   const label = outputPath.split(/[\\/]/).pop() || outputPath;
-  const name = projectBaseName(project.name);
+  const name = input.name || projectBaseName(project.name);
   const sourceSize = renderSourceSize(project);
   const media = videoMediaId && clip ? { videoMediaId } : {};
   if (tab === 'video') {

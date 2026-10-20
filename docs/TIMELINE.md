@@ -139,9 +139,13 @@ Render Video… (Ctrl+Shift+R) and Export GIF… (Ctrl+Shift+G) in the Export me
 and the timeline's Render Video button, open one dialog with two tabs. The left
 column shows the frame at the playhead, the range (work area, whole timeline or
 In/Out, set with I and O), a live summary with the estimated file size and the
-save location. Renders run in the background with their own GPU worker, so you
-can keep editing; the queue at the bottom right shows progress, Cancel and Show
-in folder. **Add to Queue** keeps the dialog open for another output.
+save location. Renders are named after the saved project file (an unsaved
+project uses its name plus `_gleech`); type a different name in the Save to box,
+or pick a folder and name with **Change…**. For image sequences the name also
+names the frames and their subfolder. The box warns when a render would replace
+a file. Renders run in the background with their own GPU worker, so you can keep
+editing; the queue at the bottom right shows progress, Cancel and Show in
+folder. **Add to Queue** keeps the dialog open for another output.
 
 **Video** presets set size, codec, compression and audio: 8K and 4K UHD (HEVC),
 2K Master, 1080p Social, Vertical 9:16, Half-res Draft, Edit Master and 4K Edit

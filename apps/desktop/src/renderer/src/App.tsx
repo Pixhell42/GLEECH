@@ -4257,6 +4257,7 @@ export function App() {
         <RenderDialog
           initialTab={renderDialog}
           project={project}
+          projectFile={document?.name ?? null}
           timeline={project.timeline}
           frame={frame}
           preview={renderPreview}
