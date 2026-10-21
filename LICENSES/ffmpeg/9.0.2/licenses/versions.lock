@@ -1,0 +1,650 @@
+# ---------------------------------------------------------------------------
+# versions.lock -- THE single source of truth for every pinned input.
+#
+# Format: plain `KEY=value` shell assignments. No command substitution, no
+# expansion of other variables, so this file is equally parseable from bash
+# (`sed -n 's/^KEY=//p'`), PowerShell, Python and GitHub Actions -- the same
+# contract nelux's own tools/ffmpeg.lock already uses, on purpose.
+# scripts/lib/common.sh load_lock() validates the whole file against that
+# grammar before sourcing it.
+#
+# Every third-party source is pinned by BOTH a human-readable tag AND an
+# immutable commit SHA (or, for FFmpeg, a tarball SHA256). The build scripts
+# verify the SHA after fetching and abort on mismatch -- a moved tag is a
+# build failure, not a silent substitution.
+#
+# To bump anything: edit ONLY this file, then run
+#     ./scripts/fetch-sources.sh    (fails loudly if a tag moved or a hash changed)
+#     ./scripts/validate-flags.sh   (fails if a new FFmpeg renamed a component)
+# and open a PR. Nothing else in the repo hardcodes a version.
+#
+# Last verified: 2026-08-04
+# ---------------------------------------------------------------------------
+
+# ===========================================================================
+# FFmpeg
+# ===========================================================================
+# Release tarball is the primary source (deterministic, no git needed).
+# The git tag/commit are recorded so the exact tree can be reconstructed and
+# so `git describe` inside the source archive is meaningful.
+FFMPEG_VERSION=9.0.2
+FFMPEG_TAG=n9.0.2
+# `git rev-parse n9.0.2^{}` -- the commit the annotated tag points at.
+FFMPEG_COMMIT=946fcce07b6dcd0331c8cc609192aeff5e1924f8
+# The annotated tag object itself, from `git ls-remote` against the GitHub
+# mirror on 2026-10-04.
+FFMPEG_TAG_OBJECT=ce8f11b9fac4cd7ccfb41ca7c01bc17f5cda8cc3
+FFMPEG_URL=https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+# VERIFIED: computed locally with sha256sum on the file downloaded from
+# ffmpeg.org on 2026-10-04 (12,040,788 bytes). The detached signature
+# verified "Good signature" against FCF986EA...D67658D8 the same day.
+# NOTE: ffmpeg.org publishes .asc (PGP) signatures, NOT .sha256 files -- there
+# is no upstream SHA256 to cross-check against. scripts/fetch.sh therefore
+# ALSO verifies ffmpeg-9.0.2.tar.xz.asc against the FFmpeg release key when
+# gpg is available. Treat the SHA256 below as "pinned by us", and the PGP
+# signature as the upstream trust root.
+FFMPEG_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+FFMPEG_SIG_URL=https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz.asc
+# FFmpeg release signing key fingerprint (Michael Niedermayer).
+FFMPEG_GPG_FPR=FCF986EA15E6E293A5644F10B4322F04D67658D8
+
+# SONAME majors produced by this FFmpeg. Asserted by scripts/verify-output.sh
+# after every build: if one of these changes, downstream consumers that
+# hardcode a DLL/so name break, so the build must fail loudly.
+# Read from lib*/version_major.h (libavutil/version.h for avutil) in the
+# 9.0.2 tarball. Every major moved from 8.1.2 -- 9.0 is an ABI break.
+SONAME_AVCODEC=63
+SONAME_AVDEVICE=63
+SONAME_AVFILTER=12
+SONAME_AVFORMAT=63
+SONAME_AVUTIL=61
+SONAME_SWRESAMPLE=7
+SONAME_SWSCALE=10
+
+# ===========================================================================
+# nv-codec-headers (NVENC / NVDEC / CUVID stub headers)
+# ===========================================================================
+# *** THIS SINGLE VARIABLE SETS THE MINIMUM NVIDIA DRIVER VERSION FOR EVERY
+# *** NVENC/NVDEC FEATURE IN THIS BUILD. See README.md#nvidia-driver-floor.
+#
+#   n11.1.5.3   -> Linux >= 470.57.02 / Windows >= 471.41
+#   n12.1.14.0  -> Linux >= 530.41.03 / Windows >= 531.61   <-- CHOSEN
+#   n13.0.19.0  -> Linux >= 570.0     / Windows >= 570.0
+#
+# ffmpeg-9.0.2/configure:7214-7216 accepts, in order of preference:
+#   ffnvcodec >= 12.1.14.0            (unbounded upper -- 13.x also matches)
+#   ffnvcodec >= 12.0.16.1  < 12.1
+#   ffnvcodec >= 11.1.5.3   < 12.0
+# (9.0 dropped the 11.0.x and 8.1.x brackets 8.1.2 still accepted.)
+#
+# We choose n12.1.14.0: it is the lowest version in FFmpeg's *preferred*
+# bracket, so we get every NVENC/NVDEC feature FFmpeg 9.0.2 knows how to use
+# (incl. AV1 NVENC, which needs >= 12.0), while keeping the driver floor at
+# 531.61 (Mar 2023) instead of 570.x (Jan 2025). Bumping to n13.0.19.0 would
+# cut off every user on a 2023-2024 driver for no feature nelux or TAS uses.
+NVCODEC_TAG=n12.1.14.0
+NVCODEC_COMMIT=1889e62e2d35ff7aa9baca2bceb14f053785e6f1
+NVCODEC_REPO=https://github.com/FFmpeg/nv-codec-headers.git
+NVCODEC_DRIVER_MIN_LINUX=530.41.03
+NVCODEC_DRIVER_MIN_WINDOWS=531.61
+
+# ===========================================================================
+# GPL video encoders
+# ===========================================================================
+# x264 has no release tags upstream; upstream ships `stable` and `master`
+# branches only. We pin the exact commit. As of 2026-08-04 `master` and the
+# `GPLv2-only` branch both point at 0480cb05 (committed 2025-09-10) and
+# `stable` at b35605ac (2025-06-08). We take master: FFmpeg 9.0.2
+# configure:7493-7498 wants X264_BUILD >= 155 (>= 158 without --enable-gpl
+# path variations, >= 163 for HDR10 signalling); master satisfies all three,
+# `stable` predates some of the HDR10 work.
+# LICENSE: GPL-2.0 (COPYING is the plain GPLv2 text). See README.md#version3.
+X264_TAG=master@2025-09-10
+X264_COMMIT=0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee
+X264_REPO=https://code.videolan.org/videolan/x264.git
+
+# x265 canonical repo is Bitbucket (the github.com/videolan/x265 mirror is
+# abandoned at 3.4 and MUST NOT be used).
+# 4.2 is the newest release tag. configure:7499-7500 needs X265_BUILD >= 89;
+# 4.2 is build 215.
+# SIZE WARNING: multilib (8+10+12 bit) x265 is ~22.7 MB of the Windows
+# avcodec -- the single largest line item. It stays: both consumers use
+# 10-bit (TAS presets x265_10bit/hevc_nvenc_10bit/hevc_amf_10bit/
+# qsv_h265_10bit; nelux's 10-bit pixel-format tests). See docs/SIZES.md.
+X265_TAG=4.2
+X265_COMMIT=e444744c03978c1fb4e037168967020cf2648427
+X265_REPO=https://bitbucket.org/multicoreware/x265_git.git
+
+# ===========================================================================
+# AV1
+# ===========================================================================
+# dav1d -- the fast AV1 *decoder*. nelux's decoder preference chain tries
+# libdav1d first (src/Nelux/backends/Decoder.cpp).
+# configure:7334 requires dav1d >= 1.0.0.
+DAV1D_TAG=1.5.4
+DAV1D_COMMIT=54706fc6bc0cdecab7e9593974a4039cc038fca7
+DAV1D_REPO=https://code.videolan.org/videolan/dav1d.git
+
+# SVT-AV1 -- the fast AV1 *encoder*. Upstream moved to gitlab.com; the
+# github.com/AOMediaCodec/SVT-AV1 mirror has no tags and must not be used.
+# configure:7443 requires SvtAv1Enc >= 0.9.0.
+SVTAV1_TAG=v4.2.0
+SVTAV1_COMMIT=9292ec8e32bce26f781f277ec8739b53426c4300
+SVTAV1_REPO=https://gitlab.com/AOMediaCodec/SVT-AV1.git
+
+# libaom -- reference AV1 codec. Kept for `libaom-av1` (nelux tests it, and
+# it is 2nd in nelux's decoder preference chain after libdav1d).
+# configure:7321 requires aom >= 2.0.0.
+# SHA is the *peeled* commit (refs/tags/v3.14.1^{}).
+AOM_TAG=v3.14.1
+AOM_COMMIT=03087864cf4bea6abb0d28f95cf7843511413d8f
+AOM_REPO=https://aomedia.googlesource.com/aom
+
+# ===========================================================================
+# VP8/VP9
+# ===========================================================================
+# configure:7469-7481 requires vpx >= 1.4.0.
+VPX_TAG=v1.16.0
+VPX_COMMIT=1024874c5919305883187e2953de8fcb4c3d7fa6
+VPX_REPO=https://github.com/webmproject/libvpx.git
+
+# ===========================================================================
+# Quality metrics
+# ===========================================================================
+# libvmaf backs the `libvmaf` FILTER. This is a TEST requirement, not a
+# benchmark nicety: Nelux/tests/test_software_encoders.py is a real pytest
+# module whose quality gate at :181 runs
+#     [0:v][1:v]libvmaf=feature='name=psnr|name=float_ssim'
+# and RAISES at :198 if it fails. It pytest.skip()s only when ffmpeg/ffprobe
+# are missing (:171,:221) -- a missing libvmaf filter is a FAILURE.
+# configure:7458 requires pkg-config "libvmaf >= 2.0.0".
+# The meson project lives in the repo's libvmaf/ subdirectory. Built with
+# -Denable_float=true (needed by the float_ssim feature the test asks for)
+# and built_in_models left at its default, so no runtime .json model files
+# have to ship.
+# LICENSE: BSD-2-Clause-Patent.
+VMAF_TAG=v3.2.0
+VMAF_COMMIT=3f9e02af258a5c0e30124fc585a3c3af90126dee
+VMAF_REPO=https://github.com/Netflix/vmaf.git
+
+# ===========================================================================
+# Audio
+# ===========================================================================
+# libopus -- TAS muxes Opus audio (src/io/ffmpegSettings.py).
+# configure:7419 has no version floor, but opus_multistream_surround_encoder_create
+# needs >= 1.1.
+OPUS_TAG=v1.6.1
+OPUS_COMMIT=22244de5a79bd1d6d623c32e72bf1954b56235be
+OPUS_REPO=https://github.com/xiph/opus.git
+
+# --- MP3 and Vorbis: SAFETY NET, not a consumer requirement -----------------
+# Neither is named by nelux, TheAnimeScripter, TAS-Standalone or
+# TAS-AdobeEdition. Both are here because they close a gap a user can walk
+# into through free text:
+#   * TAS-Standalone's `custom_encoder` is an unvalidated text field
+#     (src/shared/schema.ts:462 -> buildArgs.ts:102-107 -> the backend's
+#     ffmpegSettings.py:825 whitespace split), so `-c:a libmp3lame` reaches
+#     the command line verbatim;
+#   * WITHOUT libmp3lame there is NO MP3 ENCODER AT ALL on Linux and macOS.
+#     Windows happens to have `mp3_mf` from MediaFoundation, which is exactly
+#     the kind of platform asymmetry this repo exists to remove.
+#   * FFmpeg's NATIVE `vorbis` encoder is marked experimental and refuses to
+#     open without `-strict -2`, so "the codec exists" was never the same as
+#     "a user can encode Vorbis".
+# libmp3lame also changes what av_guess_codec() returns for matroska (mp3
+# rather than ac3), which nelux's audio passthrough consults at
+# Nelux/src/Nelux/backends/Encoder.cpp:390.
+#
+# LAME has no git upstream, so this one is a verified tarball.
+# LICENSE: LGPL-2.1-or-later. configure:7398 does a plain `require`, NOT
+# pkg-config -- LAME installs no .pc file.
+LAME_VERSION=3.100
+LAME_URL=https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz,https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz/download
+LAME_SHA256=ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e
+
+# libogg is not optional for libvorbis: vorbis's configure takes --with-ogg
+# and vorbis.pc lists ogg in Requires.private.
+# LICENSE: BSD-3-Clause.
+OGG_TAG=v1.3.6
+OGG_COMMIT=be05b13e98b048f0b5a0f5fa8ce514d56db5f822
+OGG_REPO=https://github.com/xiph/ogg.git
+
+# LICENSE: BSD-3-Clause. configure:7462-7463 requires pkg-config vorbis + vorbisenc.
+VORBIS_TAG=v1.3.7
+VORBIS_COMMIT=0657aee69dec8508a0011f47f3b69d7538e9d262
+VORBIS_REPO=https://github.com/xiph/vorbis.git
+
+# ===========================================================================
+# Scaling / colour
+# ===========================================================================
+# libzimg -- backs the `zscale` filter, which TAS uses for colour-managed
+# scaling (src/io/ffmpegSettings.py:~797). Required by TAS; shipped for both.
+# configure:7508 requires zimg >= 2.7.0.
+ZIMG_TAG=release-3.0.6
+ZIMG_COMMIT=f819b14e8f39d1282400b0d9543e8ef73c1b2bbd
+ZIMG_REPO=https://github.com/sekrit-twc/zimg.git
+
+# ===========================================================================
+# Images -- SAFETY NET
+# ===========================================================================
+# There is no WebP encoder in FFmpeg without libwebp (decode is native, and
+# works today). Nothing in the four consumer repos asks for it; it is here
+# for the same free-text reason as libmp3lame above, and because WebP is a
+# thumbnail format both front-ends already recognise as INPUT
+# (TAS-Standalone src/main/media.ts:19-41, TAS-AdobeEdition
+# MediaBrowserTab.tsx:117-121) while being unable to produce it.
+# libwebpmux is built too: configure gates the libwebp_anim encoder on
+# `libwebpmux >= 0.4.0`, and without it animated WebP silently disappears.
+# LICENSE: BSD-3-Clause.
+WEBP_TAG=v1.6.0
+WEBP_COMMIT=4fa21912338357f89e4fd51cf2368325b59e9bd9
+WEBP_REPO=https://github.com/webmproject/libwebp.git
+
+# ===========================================================================
+# Text rendering -- SAFETY NET (subtitle BURN-IN and drawtext)
+# ===========================================================================
+# READ THIS FIRST, because it is easy to add for the wrong reason:
+# subtitle PASSTHROUGH and subtitle TRANSCODE need NONE of these. mov_text,
+# webvtt, ass, subrip and text are native FFmpeg codecs, which is what
+# TheAnimeScripter uses (-c:s webvtt / -c:s mov_text, src/io/ffmpegSettings
+# .py:848-859) and what nelux uses (AV_CODEC_ID_MOV_TEXT/WEBVTT/ASS/SUBRIP/
+# TEXT, src/Nelux/backends/Encoder.cpp:522-524). Those paths work without a
+# single library below.
+#
+# What these four buy is RENDERING: the `subtitles=` and `ass` filters, which
+# BURN subtitles into the video, and `drawtext`. No consumer calls them today
+# -- they are reachable only through free text (see the LAME note above).
+#
+# Build order is load-bearing: freetype -> harfbuzz -> fribidi -> libass.
+# harfbuzz must be built WITH freetype because libass's shaper includes
+# hb-ft.h; libass then needs all three.
+#
+# fontconfig is DELIBERATELY ABSENT. It would drag in expat and gperf, and --
+# the real reason -- it resolves fonts through a system-wide config file,
+# which a relocatable archive cannot rely on. Consequence, stated plainly:
+# on Linux, `subtitles=` cannot look a font up BY NAME; it works with fonts
+# embedded in the container, with an explicit fontsdir=, and with fontfile=
+# on drawtext. Windows (DirectWrite) and macOS (CoreText) have a native font
+# provider and are unaffected.
+#
+# LICENCE NOTE -- FreeType is dual-licensed FTL or GPL-2.0-or-later. The FTL
+# is GPLv3-compatible but NOT GPLv2-compatible, so we take FreeType under its
+# GPL-2.0-or-later option, which is what keeps these binaries
+# GPL-2.0-or-later rather than forcing GPLv3. scripts/package.sh ships both
+# licence texts from the source tree. The others are permissive:
+# harfbuzz Old-MIT, FriBidi LGPL-2.1-or-later, libass ISC.
+FREETYPE_TAG=VER-2-14-3
+FREETYPE_COMMIT=0a0221a1347e2f1e07c395263540026e9a0aa7c7
+FREETYPE_REPO=https://gitlab.freedesktop.org/freetype/freetype.git
+
+HARFBUZZ_TAG=14.3.0
+HARFBUZZ_COMMIT=4c2aa804671d7276e8a0eb95da07202ead05c843
+HARFBUZZ_REPO=https://github.com/harfbuzz/harfbuzz.git
+
+FRIBIDI_TAG=v1.0.16
+FRIBIDI_COMMIT=68162babff4f39c4e2dc164a5e825af93bda9983
+FRIBIDI_REPO=https://github.com/fribidi/fribidi.git
+
+# configure:7329 requires pkg-config "libass >= 0.11.0".
+LIBASS_TAG=0.17.5
+LIBASS_COMMIT=4a05d8127f525943ebf45fdc6497c9e665947f0d
+LIBASS_REPO=https://github.com/libass/libass.git
+
+# ===========================================================================
+# TLS -- LINUX ONLY (Windows uses Schannel, macOS SecureTransport)
+# ===========================================================================
+# READ THIS BEFORE "SIMPLIFYING" TO LibreSSL OR OpenSSL.
+#
+# ffmpeg-9.0.2/configure hard-rejects every other backend in a GPL build:
+#   :7449-7450  libtls  -> die "ERROR: LibreSSL is incompatible with the gpl"
+#   :7552       openssl >= 3.0 -> die "requires --enable-version3"
+#   :7553       openssl <  3.0 -> die "is incompatible with the gpl"
+#   :2051-2060  mbedtls is in EXTERNAL_LIBRARY_VERSION3_LIST -> forces GPLv3
+# GnuTLS is the ONLY remaining option: configure:7317 gates it on nothing but
+# pkg-config, and it is in neither the version3 nor the nonfree list.
+#
+# WHY WE NEED TLS AT ALL: Theanimescripter/src/ytdlp.py:184,202 point yt-dlp
+# at OUR ffmpeg via "ffmpeg_location", and TAS sets neither --downloader nor
+# hls_prefer_native, so yt-dlp's FFmpegFD fallback spawns our ffmpeg with an
+# https://...m3u8 URL for live formats. See flags/ffmpeg.linux.flags.
+#
+# All three are built STATIC from source, not taken from the manylinux image,
+# so libavformat.so acquires no new runtime .so dependency (verify-output.sh's
+# import allowlist enforces that).
+#
+# LICENCE CHAIN: gnutls LGPL-2.1-or-later; libtasn1 and libunistring are
+# vendored via --with-included-*; gmp and nettle are dual LGPLv3+/GPLv2+ and
+# we take the GPLv2+ arm, which keeps the output at GPL-2.0-or-later and does
+# NOT drag in the version3 problem --enable-version3 would.
+#
+# These are tarballs, not git: gmp is on Mercurial upstream and the GnuTLS
+# and Nettle projects publish signed release tarballs as the canonical
+# artefact. Pinned by SHA256, all three VERIFIED by downloading and hashing
+# locally on 2026-08-04.
+GMP_VERSION=6.3.0
+# ftp.gnu.org FIRST: gmplib.org was unreachable from every GitHub runner on
+# the first full CI run and took out three build legs at once. The GNU
+# mirror was verified to serve a byte-identical tarball (same SHA256).
+# mirrors.kernel.org added 2026-10-04 after ftp.gnu.org AND gmplib.org both
+# timed out from a macOS runner (run 37194952841). Same bytes: hashed, matches.
+GMP_URL=https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz,https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz,https://mirrors.kernel.org/gnu/gmp/gmp-6.3.0.tar.xz
+GMP_SHA256=a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898
+
+NETTLE_VERSION=3.10.2
+# Second mirror for the same reason as GMP above; hashed, matches.
+NETTLE_URL=https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz,https://mirrors.kernel.org/gnu/nettle/nettle-3.10.2.tar.gz
+NETTLE_SHA256=fe9ff51cb1f2abb5e65a6b8c10a92da0ab5ab6eaf26e7fc2b675c45f1fb519b5
+
+# configure:7317 has no version floor; 3.8.x is the current stable series.
+GNUTLS_VERSION=3.8.10
+GNUTLS_URL=https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.10.tar.xz,https://mirrors.dotsrc.org/gcrypt/gnutls/v3.8/gnutls-3.8.10.tar.xz
+GNUTLS_SHA256=db7fab7cce791e7727ebbef2334301c821d79a550ec55c9ef096b610b03eb6b7
+
+# ===========================================================================
+# Hardware acceleration SDKs (headers / dispatchers)
+# ===========================================================================
+# Intel oneVPL dispatcher -- provides the `vpl` pkg-config module.
+# ffmpeg-9.0.2/configure:7382-7390 does `check_pkg_config libmfx "vpl >= 2.6"`
+# and `die "ERROR: libvpl >= 2.6 not found"` -- there is NO non-pkg-config
+# fallback for --enable-libvpl, so PKG_CONFIG_PATH must point at the
+# installed vpl.pc on every platform, Windows included.
+# configure:7364-7365: `--enable-libmfx` and `--enable-libvpl` are mutually
+# exclusive and configure dies if both are given. We use libvpl only.
+# v2023.4.0 exposes VPL API 2.10 (pkg-config `vpl` >= 2.6 satisfied).
+LIBVPL_TAG=v2023.4.0
+LIBVPL_COMMIT=2274efcd3672b43297ef774f332e1fed6781381c
+LIBVPL_REPO=https://github.com/intel/libvpl.git
+
+# AMD AMF -- header-only. FFmpeg needs AMF/ from the SDK on the include path.
+# Windows + Linux only (no macOS AMF).
+AMF_TAG=v1.5.2
+AMF_COMMIT=eadd00804d5f7e5cd8c85d540073198312870776
+AMF_REPO=https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git
+
+# ---------------------------------------------------------------------------
+# Vulkan -- Windows + Linux (both arches). Not macOS: no Vulkan driver ships
+# with it, and MoltenVK has no Vulkan Video, so there is nothing to test on.
+# ---------------------------------------------------------------------------
+# NOTHING here is linked. libavutil/hwcontext_vulkan.c:650-682 dlopen()s the
+# loader at runtime (vulkan-1.dll / libvulkan.so.1) exactly like the NVIDIA
+# and AMF stubs, so a machine without Vulkan still loads FFmpeg fine and the
+# import / DT_NEEDED allowlists in scripts/verify-output.sh stay unchanged.
+#
+# All three repos are pinned to the SAME Vulkan SDK release tag, i.e. a set
+# Khronos tested together. The tags are lightweight, so _COMMIT is the tag's
+# own target (`git ls-remote`, 2026-10-04).
+#
+# Vulkan-Headers -- header-only. ffmpeg-9.0.2/configure:7804-7806 needs
+# VK_VERSION_1_3 with VK_HEADER_VERSION >= 277 (no vulkan.pc required: the
+# fallback is a plain check_cpp_condition on the include path), and
+# configure:7849-7850 enables `vulkan_1_4` -- which vp9_vulkan_hwaccel_deps
+# (configure:3547) requires -- only for VK_VERSION_1_4 with VK_HEADER_VERSION
+# >= 317. 1.4.363 clears both.
+# LICENSE: every header we compile in is SPDX "Apache-2.0 OR MIT"; we take
+# MIT, which keeps the binaries GPL-2.0-or-later.
+VULKAN_HEADERS_TAG=vulkan-sdk-1.4.363.0
+VULKAN_HEADERS_COMMIT=6802bb4733b63ed5efd3adb308a6c885ef180ea1
+VULKAN_HEADERS_REPO=https://github.com/KhronosGroup/Vulkan-Headers.git
+
+# SPIRV-Headers -- header-only. OPTIONAL to configure, which is exactly why
+# it is pinned: without it configure:7858-7861 only WARNS ("spirv-headers not
+# found, swscale SPIR-V backend unavailable") and swscale silently loses its
+# Vulkan backend (libswscale/vulkan/ops.c gates on HAVE_SPIRV_*_SPIRV_H).
+# verify-output.sh asserts HAVE_SPIRV_UNIFIED1_SPIRV_H. LICENSE: MIT-style
+# (Khronos).
+SPIRV_HEADERS_TAG=vulkan-sdk-1.4.363.0
+SPIRV_HEADERS_COMMIT=496543121ce6419f23d6fa5d7194ba66c36212d2
+SPIRV_HEADERS_REPO=https://github.com/KhronosGroup/SPIRV-Headers.git
+
+# glslang -- a HOST BUILD TOOL, not a library: nothing of it is linked. FFmpeg
+# 9.0 compiles its GLSL compute shaders to SPIR-V at BUILD time and embeds the
+# bytecode in libavcodec/libavfilter/libswscale. Without a compiler,
+# configure:7809-7831 silently disables `spirv_compiler`, and with it all 18
+# *_vulkan filters, the ffv1_vulkan/prores_ks_vulkan encoders and five Vulkan
+# hwaccels -- with NO error. `spirv_compiler` is in no list configure prints,
+# so config.h cannot prove it; the component contract (scale_vulkan,
+# ffv1_vulkan in flags/required-components.txt) does.
+# Built from source rather than taken from a package manager because (a) the
+# SPIR-V it emits ends up in the shipped libraries, so its version is part of
+# what we ship, and (b) EL8's packaged glslang predates the
+# `--glsl-version 460` / `--target-env spirv1.6` / `--depfile` flags configure
+# passes. scripts/build-ffmpeg.sh hands configure this exact binary via
+# --glslc= so a system glslc on PATH can never be picked instead.
+# Pre-flight: all 58 *.comp.glsl in ffmpeg-9.0.2 compiled cleanly with
+# configure's exact flags under glslang 16.2.0; this pin is 16.6.0.
+# LICENSE: BSD-3-Clause / Apache-2.0 / MIT mix (its own LICENSE.txt). Its
+# source is shipped in the corresponding-source archive anyway, like
+# Implib.so, because its OUTPUT is in the binaries.
+GLSLANG_TAG=vulkan-sdk-1.4.363.0
+GLSLANG_COMMIT=e1b562a8bed273a02f30b59b66a5d499793cede5
+GLSLANG_REPO=https://github.com/KhronosGroup/glslang.git
+
+# ---------------------------------------------------------------------------
+# VAAPI stack -- linux/x86_64 ONLY, and NOT linked the way it looks.
+#
+# WHY VAAPI IS IN THE BUILD AT ALL: on Linux the QSV hwcontext creates a VAAPI
+# CHILD DEVICE at runtime, so `-init_hw_device qsv` fails without vaapi
+# compiled in even though the encoders exist. h264_qsv, hevc_qsv and vp9_qsv
+# are all REQUIRED on linux/x86_64 (flags/required-components.txt:108-110,
+# 179-180), so --enable-vaapi in flags/ffmpeg.linux.flags:39 is not optional.
+# Not on aarch64: flags/ffmpeg.linux.arm64.flags:41 passes --disable-vaapi
+# because there is no aarch64 QSV runtime for it to serve.
+#
+# WHY THAT IS A PROBLEM: linking libva the ordinary way puts
+#     DT_NEEDED libva.so.2, libva-drm.so.2, libdrm.so.2
+# into libavutil.so.60. None of the three is in the manylinux_2_28 policy set,
+# so `auditwheel repair` either vendors them into nelux's wheel or rejects the
+# wheel outright, and TAS's spawned bin/ffmpeg fails to start on any machine
+# without libva installed. scripts/verify-output.sh's DT_NEEDED allowlist
+# names libva.so.2 explicitly as something that must never appear, and it is
+# right to: neither consumer ships it.
+#
+# WHAT WE DO INSTEAD: build libva from this pin, then replace libva.so.2 and
+# libva-drm.so.2 with STATIC STUB ARCHIVES generated by Implib.so and DELETE
+# the shared objects (scripts/build-deps.sh build_libva, via
+# scripts/lib/gen-implib.sh). The stub defines every VA entry point as a
+# trampoline that dlopen()s the real libva.so.2 on the first call, so the
+# shipped binaries carry NO DT_NEEDED for any of it, and a machine that never
+# asks for QSV never reaches the dlopen. This is exactly how
+# BtbN/FFmpeg-Builds solves it (scripts.d/50-vaapi/*.sh and
+# images/base-linux64/gen-implib.sh, MIT).
+#
+# libva is pinned rather than taken from AlmaLinux's libva-devel for the same
+# reason bzip2 and xz are (see docker/Dockerfile.manylinux_2_28): the stub
+# archive is compiled INTO the shipped libavutil.so, so its contents must come
+# from a pinned input, and leaving the -devel package out of the image is what
+# guarantees a regression cannot silently resolve `-lva` against a system .so
+# instead.
+LIBVA_TAG=2.24.1
+# NOTE: 2.24.1 is an ANNOTATED tag, so `git ls-remote --tags` prints TWO
+# lines for it: the tag OBJECT (5a99f4a...) and the COMMIT it points at
+# (710eb46..., the `^{}` row). A checkout lands on the COMMIT, so that is
+# what belongs here -- recording the tag object made fetch_git abort with
+#   post-checkout HEAD is 710eb465..., expected 5a99f4a1...
+# Always take the `^{}` value. Audited 2026-08-05: libva was the only one
+# of the 15 real-tag pins with this mistake.
+LIBVA_COMMIT=710eb465c6277ee2cac3e6948767b01eebe7e77a
+LIBVA_REPO=https://github.com/intel/libva.git
+
+# libdrm is a BUILD-TIME PREREQUISITE OF LIBVA, not a feature of ours.
+# libva/meson.build:88 does
+#     dependency('libdrm', version : '>= 2.4.75', required : true)
+# on every non-Windows host, and libva-drm.pc then carries libdrm through to
+# FFmpeg's link line because scripts/build-ffmpeg.sh passes
+# --pkg-config-flags=--static. We do NOT pass --enable-libdrm
+# (flags/ffmpeg.linux.flags:89), so no FFmpeg code references a drm* symbol
+# and the static archive below contributes ZERO objects to the link -- it
+# exists only so `-ldrm` resolves to something that is not the system
+# libdrm.so.2.
+#
+# DELIBERATELY STATIC, where BtbN stub it with Implib.so: their builds pass
+# --enable-libdrm (kmsgrab, DRM-prime interop) so their libavutil really does
+# call into libdrm and needs the lazy dlopen. Ours does not, and a static
+# archive that nothing references is strictly less machinery than a stub --
+# no trampolines, no dlopen, and no abort() path (see gen-implib.sh).
+#
+# BtbN's libpciaccess recipe is therefore NOT ported: it exists only to
+# satisfy libdrm's -Dintel=enabled KMS helper (libdrm_intel), which nothing
+# in this build links.
+LIBDRM_TAG=libdrm-2.4.134
+LIBDRM_COMMIT=e984d448b8b17aab853369e6c203e53719f46de1
+LIBDRM_REPO=https://gitlab.freedesktop.org/mesa/drm.git
+
+# Implib.so -- the stub generator. MIT, and a genuine SHIPPED COMPONENT, not
+# merely a build tool: the trampolines and the dlopen shim it emits are
+# compiled into libavutil.so.60, so its licence has to travel with the
+# binaries (scripts/package.sh collects it automatically from this pin).
+#
+# Pinned by commit because upstream publishes no tags at all. The TAG below is
+# a date label, like X264_TAG -- it is documentation, not something anything
+# resolves.
+IMPLIB_TAG=master@2026-08-01
+IMPLIB_COMMIT=a3e167cf978a5b8a38ec0f710d8c4331e8dcdd9a
+IMPLIB_REPO=https://github.com/yugr/Implib.so.git
+
+# ===========================================================================
+# Compression (required, not optional)
+# ===========================================================================
+# zlib is NOT a nice-to-have. With --disable-autodetect (see
+# profiles/common.flags) it is OFF unless explicitly enabled, and without it
+# the png/apng encoders+decoders, ffv1, flashsv, the matroska and mov muxers'
+# compressed-header paths, and several image decoders all silently vanish.
+# We build it FROM SOURCE as a static library on Windows so the produced
+# libav* DLLs do not acquire a runtime dependency on MSYS2's zlib1.dll --
+# which would be fatal for nelux, whose wheel bundles only av*/sw* DLLs.
+ZLIB_TAG=v1.3.1
+ZLIB_COMMIT=51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+ZLIB_REPO=https://github.com/madler/zlib.git
+
+# ---------------------------------------------------------------------------
+# bzip2 / xz(liblzma) / libiconv -- WINDOWS + LINUX, from source
+# ---------------------------------------------------------------------------
+# flags/ffmpeg.flags:181-186 asks for --enable-bzlib, --enable-lzma and
+# --enable-iconv on every platform. Until now nothing built them, so they were
+# satisfied from whatever the build environment happened to provide:
+#
+#   Windows  MSYS2 ships libbz2.dll.a / liblzma.dll.a / libiconv.dll.a
+#            ALONGSIDE the static .a, and GNU ld prefers the .dll.a. The
+#            produced avcodec-62.dll / avformat-62.dll would then import
+#            libbz2-1.dll, liblzma-5.dll and libiconv-2.dll -- none of which
+#            nelux's wheel ships (it bundles only av*/sw*), so every import
+#            of nelux would fail with a missing-DLL error on a machine that
+#            has no MSYS2.
+#   Linux    docker/Dockerfile.manylinux_2_28 installed bzip2-devel and
+#            xz-devel, which on AlmaLinux 8 provide only the SHARED libs, so
+#            libavformat.so.62 acquired DT_NEEDED libbz2.so.1 / liblzma.so.5.
+#            Those are outside the manylinux_2_28 policy set, so auditwheel
+#            would drag them into (or reject) the nelux wheel.
+#
+# Both are the same failure the zlib pin above already exists to prevent, and
+# the answer is the same: pin them and build them static, rather than widening
+# scripts/verify-output.sh's import allowlist. Taking a shipped library from
+# the build image is exactly the non-determinism --disable-autodetect exists
+# to forbid.
+#
+# NOT built on macOS: there bzlib, lzma and iconv come from /usr/lib and the
+# SDK, i.e. from the operating system, on the same footing as SecureTransport
+# and VideoToolbox. verify-output.sh's macOS allowlist already permits
+# /usr/lib, and building a second copy would add risk without adding
+# determinism.
+#
+# All three SHA256s were computed locally on 2026-08-04 from the file
+# downloaded from the URL below, and then CROSS-CHECKED against an
+# independent mirror (tukaani.org and SourceForge for xz, mirrors.kernel.org
+# for libiconv) that returned a byte-identical archive.
+
+# bzip2 1.0.8 is the current and final release of the 1.0 series (2019).
+# LICENSE: BSD-style (bzip2-1.0.6 licence). No GPL interaction.
+#
+# *** TRAP: bzlib.h:78-95 -- READ BEFORE TOUCHING THE WINDOWS BUILD ***
+# On _WIN32, when BZ_EXPORT is NOT defined, bzlib.h declares every entry
+# point as a FUNCTION POINTER, not a function:
+#     #define BZ_API(func) (WINAPI * func)
+#     #define BZ_EXTERN
+# so `BZ_EXTERN int BZ_API(BZ2_bzlibVersion) (void);` becomes a tentative
+# definition of a NULL pointer variable. FFmpeg's configure check
+# (`check_lib bzlib bzlib.h BZ2_bzlibVersion -lbz2`) still COMPILES AND LINKS
+# against that -- so the check passes, the build succeeds, and matroska
+# bzlib decompression calls a null pointer at runtime. scripts/build-deps.sh
+# therefore compiles bzip2 with -DBZ_EXPORT and scripts/build-ffmpeg.sh adds
+# -DBZ_EXPORT to --extra-cflags on Windows. (WINAPI is __stdcall, which is a
+# no-op on x86-64, so the ABI is unchanged.) Distro packages, MSYS2's
+# included, patch this header; we build vanilla source, so we must not.
+BZIP2_VERSION=1.0.8
+BZIP2_URL=https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz,https://ftp.osuosl.org/pub/blfs/conglomeration/bzip2/bzip2-1.0.8.tar.gz
+BZIP2_SHA256=ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269
+
+# xz / liblzma. Pinned to the 5.4 series ON PURPOSE: 5.6.0 and 5.6.1 are the
+# releases that carried the CVE-2024-3094 backdoor, which was introduced in
+# the RELEASE TARBALL's build machinery rather than in the git tree. 5.4.7 is
+# the last 5.4.x, was cut by the post-incident maintainers, and predates the
+# affected build system entirely. liblzma is the only part we use.
+# LICENSE: 0BSD for liblzma (public-domain-equivalent). No GPL interaction.
+# NOTE: lzma.h:189-195 makes __declspec(dllimport) conditional on
+# `!defined(__GNUC__)`, so a MinGW static link needs NO -DLZMA_API_STATIC.
+XZ_VERSION=5.4.7
+XZ_URL=https://github.com/tukaani-project/xz/releases/download/v5.4.7/xz-5.4.7.tar.xz
+XZ_SHA256=016182c70bb5c7c9eb3465030e3a7f6baa25e17b0e8c0afe92772e6021843ce2
+
+# GNU libiconv -- WINDOWS ONLY at build time (glibc and macOS's libSystem both
+# provide iconv; only mingw does not).
+#
+# *** WHY THIS IS NOT OPTIONAL ON WINDOWS ***
+# configure:4790-4794 -- under --disable-autodetect, and unless iconv is
+# explicitly disabled, configure sets `libc_iconv`. configure:7907-7911 then
+# reads:
+#     if enabled libc_iconv; then
+#         check_func_headers iconv.h iconv
+#     elif enabled iconv; then
+#         check_func_headers iconv.h iconv || check_lib iconv iconv.h iconv -liconv
+#     fi
+# Because libc_iconv wins, the `-liconv` fallback is NEVER REACHED in our
+# configuration. check_func_headers only ENABLES on success (configure:1500),
+# and configure:8359-8361 then does
+#     requested $lib && ! enabled $lib && die "ERROR: $lib requested but not found"
+# so on mingw -- where iconv is not in the C library -- configure DIES.
+# scripts/build-ffmpeg.sh therefore passes `--extra-libs=-liconv` on Windows,
+# which test_ld appends to the probe's link line, so the libc probe links
+# against the static libiconv.a built here and succeeds.
+# LICENSE: the libiconv LIBRARY is LGPL-2.1-or-later (the iconv command-line
+# program is GPL, and we do not build or ship it: --disable-shared plus we
+# install only the library). LGPL-2.1 is GPL-2.0 compatible, so this does not
+# move the output off GPL-2.0-or-later and does NOT drag in version3.
+LIBICONV_VERSION=1.18
+LIBICONV_URL=https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz
+LIBICONV_SHA256=3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8
+
+# ===========================================================================
+# Build/CI environment pins
+# ===========================================================================
+# Linux MUST be built in manylinux_2_28 (glibc 2.28). nelux ships
+# manylinux_2_28 wheels and auditwheel REJECTS shared libs that reference a
+# newer glibc symbol version. Building on ubuntu-latest would produce
+# libavutil.so.60 with GLIBC_2.34 references and break the wheel repair step.
+#
+# TWO ARCHES. nelux ships Linux/aarch64 too (tools/ffmpeg.lock:113-119
+# LINUXARM64_BTBN_*), so there is a manylinux_2_28_aarch64 build as well --
+# without it that platform keeps a BtbN fallback whose autobuild tag WILL be
+# pruned. Both images are AlmaLinux 8 + devtoolset: new compiler, old libc.
+#
+# Pinned to a DATED tag rather than :latest, plus the digest that tag resolved
+# to. Both digests were obtained on 2026-08-04 from
+#   https://quay.io/api/v1/repository/pypa/manylinux_2_28_<arch>/tag/?onlyActiveTags=true
+# -- not guessed. The build scripts do not enforce the digest today (docker
+# does that if you write FROM image@digest); it is recorded so a reviewer can
+# tell whether a rebuild used the same base.
+# CAVEAT: quay.io GCs untagged manifests, so a very old digest may eventually
+# become unpullable. The dated tag is the primary pin.
+MANYLINUX_IMAGE_X86_64=quay.io/pypa/manylinux_2_28_x86_64:2026.08.02-2
+MANYLINUX_DIGEST_X86_64=sha256:622a0041b2daf9865d38d7a14ae913a66d103db7b15fdedbcf513353d106183e
+MANYLINUX_IMAGE_AARCH64=quay.io/pypa/manylinux_2_28_aarch64:2026.08.02-2
+MANYLINUX_DIGEST_AARCH64=sha256:5bf033a700fd265da5cca83c0fa379810b8a4b516a2ec432f1a2b51dca4346cf
+
+# macOS deployment targets. 11.0 is the first arm64 macOS.
+MACOSX_DEPLOYMENT_TARGET_ARM64=11.0
+MACOSX_DEPLOYMENT_TARGET_X86_64=10.15
+
+# MSYS2 environment used for the Windows build (mingw64 / UCRT64).
+# FFmpeg CANNOT be built with MSVC -- it needs a C99/C11 compiler with GNU
+# inline asm and a POSIX shell. The DLLs are still fully consumable from MSVC.
+MSYS2_MSYSTEM=MINGW64

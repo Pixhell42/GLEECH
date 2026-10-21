@@ -7,7 +7,7 @@ import type { FfmpegStatus } from '../shared/render';
 
 /**
  * Finds the ffmpeg executable GLEECH uses for video and GIF encoding and media
- * decoding. Order: the bundled copy, a user-chosen copy, then the PATH.
+ * decoding. Order: a user-chosen copy, the bundled copy, then the PATH.
  */
 export interface FfmpegLocator {
   status(refresh?: boolean): Promise<FfmpegStatus>;
@@ -25,12 +25,16 @@ export function bundledFfmpegCandidates(
   packaged: boolean,
 ): string[] {
   const platformDir = `${process.platform}-${process.arch}`;
+  const builderOs =
+    process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux';
   return packaged
     ? [
+        join(resourcesPath, 'ffmpeg', 'bin', executable),
         join(resourcesPath, 'ffmpeg', executable),
         join(resourcesPath, 'ffmpeg', platformDir, executable),
       ]
     : [
+        join(appPath, 'out', 'ffmpeg', `${builderOs}-${process.arch}`, 'bin', executable),
         join(appPath, 'resources', 'ffmpeg', platformDir, executable),
         join(appPath, 'resources', 'ffmpeg', executable),
       ];
@@ -132,16 +136,16 @@ export function createFfmpegLocator(options: {
     }
   }
   async function resolveStatus(): Promise<FfmpegStatus> {
-    for (const candidate of options.bundled)
-      if (await isExecutable(candidate)) {
-        const status = await probe(candidate, 'bundled');
-        if (status.available) return status;
-      }
     const chosen = await configured();
     if (chosen && (await isExecutable(chosen))) {
       const status = await probe(chosen, 'configured');
       if (status.available) return status;
     }
+    for (const candidate of options.bundled)
+      if (await isExecutable(candidate)) {
+        const status = await probe(candidate, 'bundled');
+        if (status.available) return status;
+      }
     const onPath = await findOnPath();
     if (onPath) {
       const status = await probe(onPath, 'path');

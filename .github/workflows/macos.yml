@@ -12,6 +12,11 @@ on:
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - tooling/mac-*.mjs
+      - tooling/*ffmpeg*.mjs
+      - apps/desktop/build/ffmpeg-before-pack.mjs
+      - apps/desktop/build/after-pack.mjs
+      - apps/desktop/src/main/ffmpeg*.ts
+      - LICENSES/ffmpeg/**
       - tooling/cli-*.mjs
       - apps/desktop/build/cli-after-pack.mjs
       - apps/desktop/resources/cli/**
@@ -76,6 +81,8 @@ jobs:
           GLEECH_MAC_APP: ${{ matrix.app }}
         run: |
           gleech_executable="$GLEECH_MAC_APP/Contents/MacOS/GLEECH"
+          node tooling/ffmpeg-package-check.mjs "$GLEECH_MAC_APP/Contents/Resources"
+          node tooling/ffmpeg-check.mjs "$gleech_executable"
           node tooling/smoke.mjs "$gleech_executable"
           node tooling/image-check.mjs "$gleech_executable" --cpu
           node tooling/mcp-check.mjs "$gleech_executable" --cpu

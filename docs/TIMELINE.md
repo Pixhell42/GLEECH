@@ -181,8 +181,9 @@ loop was trimmed to fit.
 
 ### ffmpeg
 
-Movies, loops and video import use ffmpeg. GLEECH looks for a bundled copy, then
-one you chose with **Locate ffmpeg…** in the Render dialog, then your PATH.
+Movies, loops and video import use ffmpeg. Packaged apps include FFmpeg with
+x264/x265. An executable you choose with **Locate ffmpeg…** takes priority over
+the bundle; if it is missing or unusable, GLEECH tries the bundle, then your PATH.
 Image sequences and flip books render without ffmpeg. See
 [development setup](DEVELOPMENT.md#ffmpeg) for local builds.
 
