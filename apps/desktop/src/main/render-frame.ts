@@ -3,7 +3,7 @@
 import sharp from 'sharp';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
-import { access, unlink } from 'node:fs/promises';
+import { access, stat, unlink } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import type {
   OutputFrame,
@@ -349,7 +349,7 @@ export const UPSCALER_EXECUTABLES: Partial<Record<UpscaleEngine, { exe: string; 
   waifu2x: { exe: 'waifu2x-ncnn-vulkan', name: 'waifu2x' },
 };
 
-async function isFile(path: string): Promise<boolean> {
+async function isExecutable(path: string): Promise<boolean> {
   try {
     await access(path, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
     return true;
@@ -371,7 +371,7 @@ export async function findExecutable(
   for (const dir of dirs) {
     if (!dir) continue;
     const candidate = join(dir, file);
-    if (await isFile(candidate)) return candidate;
+    if (await isExecutable(candidate)) return candidate;
   }
   return null;
 }
@@ -576,7 +576,13 @@ async function externalUpscale(
       // ncnn tools look for their models next to the executable.
       await runTool(executable, args, known.name, { cwd: join(executable, '..') });
     }
-    if (!(await isFile(output)))
+    // PNG output is data, not a program: Unix image files need no execute bit.
+    if (
+      !(await stat(output).then(
+        (file) => file.isFile(),
+        () => false,
+      ))
+    )
       throw new Error('The upscaler finished but did not write its output image.');
     const upscaled = await sharp(output)
       .toColourspace('srgb')
