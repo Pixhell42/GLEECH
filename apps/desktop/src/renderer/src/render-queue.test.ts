@@ -114,3 +114,31 @@ describe('render queue video frame hold', () => {
     expect(gleech.cancelRender).toHaveBeenCalledWith('encoder');
   });
 });
+
+describe('render queue cancellation', () => {
+  it('cancels active encoding, skips a canceled queued job and continues the queue', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof gleech.finishRender>>) => void;
+    gleech.finishRender.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const active = renderQueue.enqueue(request());
+    await vi.waitFor(() => expect(gleech.finishRender).toHaveBeenCalledOnce());
+    const skipped = renderQueue.enqueue(request());
+    const next = renderQueue.enqueue(request());
+    renderQueue.cancel(skipped);
+    renderQueue.cancel(active);
+    await vi.waitFor(() => expect(gleech.cancelRender).toHaveBeenCalledExactlyOnceWith('encoder'));
+    finish(ok({ outputPath: 'out.mp4', notes: [] }));
+    await vi.waitFor(() =>
+      expect(renderQueue.snapshot().find((job) => job.id === next)?.status).toBe('done'),
+    );
+    expect(renderQueue.snapshot().find((job) => job.id === active)?.status).toBe('canceled');
+    expect(renderQueue.snapshot().find((job) => job.id === skipped)?.status).toBe('canceled');
+    expect(gleech.beginRender).toHaveBeenCalledTimes(2);
+    expect(gleech.closeVideoReader).toHaveBeenCalledTimes(2);
+    expect(renderQueue.busy()).toBe(false);
+  });
+});

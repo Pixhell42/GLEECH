@@ -1,5 +1,5 @@
 // Which timeline instants a render visits, and at what size effects run.
-// Pure, so the Render dialog summary and the background job agree.
+// Shared by desktop and terminal hosts; no browser or runtime dependencies.
 import {
   timeFrame,
   workRange,
@@ -14,7 +14,7 @@ import type {
   RenderRange,
   UpscaleMethod,
   VideoRenderSettings,
-} from '../../shared/render';
+} from './render';
 
 export function renderRange(kind: RangeKind, timeline: Timeline): RenderRange {
   const end = frameCount(timeline) / timeline.fps;

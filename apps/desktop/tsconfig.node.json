@@ -10,6 +10,7 @@
     "mcp.vite.config.ts",
     "cli.vite.config.ts",
     "src/main/**/*.ts",
+    "src/shared/**/*.ts",
     "src/cli/**/*.ts",
     "src/preload/**/*.ts"
   ]

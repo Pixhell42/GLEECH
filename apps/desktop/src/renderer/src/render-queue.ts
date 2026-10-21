@@ -1,42 +1,13 @@
-// Background render jobs. Each job renders frames with its own effect worker,
-// so the editor stays interactive, and streams them to the encoder in main.
-import {
-  effectsNeedSubject,
-  evaluateEffectsAt,
-  frameSeed,
-  timeFrame,
-  type ModulationContext,
-  type ProjectState,
-  type SubjectMask,
-} from '@gleech/project-model';
+// Desktop queue state and UI subscriptions. Frame processing lives in the
+// shared timeline runner, reached through the desktop worker/IPC adapters.
 import { RenderCancelledError } from '@gleech/effects';
-import type { PixelImage } from '@gleech/renderer-core';
-import { EffectProcessor } from './EffectProcessor';
-import { unwrap } from '../../shared/image-api';
-import type { RenderJobSpec, RenderResult, RenderTab } from '../../shared/render';
-import { isUniform } from './render-plan';
+import type { RenderResult, RenderTab } from '../../shared/render';
+import {
+  runDesktopTimelineRender,
+  type DesktopTimelineRenderRequest as RenderRequest,
+} from './desktop-timeline-runner';
 
-export interface RenderRequest {
-  readonly kind: RenderTab;
-  /** Output file or folder name for the queue list. */
-  readonly label: string;
-  /** Snapshot taken when the job was queued; later edits don't change it. */
-  readonly project: ProjectState;
-  readonly spec: Omit<
-    RenderJobSpec,
-    'frameCount' | 'fps' | 'sourceWidth' | 'sourceHeight' | 'frameTimes' | 'withOriginal'
-  >;
-  /** Timeline seconds of every frame to send, in order. */
-  readonly times: readonly number[];
-  /** Rate of the frames sent (uniform renders). */
-  readonly inputFps: number;
-  /** Size effects render at (source size, or larger for native upscaling). */
-  readonly renderSize: { readonly width: number; readonly height: number };
-  /** Registered media id when the source is a video clip. */
-  readonly videoMediaId?: string;
-  /** Effects-only overlays also send each unedited frame. */
-  readonly overlay: boolean;
-}
+export type { DesktopTimelineRenderRequest as RenderRequest } from './desktop-timeline-runner';
 
 export type RenderStatus = 'queued' | 'rendering' | 'encoding' | 'done' | 'failed' | 'canceled';
 export interface RenderJob {
@@ -52,34 +23,12 @@ export interface RenderJob {
   readonly error?: string;
 }
 
-function resizePixels(image: PixelImage, width: number, height: number): PixelImage {
-  if (image.width === width && image.height === height) return image;
-  const from = new OffscreenCanvas(image.width, image.height);
-  from
-    .getContext('2d')!
-    .putImageData(
-      new ImageData(new Uint8ClampedArray(image.pixels), image.width, image.height),
-      0,
-      0,
-    );
-  const to = new OffscreenCanvas(width, height);
-  const context = to.getContext('2d')!;
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(from, 0, 0, width, height);
-  return {
-    width,
-    height,
-    pixels: context.getImageData(0, 0, width, height).data.buffer as ArrayBuffer,
-  };
-}
-
 class RenderQueue {
   private jobs: readonly RenderJob[] = [];
   private requests = new Map<string, RenderRequest>();
   private listeners = new Set<() => void>();
   private cancelled = new Set<string>();
-  private active: { id: string; processor: EffectProcessor; encoder: string | null } | null = null;
+  private active: { id: string; controller: AbortController } | null = null;
   private running = false;
 
   readonly subscribe = (listener: () => void) => {
@@ -115,17 +64,14 @@ class RenderQueue {
     if (!job || !['queued', 'rendering', 'encoding'].includes(job.status)) return;
     this.cancelled.add(id);
     if (job.status === 'queued') this.patch(id, { status: 'canceled' });
-    if (this.active?.id === id) {
-      this.active.processor.cancelAll();
-      // Finishing passes (GIF palettes, size limits) run in the encoder itself.
-      if (this.active.encoder) void window.gleech.cancelRender(this.active.encoder).catch(() => {});
-    }
+    if (this.active?.id === id) this.active.controller.abort();
   }
 
   dismiss(id: string): void {
     const job = this.jobs.find((entry) => entry.id === id);
     if (!job || ['queued', 'rendering', 'encoding'].includes(job.status)) return;
     this.requests.delete(id);
+    this.cancelled.delete(id);
     this.update(this.jobs.filter((entry) => entry.id !== id));
   }
 
@@ -158,113 +104,17 @@ class RenderQueue {
   private async run(id: string) {
     const request = this.requests.get(id);
     if (!request) return;
-    const { project, times } = request;
-    const timeline = project.timeline;
-    const source = project.source;
-    const processor = new EffectProcessor();
-    this.active = { id, processor, encoder: null };
+    const controller = new AbortController();
+    this.active = { id, controller };
     this.patch(id, { status: 'rendering', startedAt: performance.now() });
-    let encoder: string | null = null;
-    let reader: string | null = null;
-    const check = () => {
-      if (this.cancelled.has(id)) throw new RenderCancelledError();
-    };
     try {
-      if (!timeline || !source) throw new Error('Open Timeline mode before rendering.');
-      const modulation: ModulationContext = {
-        bpm: timeline.bpm ?? (timeline.audio?.analysis?.bpm || 120),
-        seed: project.masterSeed,
-        audio: timeline.audio?.analysis,
-      };
-      const { width, height } = request.renderSize;
-      let still: PixelImage | null = null;
-      if (!request.videoMediaId)
-        still = resizePixels(unwrap(await window.gleech.originalPixels(source.id)), width, height);
-      check();
-      encoder = unwrap(
-        await window.gleech.beginRender({
-          ...request.spec,
-          frameCount: times.length,
-          fps: request.inputFps,
-          sourceWidth: width,
-          sourceHeight: height,
-          frameTimes: times,
-          withOriginal: request.overlay,
-        }),
-      );
-      if (this.active?.id === id) this.active.encoder = encoder;
-      if (request.videoMediaId && times.length > 1 && isUniform(times, request.inputFps))
-        reader = unwrap(
-          await window.gleech.openVideoReader(request.videoMediaId, {
-            start: times[0]!,
-            fps: request.inputFps,
-            count: times.length,
-            width,
-            height,
-          }),
-        );
-      let subject: SubjectMask | undefined;
-      let lastClipFrame: PixelImage | null = null;
-      for (let index = 0; index < times.length; index++) {
-        check();
-        const t = times[index]!;
-        let raw: PixelImage;
-        if (still) raw = still;
-        else if (reader) {
-          // Past the clip's end the last frame holds, like the preview.
-          const frame = unwrap(await window.gleech.readVideoFrame(reader));
-          if (frame) lastClipFrame = resizePixels(frame, width, height);
-          if (!lastClipFrame)
-            lastClipFrame = resizePixels(
-              unwrap(
-                await window.gleech.videoFrameAt(request.videoMediaId!, t, Math.max(width, height)),
-              ),
-              width,
-              height,
-            );
-          raw = lastClipFrame;
-        } else
-          raw = resizePixels(
-            unwrap(
-              await window.gleech.videoFrameAt(request.videoMediaId!, t, Math.max(width, height)),
-            ),
-            width,
-            height,
-          );
-        const effects = evaluateEffectsAt(project.effects, t, modulation);
-        const seed = frameSeed(project.masterSeed, timeline.seed, timeFrame(t, timeline.fps));
-        const active = effects.some((effect) => effect.enabled && effect.params.amount > 0);
-        if (active && !subject && effectsNeedSubject(effects, raw.pixels))
-          subject = unwrap(await window.gleech.subjectMask(source.id));
-        check();
-        const rendered = active
-          ? await processor.render(raw, effects, {
-              masterSeed: seed,
-              reference: raw,
-              purpose: 'export',
-              ...(subject ? { subjectMask: subject } : {}),
-            })
-          : raw;
-        check();
-        unwrap(
-          await window.gleech.renderFrame(
-            encoder,
-            { width: rendered.width, height: rendered.height, pixels: rendered.pixels },
-            request.overlay
-              ? { width: raw.width, height: raw.height, pixels: raw.pixels }
-              : undefined,
-          ),
-        );
-        this.patch(id, { done: index + 1 });
-      }
-      check();
-      this.patch(id, { status: 'encoding' });
-      const result = unwrap(await window.gleech.finishRender(encoder));
-      encoder = null;
-      if (this.active) this.active.encoder = null;
+      const result = await runDesktopTimelineRender(request, {
+        signal: controller.signal,
+        onProgress: ({ phase, done }) => this.patch(id, { status: phase, done }),
+      });
+      if (controller.signal.aborted) throw new RenderCancelledError();
       this.patch(id, { status: 'done', result });
     } catch (error) {
-      if (encoder) await window.gleech.cancelRender(encoder).catch(() => {});
       if (error instanceof RenderCancelledError || this.cancelled.has(id))
         this.patch(id, { status: 'canceled' });
       else
@@ -273,8 +123,6 @@ class RenderQueue {
           error: error instanceof Error ? error.message : 'The render failed.',
         });
     } finally {
-      if (reader) await window.gleech.closeVideoReader(reader).catch(() => {});
-      processor.dispose();
       this.active = null;
       this.cancelled.delete(id);
     }

@@ -49,7 +49,7 @@ import {
   videoOutputLabel,
   videoRenderLabel,
 } from '../../shared/render-presets';
-import { renderRange, videoFrameTimes } from './render-plan';
+import { renderRange, videoFrameTimes } from '../../shared/render-plan';
 import type { RenderRequest } from './render-queue';
 import {
   audibleTrack,

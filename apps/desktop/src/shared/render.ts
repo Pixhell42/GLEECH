@@ -1,5 +1,5 @@
 // Shared contracts for timeline rendering: the Render dialog (renderer), the
-// frame loop (renderer) and the encoder service (main) all use these types.
+// shared frame loop and the encoder service (main) all use these types.
 
 export type RenderTab = 'video' | 'gif';
 

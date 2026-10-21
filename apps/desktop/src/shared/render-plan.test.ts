@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEffect, createTimeline, type EffectInstance } from '@gleech/project-model';
-import { defaultGifSettings, defaultVideoSettings } from '../../shared/render-presets';
+import { defaultGifSettings, defaultVideoSettings } from './render-presets';
 import {
   effectRenderSize,
   gifFrameTimes,

@@ -55,7 +55,7 @@ import {
   resolveVideoOutput,
   type SourceInfo,
 } from '../../shared/render-presets';
-import { renderRange } from './render-plan';
+import { renderRange } from '../../shared/render-plan';
 import { buildRenderRequest, renderSourceSize, videoAudioActive } from './render-request';
 import { renderQueue, type RenderJob } from './render-queue';
 
