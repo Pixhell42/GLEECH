@@ -28,6 +28,17 @@ import {
   type PresetRecipe,
   type PresetPlacement,
   type PaintedMask,
+  assertTimeline,
+  assertActiveRange,
+  freezeAnimation,
+  freezeTimeline,
+  snapAnimationToRate,
+  clampTimelineRanges,
+  type ActiveRange,
+  type ParameterAnimation,
+  type Timeline,
+  activeVideo,
+  audioIsClipSound,
 } from '@gleech/project-model';
 import {
   pastedSettings,
@@ -49,13 +60,29 @@ export {
 } from './settings-clipboard';
 export type { SettingsClipboard, SettingsTarget } from './settings-clipboard';
 
+/** Timeline settings to merge; undefined removes optional media and tempo. */
+export type TimelineChange = {
+  [K in Exclude<keyof Timeline, 'version'>]?: Timeline[K] | undefined;
+};
+
 export interface CommandService {
   getState(): ProjectState;
   subscribe(listener: () => void): () => void;
   setSeed(seed: number): void;
+  /** Create, replace or remove the project timeline. */
+  setTimeline(timeline: Timeline | null): void;
+  /** Merge timeline settings. Frame rate changes re-time keys onto the new frames. */
+  updateTimeline(change: TimelineChange): void;
   /** Replace an already validated stack and seed as one reversible operation. */
   applyStackRecipe(recipe: PresetRecipe): void;
+  /** Open an image: it names the project and replaces any video clip and its sound. */
   setSource(source: ImageSource): void;
+  /**
+   * Make a frame of the video clip (at clip time t) the source image. Switching
+   * to Image mode is navigation, not an edit: no undo step is added, and history
+   * states of the same clip use the frame too, so Undo only reverts edits.
+   */
+  useClipFrame(source: ImageSource, t: number): void;
   renameProject(name: string): void;
   loadProject(project: ProjectState): void;
   replaceProject(project: ProjectState): void;
@@ -98,6 +125,9 @@ export interface CommandService {
       fieldImage?: import('@gleech/project-model').LayerImage | null;
       directionImage?: import('@gleech/project-model').LayerImage | null;
       glyphFont?: import('@gleech/project-model').GlyphFontAtlas | null;
+      /** Per parameter key; null removes that key's animation. */
+      animation?: Readonly<Record<string, ParameterAnimation | null>>;
+      activeRange?: ActiveRange | null;
     },
   ): void;
   removeEffect(instanceId: string): void;
@@ -182,6 +212,7 @@ export function createCommandService(initialState: ProjectState): CommandService
     origin: initialState.origin ? Object.freeze({ ...initialState.origin }) : null,
     effects: freezeEffects(initialState.effects),
     snapshots: Object.freeze(initialState.snapshots.map(freezeSnapshot)),
+    ...(initialState.timeline ? { timeline: freezeTimeline(initialState.timeline) } : {}),
   });
   const listeners = new Set<() => void>();
   const past: ProjectState[] = [];
@@ -227,6 +258,8 @@ export function createCommandService(initialState: ProjectState): CommandService
           ...(effect.type === 'solid' && effect.drawing
             ? { drawing: freezeCanvasDrawing(effect.drawing) }
             : {}),
+          ...(effect.animation ? { animation: freezeAnimation(effect.animation) } : {}),
+          ...(effect.activeRange ? { activeRange: Object.freeze({ ...effect.activeRange }) } : {}),
         }) as EffectInstance;
         ownedEffects.add(frozen);
         return frozen;
@@ -300,6 +333,55 @@ export function createCommandService(initialState: ProjectState): CommandService
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    setTimeline(timeline) {
+      if (timeline) assertTimeline(timeline);
+      if (!timeline && !state.timeline) return;
+      endHistoryGroup();
+      const next: { -readonly [K in keyof ProjectState]: ProjectState[K] } = { ...state };
+      if (timeline) next.timeline = freezeTimeline(timeline);
+      else delete next.timeline;
+      commit(next);
+    },
+    updateTimeline(change) {
+      if (!state.timeline) throw new Error('Open Timeline mode first.');
+      let timeline = {
+        ...state.timeline,
+        ...change,
+        version: state.timeline.version,
+      } as Timeline;
+      for (const key of ['video', 'audio', 'bpm', 'inOut'] as const)
+        if (Object.hasOwn(change, key) && change[key] === undefined)
+          delete (timeline as unknown as Record<string, unknown>)[key];
+      assertTimeline(timeline);
+      // A shorter timeline keeps its work area and In/Out inside the new end.
+      if (timeline.duration < state.timeline.duration || timeline.fps !== state.timeline.fps)
+        timeline = clampTimelineRanges(timeline);
+      if (JSON.stringify(timeline) === JSON.stringify(state.timeline)) return;
+      const retime = timeline.fps !== state.timeline.fps;
+      commit({
+        ...state,
+        timeline: freezeTimeline(timeline),
+        ...(retime
+          ? {
+              effects: freezeEffects(
+                state.effects.map((effect) =>
+                  effect.animation
+                    ? ({
+                        ...effect,
+                        animation: Object.fromEntries(
+                          Object.entries(effect.animation).map(([key, value]) => [
+                            key,
+                            snapAnimationToRate(value, timeline.fps),
+                          ]),
+                        ),
+                      } as EffectInstance)
+                    : effect,
+                ),
+              ),
+            }
+          : {}),
+      });
+    },
     setSeed(seed) {
       assertSeed(seed);
       if (seed === state.masterSeed) return;
@@ -334,20 +416,60 @@ export function createCommandService(initialState: ProjectState): CommandService
     setSource(source) {
       assertImageSource(source);
       endHistoryGroup();
-      commit({
+      const next: { -readonly [K in keyof ProjectState]: ProjectState[K] } = {
         ...state,
-        name:
-          state.name === 'Untitled' || state.name === state.origin?.name ? source.name : state.name,
+        name: source.name,
         source: Object.freeze({ ...source }),
         origin: Object.freeze({ ...source }),
         sourceSnapshotId: null,
+      };
+      // An image replaces the clip and the clip's own sound; the rest of the
+      // timeline (keys, a separately added audio track) stays.
+      if (state.timeline?.video) {
+        const timeline: { -readonly [K in keyof Timeline]: Timeline[K] } = { ...state.timeline };
+        if (audioIsClipSound(state.timeline)) delete timeline.audio;
+        delete timeline.video;
+        next.timeline = freezeTimeline(timeline);
+      }
+      commit(next);
+    },
+    useClipFrame(source, t) {
+      assertImageSource(source);
+      const video = activeVideo(state);
+      if (!state.timeline || !video) throw new Error('Open a video clip first.');
+      assertTimeline({
+        ...state.timeline,
+        video: { ...video, posterId: source.id, posterTime: t },
       });
+      const frame = Object.freeze({ ...source });
+      // Which clip frame is the still is a view of the clip, not an edit: apply it
+      // to every history state of this clip so Undo only reverts real edits.
+      const swap = (project: ProjectState): ProjectState => {
+        const clip = activeVideo(project);
+        if (!project.timeline || !clip || clip.path !== video.path) return project;
+        return Object.freeze({
+          ...project,
+          source: frame,
+          origin: frame,
+          sourceSnapshotId: null,
+          timeline: freezeTimeline({
+            ...project.timeline,
+            video: { ...clip, posterId: frame.id, posterTime: t },
+          }),
+        });
+      };
+      endHistoryGroup();
+      past.splice(0, past.length, ...past.map(swap));
+      future.splice(0, future.length, ...future.map(swap));
+      state = swap(state);
+      notify();
     },
     replaceProject(project) {
       assertProject(project);
       endHistoryGroup();
       commit({
         ...project,
+        ...(project.timeline ? { timeline: freezeTimeline(project.timeline) } : {}),
         source: project.source ? Object.freeze({ ...project.source }) : null,
         origin: project.origin ? Object.freeze({ ...project.origin }) : null,
         snapshots: Object.freeze(project.snapshots.map(freezeSnapshot)),
@@ -361,6 +483,7 @@ export function createCommandService(initialState: ProjectState): CommandService
       future.length = 0;
       state = Object.freeze({
         ...project,
+        ...(project.timeline ? { timeline: freezeTimeline(project.timeline) } : {}),
         source: project.source ? Object.freeze({ ...project.source }) : null,
         origin: project.origin ? Object.freeze({ ...project.origin }) : null,
         snapshots: Object.freeze(project.snapshots.map(freezeSnapshot)),
@@ -578,10 +701,32 @@ export function createCommandService(initialState: ProjectState): CommandService
       )
         throw new Error('This effect does not use a direction field.');
       if (change.enabled !== undefined) endHistoryGroup();
+      if (change.activeRange) assertActiveRange(change.activeRange);
+      const animated = (effect: EffectInstance) => {
+        if (change.animation === undefined && change.activeRange === undefined) return {};
+        const animation: Record<string, ParameterAnimation> = { ...(effect.animation ?? {}) };
+        for (const [key, value] of Object.entries(change.animation ?? {})) {
+          if (value) animation[key] = value;
+          else delete animation[key];
+        }
+        return {
+          animation: Object.keys(animation).length ? animation : undefined,
+          activeRange:
+            change.activeRange === undefined
+              ? effect.activeRange
+              : (change.activeRange ?? undefined),
+        };
+      };
+      const stripUndefined = (effect: EffectInstance): EffectInstance => {
+        const copy = { ...effect } as Record<string, unknown>;
+        if (copy.animation === undefined) delete copy.animation;
+        if (copy.activeRange === undefined) delete copy.activeRange;
+        return copy as unknown as EffectInstance;
+      };
       setEffects(
         state.effects.map((effect) =>
           effect.instanceId === instanceId
-            ? ({
+            ? stripUndefined({
                 ...effect,
                 ...frozenLayer(effect),
                 enabled: change.enabled ?? effect.enabled,
@@ -600,6 +745,7 @@ export function createCommandService(initialState: ProjectState): CommandService
                 ...(change.fieldImage !== undefined
                   ? { fieldImage: change.fieldImage ?? undefined }
                   : {}),
+                ...animated(effect),
               } as EffectInstance)
             : effect,
         ),

@@ -1,15 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import ts from 'typescript';
-import { renderEffects } from './effects-reference.mjs';
+import { modelUrl, renderEffects } from './effects-reference.mjs';
 
-const model = ts.transpileModule(await readFile('packages/project-model/src/index.ts', 'utf8'), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
-}).outputText;
-const { createEffect, BLUR_STYLES, NOISE_STYLES } = await import(
-  `data:text/javascript;base64,${Buffer.from(model).toString('base64')}`
-);
+const { createEffect, BLUR_STYLES, NOISE_STYLES } = await import(modelUrl);
 function fixture(width, height, transparent = false) {
   const pixels = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++)

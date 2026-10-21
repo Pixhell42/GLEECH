@@ -32,6 +32,15 @@ Some sliders might get stuck and display a "no" circle/slash icon while dragging
 
 General warning overall, due to the fact that this is a beta test and things might change suddenly saved project files from one version might not open or render exactly the same in future versions. I try to do my best to avoid this whenever possible and retain backwards compatibility but it might not always be possible. If this happens I will do my best to note what filters/effects might be affected from patch to patch if this occurs.
 
+## Timeline
+
+- Playback renders reduced previews; heavy stacks play below real time on the
+  first pass and smoothly once frames are cached.
+- Subject-based effects detect the subject once, on the clip frame that is the
+  source image (the first frame, or the frame Image mode last opened on).
+- Crop "Follow subject" currently keeps the picture centered.
+- Projects store video and audio file paths; moved files show as offline.
+
 ## UI organization
 
 General overall UI clean up and organization. As an overall house keeping measure some effects groupings and placement could be organized better or more efficiently. This is an ongoing effort and work in progress.

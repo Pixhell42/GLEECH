@@ -1,6 +1,6 @@
 # Local MCP setup
 
-GLEECH includes a local stdio MCP server with 65 tools, nine resources and three
+GLEECH includes a local stdio MCP server with 74 tools, nine resources and three
 resource templates. It controls the open desktop instance using the normal
 editing/rendering engine. Windows uses named pipes; macOS uses a Unix socket in
 a private temporary directory (0700), with a private socket and connection file
@@ -81,12 +81,37 @@ libraries, a rendered preview and palettes. Templates address a preset recipe,
 saved snapshot or per-effect mask. Isolated batch operations preserve the
 working project and use the desktop renderer and approved file scope.
 
+## Timeline and rendering
+
+Timeline edits are reversible project edits (Edit mode) and also batch inside
+`apply_operations` as one Undo step: `set_timeline` (frame rate, duration, loop,
+work area, In/Out, seed track, tempo, and the audio track's `audioVolume` and
+`audioMuted`, which change playback and rendered audio; creates the timeline
+when missing),
+`set_keyframes` (times in seconds, snapped to frames; values in the units
+`get_effect_parameters` reports, which also lists `animatableParameters`),
+`set_modulators` (audio and LFO cards for numeric controls; audio cards also
+take subtract, invert, intensity and offset) and
+`set_active_range`. `get_timeline` reads the settings, markers, animated layers
+and the playhead; `set_playhead` moves it, which also changes the frame Image mode
+shows and that `render_preview` and `export_image` render.
+
+`list_render_presets` returns the Video and GIF & Loops presets, formats,
+compression choices, ffmpeg status and the default settings. `render_video`
+(Full Control) queues a background render with a preset plus `overrides` merged
+onto it, a range (`work`, `whole`, `inout` or explicit seconds) and an output
+path inside an approved Exports folder; existing files are refused unless
+`overwrite` is true, and `wait` returns when the file is written. `render_status`
+reports progress and the final output path, and can cancel a render. Calling
+another MCP server's upscaler is not available yet.
+
 ## Starter prompts
 
 - “Inspect the active GLEECH project and describe its layers without editing.”
 - “Add a subtle chromatic effect, keep the subject recognizable, and show a preview.”
 - “Adjust only unlocked layers. Use the returned revision and show the result.”
 - “Save a project and export PNG inside the folders I approved in GLEECH.”
+- “Animate the selected layer's opacity from 100% to 20% over two seconds, then render a 480 px GIF loop of the work area.”
 
 ## Verify and troubleshoot
 

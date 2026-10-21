@@ -16,7 +16,9 @@ import { GLYPH_DEFAULTS } from '@gleech/project-model';
 import { StarterMapPicker } from './StarterMapPicker';
 import type { ImportedImage } from '../../shared/image-api';
 import { InfoTooltip } from './InfoTooltip';
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
+import { KeyframeButtons } from './AnimationControls';
+import type { ParameterAnimationUi } from './animation-ui';
 import { FractalExplorer } from './FractalExplorer';
 import { ColorControl } from './ColorControl';
 import { GradientStopEditor } from './GradientStopEditor';
@@ -68,6 +70,10 @@ interface Props {
   onApplication(application: Partial<EffectApplication>): void;
   beginGesture(): void;
   endGesture(): void;
+  /** Keyframe diamonds and selection; omitted for still-only contexts. */
+  animation?: ParameterAnimationUi;
+  /** Below the effect controls: the selected parameter's Animation card. */
+  animationCard?: ReactNode;
 }
 
 export function EffectEditor({
@@ -92,8 +98,29 @@ export function EffectEditor({
   onApplication,
   beginGesture,
   endGesture,
+  animation,
+  animationCard,
 }: Props) {
   const [exploring, setExploring] = useState(false);
+  const keyframes = (key: string, label: string) => {
+    const info = animation?.info(key);
+    if (!animation || !info) return null;
+    return (
+      <KeyframeButtons
+        label={label}
+        info={info}
+        showStatic={animation.showStatic}
+        disabled={disabled}
+        onToggle={() => {
+          endGesture();
+          animation.toggleKey(key);
+        }}
+        onJump={(direction) => animation.jump(key, direction)}
+        onModulators={() => animation.openModulators(key)}
+      />
+    );
+  };
+  const animatedCount = effect.animation ? Object.keys(effect.animation).length : 0;
   const [vectorPicker, setVectorPicker] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel>('red');
   // Keep conditional controls mounted until a slider gesture finishes so the
@@ -664,7 +691,10 @@ export function EffectEditor({
     >
       <div className="selected-effect-heading">
         <div>
-          <div className="panel-heading">{definition.title}</div>
+          <div className="panel-heading">
+            {definition.title}
+            {animatedCount > 0 && <span className="animated-count">{animatedCount} animated</span>}
+          </div>
           <small>
             Effect{' '}
             {effects.length - effects.findIndex((entry) => entry.instanceId === effect.instanceId)}{' '}
@@ -983,12 +1013,27 @@ export function EffectEditor({
                     key={key}
                     data-settings-kind="parameter"
                     data-settings-key={key}
+                    data-animation-selected={
+                      animation?.selectedKey === key && effect.animation?.[key] ? 'true' : undefined
+                    }
+                    onPointerDownCapture={() => {
+                      if (effect.animation?.[key]) animation?.select(key);
+                    }}
+                    onFocusCapture={() => {
+                      if (effect.animation?.[key]) animation?.select(key);
+                    }}
                   >
                     {key === 'outputAlignment' && (
                       <div className="output-placement-heading panel-heading">Output placement</div>
                     )}
                     <span
-                      className={control.kind === 'number' ? 'numeric-control-heading' : undefined}
+                      className={
+                        control.kind === 'number'
+                          ? `numeric-control-heading${animation?.info(key) ? ' has-keyframes' : ''}`
+                          : animation?.info(key)
+                            ? 'animatable-control-heading'
+                            : undefined
+                      }
                     >
                       <span className="control-title">
                         {control.label}{' '}
@@ -1015,7 +1060,11 @@ export function EffectEditor({
                                         : `${Number(params[key] ?? control.default).toFixed(1)}%`}
                         </output>
                       )}
+                      {keyframes(key, control.label)}
                     </span>
+                    {animation?.info(key)?.note && (
+                      <p className="modulation-note">{animation.info(key)!.note}</p>
+                    )}
                     {key === 'bitMask' && effect.type === 'bit-damage' ? (
                       <div
                         className="bit-plane-picker"
@@ -1213,6 +1262,7 @@ export function EffectEditor({
                         }
                         disabled={
                           disabled ||
+                          Boolean(animation?.info(key)?.replaced) ||
                           (((effect.type === 'indexed-palette' &&
                             effect.params.dither === 'none') ||
                             (effect.type === 'dither' && effect.params.algorithm === 'none')) &&
@@ -1319,6 +1369,7 @@ export function EffectEditor({
       {effect.type === 'cutout' && (
         <PreviewBackdropControls value={backdrop} onChange={onBackdrop} disabled={disabled} />
       )}
+      {animationCard}
       <div className="effect-detail-actions">
         {seeded && (
           <button

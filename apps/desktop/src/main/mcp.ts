@@ -225,6 +225,7 @@ export function registerMcp(window: BrowserWindow, access: McpAccess) {
             'analyze_image',
             'copy_to_clipboard',
             'request_folder_access',
+            'render_video',
           ].includes(String(message.request.action)),
         );
         const deadline = Date.now() + (longOperation ? 299000 : 59000);

@@ -1,0 +1,61 @@
+{
+  "schema": "tas-ffmpeg/manifest/1",
+
+  "_readme": [
+    "Machine-readable identity of this FFmpeg build. Both nelux and",
+    "TheAnimeScripter should assert against it at startup.",
+    "There is NO --build-suffix: nelux's bundled libraries and TAS's",
+    "ffmpeg_shared libraries share file names, so whichever loads first in a",
+    "process serves both. That is safe ONLY while they are the same build.",
+    "Assert av_version_info and soname_majors; fail loudly on mismatch."
+  ],
+
+  "ffmpeg": {
+    "version": "9.0.2",
+    "tag": "n9.0.2",
+    "commit": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+    "tarball_sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+    "extra_version": "tas"
+  },
+
+  "av_version_info": "9.0.2-tas",
+
+  "soname_majors": {
+    "avcodec": 63,
+    "avdevice": 63,
+    "avfilter": 12,
+    "avformat": 63,
+    "avutil": 61,
+    "swresample": 7,
+    "swscale": 10
+  },
+
+  "platform": { "os": "windows", "arch": "x86_64" },
+
+  "licensing": {
+    "spdx": "GPL-2.0-or-later",
+    "gpl": true,
+    "version3": false,
+    "nonfree": false,
+    "note": "GPL because libx264 and libx265 are linked. --enable-version3 is deliberately NOT set; see flags/ffmpeg.flags."
+  },
+
+  "provenance": {
+    "versions_lock_sha256": "1514aa935bbae19426f03be537e79c31decd06e4529101f1869df09a833ac840",
+    "configure_command": "share/tas-ffmpeg/configure-command.txt",
+    "config_header": "share/tas-ffmpeg/config.h",
+    "corresponding_source": "tas-ffmpeg-9.0.2-corresponding-source.tar.xz"
+  },
+
+  "artifacts_sha256": {
+      "bin/avcodec-63.dll": "1cee2dd945376aec754456e6d1fe777367c3eeb16505847132d494412f96d924",
+      "bin/avdevice-63.dll": "b3dcf2db9d38578d51ca362bdc2a29fb3f938a8591386694754a6c8f14ecef25",
+      "bin/avfilter-12.dll": "ad4ae19a97d0eec8409d11275fd6b005280ab996129386413a9717525d3be04f",
+      "bin/avformat-63.dll": "f8a164392c9684a6a7d467f3c02044265593c3e3a8ffc36bc740ec292f057225",
+      "bin/avutil-61.dll": "8aa1abdfe0c95821ae93419b4413d37fac95bf4a7e2eab20c73f4b1ee5c73d96",
+      "bin/ffmpeg.exe": "9a765b60a13aff4b777d380e3bd9249ad1f420dbdd28141771190ff6c49de7a4",
+      "bin/ffprobe.exe": "30c3821153c8f3f2d6aba364aa92df4b5021d2c62b7956a6bf61780b535c6dac",
+      "bin/swresample-7.dll": "0e5f9d881466d39fff9ea5e77823f91dabe69be78b3a405fe09e73c6f960a7f9",
+      "bin/swscale-10.dll": "41b3262668474b43194b9ef42f0304b92b8a407f11dda6ecea250b6dc36c5c47"
+    }
+}

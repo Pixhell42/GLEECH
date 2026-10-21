@@ -399,7 +399,8 @@ try {
   const panelBounds = await page.locator('.stack-panel').boundingBox();
   const toolsBounds = await page.locator('.viewport-tools').boundingBox();
   assert.ok(
-    addBounds.y < panelBounds.y + 50 &&
+    // The heading sits below the Edited / Original toggle at the top of the panel.
+    addBounds.y < panelBounds.y + 90 &&
       seedBounds.y < 52 &&
       toolsBounds.x > panelBounds.x + panelBounds.width,
     'Add stays in the stack heading; seed is in the toolbar and zoom over the canvas',

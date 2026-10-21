@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import { load } from 'js-yaml';
 import { spawnSync } from 'node:child_process';
 import { needsNativeTestFrames } from './test-electron.mjs';
+import { timelineTestOptions } from './timeline-test-options.mjs';
+import { resolve } from 'node:path';
 import {
   createWindowsPlan,
   needsDesktop,
@@ -30,12 +32,77 @@ test('native test frames require an isolated smoke profile and explicit test env
 });
 test('routine changes keep critical workflows without rebuilding or packaging', () => {
   const plan = createWindowsPlan('quick', scripts);
-  assert.equal(plan.length, 8);
+  assert.equal(plan.length, 11);
   for (const name of ['image', 'editing', 'project', 'preset-transfer', 'mcp', 'cli'])
     assert.ok(
       plan.some(({ args }) => args[0] === `tooling/${name}-check.mjs` && args.includes('--cpu')),
     );
   assert.ok(plan.every(({ args, packaged }) => !packaged && existsSync(args[0])));
+});
+
+test('required quick checks exercise timeline media with the pinned FFmpeg bundle', () => {
+  for (const name of ['timeline', 'timeline-media'])
+    assert.ok(
+      createWindowsPlan('quick', scripts).some(
+        ({ args }) => args[0] === `tooling/${name}-check.mjs` && args.includes('--require-ffmpeg'),
+      ),
+    );
+  const plan = createWindowsPlan('quick', scripts).map(({ args }) => args[0]);
+  const bridge = plan.indexOf('tooling/ffmpeg-check.mjs');
+  assert.ok(bridge >= 0);
+  assert.ok(plan.indexOf('tooling/timeline-check.mjs') > bridge);
+  assert.ok(plan.indexOf('tooling/timeline-media-check.mjs') > bridge);
+  const steps = workflow.jobs.desktop.steps;
+  const prepare = steps.findIndex((step) => step.run === 'pnpm ffmpeg:prepare');
+  assert.ok(prepare > steps.findIndex((step) => step.run === 'pnpm build'));
+  assert.ok(prepare < steps.findIndex((step) => step.run === 'node tooling/windows-ci.mjs quick'));
+  assert.equal(steps[prepare].if, "steps.scope.outputs.desktop == 'true'");
+});
+
+test('timeline checks launch the specified native package rather than the dev app', () => {
+  for (const target of [
+    'release/win-unpacked/GLEECH.exe',
+    'release/mac/GLEECH.app/Contents/MacOS/GLEECH',
+    'release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH',
+    'release/linux-unpacked/gleech-bin',
+    'release/GLEECH-linux-x86_64.AppImage',
+    'release/with spaces ü/GLEECH',
+    'tooling/run-linux-webgpu.sh',
+  ]) {
+    const options = timelineTestOptions([target, '--cpu'], 'isolated-profile', {});
+    assert.equal(options.launch.executablePath, resolve(target));
+    assert.deepEqual(options.launch.args, [
+      '--smoke-test',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+    ]);
+    assert.equal(options.requireFfmpeg, true);
+    assert.equal(options.cpu, true);
+  }
+});
+
+test('development timeline checks isolate profiles and explicitly require codecs when requested', () => {
+  const env = {
+    ELECTRON_RUN_AS_NODE: '1',
+    ELECTRON_RENDERER_URL: 'https://example.invalid',
+    PATH: 'fixture',
+  };
+  const options = timelineTestOptions(['--require-ffmpeg'], 'isolated-profile', env);
+  assert.equal(options.requireFfmpeg, true);
+  assert.equal(options.cpu, false);
+  assert.equal(options.launch.executablePath, undefined);
+  assert.deepEqual(options.launch.args, [resolve('apps/desktop'), '--smoke-test']);
+  assert.deepEqual(options.launch.env, {
+    PATH: 'fixture',
+    GLEECH_SMOKE_USER_DATA: 'isolated-profile',
+    GLEECH_TEST_NATIVE_FRAMES: '1',
+  });
+  assert.equal(env.ELECTRON_RUN_AS_NODE, '1');
+  assert.equal(timelineTestOptions([], 'profile', {}).requireFfmpeg, false);
+  assert.throws(() => timelineTestOptions(['first', 'second'], 'profile', {}));
+  assert.throws(() => timelineTestOptions(['--cpux'], 'profile', {}));
+  assert.throws(() => timelineTestOptions(['--cpu', '--require-webgpu'], 'profile', {}));
+  assert.equal(timelineTestOptions(['--require-webgpu'], 'profile', {}).requireWebgpu, true);
 });
 test('full checks retain actual scripts, flags and packaged support without fake filenames', () => {
   const plan = createWindowsPlan('full', scripts, 'GLEECH.exe');
@@ -80,21 +147,11 @@ test('stable validation gate requires code checks and the selected desktop suite
   assert.deepEqual(Object.keys(workflow.jobs), ['checks', 'desktop', 'full', 'validate']);
   assert.equal(workflow.on.workflow_dispatch.inputs.suite.default, 'quick');
   assert.deepEqual(workflow.on.workflow_dispatch.inputs.suite.options, ['quick', 'full']);
-  assert.deepEqual(workflow.on.push.tags, ['v*']);
   const steps = workflow.jobs.desktop.steps;
   assert.equal(steps.filter((step) => step.run === 'pnpm build').length, 1);
   assert.ok(!steps.some((step) => step.run?.includes('pack:win')));
   assert.ok(workflow.jobs.checks.steps.find((step) => step.run === 'pnpm check'));
   assert.deepEqual(workflow.jobs.validate.needs, ['checks', 'desktop', 'full']);
-  assert.equal(workflow.jobs.validate.if, 'always()');
-  assert.equal(
-    workflow.jobs.full.if,
-    "inputs.suite == 'full' || startsWith(github.ref, 'refs/tags/')",
-  );
-  assert.equal(
-    workflow.jobs.desktop.if,
-    "inputs.suite != 'full' && !startsWith(github.ref, 'refs/tags/')",
-  );
   assert.equal(workflow.jobs.full.strategy['fail-fast'], false);
   assert.equal(workflow.jobs.full.strategy['max-parallel'], 6);
   assert.deepEqual(
@@ -111,6 +168,40 @@ test('stable validation gate requires code checks and the selected desktop suite
   assert.equal(workflow.permissions.contents, 'read');
   assert.ok(scripts.check.includes('pnpm build:tool:check'));
 });
+test('release publication never triggers duplicate CI and full validation is explicit', () => {
+  assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push', 'workflow_dispatch']);
+  assert.deepEqual(workflow.on.push, { branches: ['main'] });
+  assert.equal(workflow.env.CI_SUITE, "${{ inputs.suite || 'quick' }}");
+  assert.equal(
+    workflow.jobs.full.if,
+    "github.event_name == 'workflow_dispatch' && inputs.suite == 'full'",
+  );
+  // Manual quick runs remain quick even when targeting a tag.
+  assert.equal(workflow.jobs.desktop.if, "inputs.suite != 'full'");
+});
+
+test('manual cancellation cannot fail or replace the required merge check', () => {
+  assert.equal(
+    workflow.jobs.validate.name,
+    "${{ github.event_name == 'workflow_dispatch' && 'manual-validate' || 'validate' }}",
+  );
+  assert.equal(
+    workflow.jobs.validate.if,
+    "${{ github.event_name != 'workflow_dispatch' || !cancelled() }}",
+  );
+});
+
+test('manual full validation is isolated from automatic quick-run cancellation', () => {
+  assert.equal(
+    workflow.concurrency.group,
+    "windows-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'quick' }}",
+  );
+  assert.equal(
+    workflow.concurrency['cancel-in-progress'],
+    "${{ github.event_name == 'pull_request' || github.event_name == 'push' }}",
+  );
+});
+
 test('outside-contributor checks do not retain credentials or run in privileged contexts', () => {
   assert.equal(workflow.on.pull_request_target, undefined);
   assert.deepEqual(workflow.permissions, { contents: 'read' });
@@ -231,7 +322,11 @@ test(
     for (const [suite, checks, desktop, full, success] of [
       ['quick', 'success', 'success', 'skipped', true],
       ['full', 'success', 'skipped', 'success', true],
+      ['quick', 'failure', 'success', 'skipped', false],
+      ['quick', 'success', 'failure', 'skipped', false],
+      ['quick', 'success', 'cancelled', 'skipped', false],
       ['full', 'failure', 'skipped', 'success', false],
+      ['full', 'cancelled', 'skipped', 'success', false],
       ['full', 'success', 'skipped', 'failure', false],
       ['full', 'success', 'skipped', 'cancelled', false],
       ['full', 'success', 'skipped', 'skipped', false],

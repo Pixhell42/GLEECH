@@ -5,6 +5,20 @@ terms or establish rights for user-imported artwork/shaders/fonts.
 
 ## Runtime dependencies
 
+### FFmpeg executable
+
+Packaged apps include FFmpeg 9.0.2 from the pinned TAS-FFMPEG v9.0.2 release,
+licensed GPL-2.0-or-later and built with the x264 and x265 software encoders.
+GLEECH launches it as a separate process; it does not link FFmpeg into GLEECH.
+Original component notices, build records and the complete corresponding-source
+archive accompany the executable under `resources/ffmpeg/` (inside
+`Contents/Resources/` on macOS). See [the FFmpeg bundle record](LICENSES/ffmpeg/README.md)
+and [pinned download checksums](LICENSES/ffmpeg/bundle.json). These terms are
+separate from GLEECH's MIT license. Preserve the entire bundle when distributing
+the app; the source archive must not be removed to reduce package size.
+
+### JavaScript and native dependencies
+
 The pinned production package inventory, SPDX declarations, upstream homepages
 and retained notice paths are in [LICENSES/dependencies.json](LICENSES/dependencies.json).
 Original license/notice texts are preserved in LICENSES and copied into the
