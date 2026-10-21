@@ -1,4 +1,6 @@
 import { installCli } from './install';
+import { UsageError } from './errors';
+import { exportTimeline, TIMELINE_OPTIONS, validateTimelineOptions } from './timeline';
 import { closeGpu, configureRendering, gpuCapabilities, renderingSettings } from './gpu';
 import { randomUUID, randomInt } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
@@ -62,7 +64,7 @@ import {
   type Paint,
 } from './style';
 
-export class UsageError extends Error {}
+export { UsageError } from './errors';
 
 const out = createPaint(process.stdout);
 const err = createPaint(process.stderr);
@@ -364,10 +366,50 @@ async function render(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, {
     ...OUTPUT,
     ...STACK,
+    ...TIMELINE_OPTIONS,
     'save-project': { type: 'string' },
     'save-preset': { type: 'string' },
   });
   if (values.help || !positionals.length) return help('render');
+  validateTimelineOptions(values);
+  if (values['timeline']) {
+    if (positionals.length !== 1 || !/\.gleech$/i.test(positionals[0]!))
+      throw new UsageError('--timeline takes one saved .gleech project.');
+    const input = resolve(positionals[0]!);
+    const session = await openInput(input);
+    await applyStackOptions(
+      session,
+      values,
+      await Promise.all(((values.preset as string[] | undefined) ?? []).map(findPreset)),
+    );
+    const task = progress(`Rendering timeline ${out.bold(stemOf(input))}`);
+    const abort = new AbortController();
+    const cancel = () => abort.abort();
+    process.once('SIGINT', cancel);
+    process.once('SIGTERM', cancel);
+    try {
+      const result = await exportTimeline(session, values, {
+        signal: abort.signal,
+        onProgress: ({ phase, done, total }) =>
+          task.update(`${phase === 'encoding' ? 'Encoding' : 'Rendering'} ${done}/${total}`),
+      });
+      task.done(`${out.text(result.output)} ${out.faint(`${result.frames} frames`)}`);
+      result.warnings.forEach(warn);
+      result.notes.forEach(warn);
+      if (values.json) write(JSON.stringify(result, null, 2));
+      return 0;
+    } catch (error) {
+      task.fail();
+      if (abort.signal.aborted) {
+        warn('Timeline export cancelled.');
+        return 130;
+      }
+      throw error;
+    } finally {
+      process.removeListener('SIGINT', cancel);
+      process.removeListener('SIGTERM', cancel);
+    }
+  }
   const inputs = await expandInputs(positionals);
   const plan = outputPlan(values, inputs.length > 1, '-gleech');
   if (inputs.length > 1 && (values['save-project'] || values['save-preset']))
@@ -954,6 +996,12 @@ const HELP: Record<
       ['-s, --seed <n>', 'master seed (0–4294967295)'],
       ['-o, --output <file|dir>', 'output file, or folder for several inputs'],
       ['-f, --format <fmt>', 'png | jpeg | webp | tiff (default from extension)'],
+      ['    --timeline', 'export one saved timeline: mp4 | gif | png (sequence)'],
+      ['    --fps <rate>', 'timeline output rate (GIF: 10, 12, 15, 24 or 30)'],
+      ['    --range <range>', 'whole | work | inout (default whole)'],
+      ['    --start / --end <s>', 'override timeline range boundaries in seconds'],
+      ['    --width <px>', 'timeline output width; preserve source aspect ratio'],
+      ['    --no-audio', 'omit timeline audio (PNG sequences are always silent)'],
       ['-q, --quality <1-100>', 'JPEG/WebP quality (default 90)'],
       ['    --max-size <px>', 'render a reduced draft with matching field placement'],
       ['    --save-project <f>', 'also save an editable .gleech project'],
@@ -967,6 +1015,8 @@ const HELP: Record<
       'gleech render shots/ -p "liquid glass" -o out/ -f webp -q 85',
       'gleech render photo.png -e "pixel-sort:amount=70%,direction=vertical" -e crt --show',
       'gleech render project.gleech -o final.tiff',
+      'gleech render project.gleech --timeline -o movie.mp4',
+      'gleech render project.gleech --timeline -f png -o frames/ --range work',
     ],
   },
   gleech: {

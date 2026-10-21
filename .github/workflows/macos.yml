@@ -87,7 +87,7 @@ jobs:
           node tooling/image-check.mjs "$gleech_executable" --cpu
           node tooling/mcp-check.mjs "$gleech_executable" --cpu
           node tooling/mcp-clients-check.mjs "$gleech_executable"
-          node tooling/cli-check.mjs "$gleech_executable" --cpu
+          node tooling/cli-check.mjs "$gleech_executable" --cpu --require-ffmpeg
           node tooling/cli-launcher-check.mjs "$GLEECH_MAC_APP"
       - name: Upload verified alpha package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

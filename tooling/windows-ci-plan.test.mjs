@@ -39,6 +39,10 @@ test('routine changes keep critical workflows without rebuilding or packaging', 
 });
 
 test('required quick checks exercise timeline media with the pinned FFmpeg bundle', () => {
+  const cli = createWindowsPlan('quick', scripts).find(
+    ({ args }) => args[0] === 'tooling/cli-check.mjs',
+  );
+  assert.ok(cli.args.includes('--require-ffmpeg'));
   const plan = createWindowsPlan('quick', scripts).map(({ args }) => args[0]);
   const bridge = plan.indexOf('tooling/ffmpeg-check.mjs');
   assert.ok(bridge >= 0);
