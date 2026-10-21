@@ -342,6 +342,26 @@ describe('shared timeline runner', () => {
     expect(h.reader.read).not.toHaveBeenCalled();
   });
 
+  it('wakes a blocked video read when cancelled', async () => {
+    const h = host();
+    const controller = new AbortController();
+    const gate = deferred<RenderFrame | null>();
+    h.reader.read.mockImplementationOnce(() => gate.promise);
+    h.reader.close.mockImplementation(async () => {
+      gate.reject(new Error('Reader closed'));
+    });
+    const running = runTimelineRender(
+      request(),
+      { ...h.adapters, source: h.video },
+      { signal: controller.signal },
+    );
+    await vi.waitFor(() => expect(h.reader.read).toHaveBeenCalledOnce());
+    controller.abort();
+    await expect(running).rejects.toBeInstanceOf(RenderCancelledError);
+    expect(h.encoder.cancel).toHaveBeenCalledOnce();
+    expect(h.reader.close).toHaveBeenCalledOnce();
+  });
+
   it('interrupts final encoding and never reports aborted work as successful', async () => {
     const h = host();
     const controller = new AbortController();
