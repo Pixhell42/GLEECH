@@ -10,9 +10,10 @@ keep your work editable in portable projects.
 
 Windows x64 is the supported development and testing target. An experimental
 macOS build for Intel and Apple Silicon and an experimental Linux x64 build
-include local MCP support. This is a
-still-image editor. Video/GIF animation, shader playback/export, animation tools
-and timeline editing are planned and waiting for design.
+include local MCP support. Image mode is the still editor; Timeline mode animates
+any effect control with keyframes, curves, audio and LFO modulators, and renders
+video, GIFs and loops, image sequences and flip books (see
+[Timeline, video and GIF](docs/TIMELINE.md)). Movie and loop export use ffmpeg.
 
 The current library contains **109 built-in effects**, including **46 original
 shaders**, **29 starter presets**, **40 depth maps** and **40 vector maps**.
@@ -114,7 +115,7 @@ pnpm cli render shots/ -p signal-burn -o out/
 pnpm cli gleech photo.jpg -n 9 --sheet sheet.png
 ```
 
-Builds from the CLI/TUI branch include GPU/CPU rendering and a `gleech` launcher under `resources/cli`. See the
+Current source builds include GPU/CPU rendering and a `gleech` launcher under `resources/cli`. See the
 [CLI and TUI guide](docs/CLI.md).
 
 ## Community and contributions

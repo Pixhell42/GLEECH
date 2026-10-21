@@ -1,6 +1,6 @@
 # GLEECH roadmap
 
-Updated 2026-10-15. This roadmap describes product priorities, not committed
+Updated 2026-10-19. This roadmap describes product priorities, not committed
 release dates. Beta feedback helps determine the order of work.
 
 ## Available today
@@ -13,6 +13,9 @@ release dates. Beta feedback helps determine the order of work.
   and local stdio MCP control.
 - Favorites, adjustable panels, remembered control sections, UI color choices
   and native bug/feature reporting through GitHub sign-in.
+- Timeline mode: keyframes and curves for any control, audio and LFO modulators,
+  effect ranges, seed tracks, video clips and audio tracks, and background renders
+  to video, GIF/WebP/APNG loops, PNG sequences and flip books.
 
 ## Performance and responsiveness
 
@@ -86,13 +89,18 @@ may differ; separate copies of the product roadmap should not diverge.
 
 - Global drawing tools and blank layers, polygon/Bezier drawing, raster drawing,
   eraser/fill, and Image Size/Canvas Size tools.
-- Video/GIF animation, shader playback and animation export, animation tools
-  and timeline editing.
 - Shape-local shader patterns with a choice of whether the pattern follows the
   shape; keep this distinct from a static application mask.
 
 These are planned product directions awaiting interaction and technical design
 before implementation. They are not available in the current beta.
+
+## Timeline follow-ups
+
+- Bundle a reviewed ffmpeg build with its notices in each package.
+- Crop framing that follows the detected subject, and subject masks per video frame.
+- Calling another MCP server's upscale tool from the Render dialog.
+- Smoother playback for clips Chromium can't decode directly.
 
 ## Deferred exploration
 

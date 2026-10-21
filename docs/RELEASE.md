@@ -82,8 +82,9 @@ advisories visible and reassess changes; scan results age and are not a security
 
 - Windows x64 beta, with separate experimental macOS Intel/Apple Silicon and Linux x64 alphas.
 - Development installers are unsigned; no automatic updater/public publishing job.
-- Still images only; Phase chooses a saved frame. Video/GIF animation, shader
-  playback/export, animation tools and timeline editing are waiting for design.
+- Timeline mode animates controls and renders video, GIFs and sequences. Movies,
+  loops and video import need ffmpeg (bundled builds pending; Locate ffmpeg… or
+  PATH). Clips and audio tracks are referenced by path, not embedded in projects.
 - Built-in shaders have CPU fallback; imported WGSL/ISF needs WebGPU/WebGL2.
 - Imported shader support is a bounded single-function/single-pass subset.
 - Global drawing/blank layers, new polygon/Bezier tools, Image Size and Canvas Size
