@@ -196,6 +196,9 @@ Undo step, as they do in the app.
 
 ## Limits
 
+- Timeline video/GIF exports, clip playback and keyframe/modulator editing
+  currently require the desktop app. The CLI and TUI use the base still-image
+  stack; they do not evaluate timeline animation or decode the clip at its playhead.
 - CPU fallback applies to built-in effects. Imported shaders require their GPU
   backend or explicit skipping. Unsupported imported shader programs fail clearly.
 - Reading JPEG/WebP and writing JPEG/WebP/TIFF, the JPEG Recompression effect and

@@ -30,12 +30,25 @@ test('native test frames require an isolated smoke profile and explicit test env
 });
 test('routine changes keep critical workflows without rebuilding or packaging', () => {
   const plan = createWindowsPlan('quick', scripts);
-  assert.equal(plan.length, 8);
+  assert.equal(plan.length, 11);
   for (const name of ['image', 'editing', 'project', 'preset-transfer', 'mcp', 'cli'])
     assert.ok(
       plan.some(({ args }) => args[0] === `tooling/${name}-check.mjs` && args.includes('--cpu')),
     );
   assert.ok(plan.every(({ args, packaged }) => !packaged && existsSync(args[0])));
+});
+
+test('required quick checks exercise timeline media with the pinned FFmpeg bundle', () => {
+  const plan = createWindowsPlan('quick', scripts).map(({ args }) => args[0]);
+  const bridge = plan.indexOf('tooling/ffmpeg-check.mjs');
+  assert.ok(bridge >= 0);
+  assert.ok(plan.indexOf('tooling/timeline-check.mjs') > bridge);
+  assert.ok(plan.indexOf('tooling/timeline-media-check.mjs') > bridge);
+  const steps = workflow.jobs.desktop.steps;
+  const prepare = steps.findIndex((step) => step.run === 'pnpm ffmpeg:prepare');
+  assert.ok(prepare > steps.findIndex((step) => step.run === 'pnpm build'));
+  assert.ok(prepare < steps.findIndex((step) => step.run === 'node tooling/windows-ci.mjs quick'));
+  assert.equal(steps[prepare].if, "steps.scope.outputs.desktop == 'true'");
 });
 test('full checks retain actual scripts, flags and packaged support without fake filenames', () => {
   const plan = createWindowsPlan('full', scripts, 'GLEECH.exe');

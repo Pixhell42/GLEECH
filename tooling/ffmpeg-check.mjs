@@ -1,7 +1,7 @@
 // Exercise the real bridge and locator with PATH disabled and an isolated profile.
 import assert from 'node:assert/strict';
 import { cp, mkdir, mkdtemp, unlink } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { prepareFfmpeg } from './prepare-ffmpeg.mjs';
@@ -35,7 +35,8 @@ try {
   assert.equal(bundled.value.version, '9.0.2-tas');
   assert.ok(bundled.value.encoders.includes('libx264'));
   assert.ok(bundled.value.encoders.includes('libx265'));
-  assert.ok(bundled.value.path.includes(join('ffmpeg', 'bin')));
+  // Development bundles include a target directory between ffmpeg/ and bin/.
+  assert.equal(basename(dirname(bundled.value.path)), 'bin');
   // On Windows the DLLs stay beside the selected executable; on Unix preserve
   // the complete bin/lib relative layout for the executable's runtime paths.
   await cp(dirname(dirname(bundled.value.path)), alternate, {
