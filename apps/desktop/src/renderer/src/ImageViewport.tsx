@@ -27,7 +27,15 @@ import type { ImportedImage } from '../../shared/image-api';
 import { EffectProcessor } from './EffectProcessor';
 import { MaskPaintSurface, type MaskPainting } from './MaskPaintSurface';
 
+/** Rendered half-resolution frames kept for instant timeline playback. */
+const FRAME_CACHE_BYTES = 512 * 1024 * 1024;
+function playbackDimension(width: number, height: number): number {
+  return Math.max(360, Math.min(1280, Math.ceil(Math.max(width, height) / 2)));
+}
+
 export interface ViewportHandle {
+  /** Forget cached timeline frames (the recipe changed). */
+  clearFrameCache(): void;
   showImage(
     image: ImportedImage,
     effects?: readonly EffectInstance[],
@@ -58,6 +66,16 @@ interface Props {
   originalPixels(id: string): Promise<PixelImage>;
   maskPainting: MaskPainting | null;
   feedback: { text: string; id: number } | null;
+  /** Identifies the current timeline frame and recipe, for the frame cache. */
+  frameKey?: string | null;
+  /** Playing: render half-resolution drafts only and cache them. */
+  playback?: boolean;
+  /** A decoded video frame that replaces the source image for this frame. */
+  sourceFrame?: PixelImage | null;
+  /** A cached playback frame was shown (`cached`) or rendered into the cache. */
+  onFrameShown?(key: string, cached: boolean): void;
+  /** A frame left the cache to stay within its memory budget. */
+  onFrameEvicted?(key: string): void;
 }
 
 function maskDraftRecipe(
@@ -96,9 +114,37 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
     originalPixels,
     maskPainting,
     feedback,
+    frameKey = null,
+    playback = false,
+    sourceFrame = null,
+    onFrameShown,
+    onFrameEvicted,
   },
   ref,
 ) {
+  const frameKeyRef = useRef(frameKey);
+  const playbackRef = useRef(playback);
+  const sourceFrameRef = useRef(sourceFrame);
+  const frameShown = useRef(onFrameShown);
+  const frameEvicted = useRef(onFrameEvicted);
+  const frameCache = useRef(new Map<string, PixelImage>());
+  const frameCacheBytes = useRef(0);
+  useEffect(() => {
+    frameShown.current = onFrameShown;
+    frameEvicted.current = onFrameEvicted;
+  }, [onFrameShown, onFrameEvicted]);
+  const cacheFrame = (key: string, pixels: PixelImage) => {
+    const cache = frameCache.current;
+    if (cache.has(key)) return;
+    cache.set(key, pixels);
+    frameCacheBytes.current += pixels.pixels.byteLength;
+    while (frameCacheBytes.current > FRAME_CACHE_BYTES && cache.size > 1) {
+      const [oldest, image] = cache.entries().next().value!;
+      cache.delete(oldest);
+      frameCacheBytes.current -= image.pixels.byteLength;
+      frameEvicted.current?.(oldest);
+    }
+  };
   const stage = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -180,9 +226,11 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
     if (layer.current) layer.current.dataset.requestedRevision = String(revision.current);
     // Let a small in-flight preview finish so a continuous slider drag still
     // paints frames. Full-detail work is cancelled as soon as controls change.
+    // During playback a draft always finishes; the loop then renders the newest frame.
     if (
       previewPhase.current !== 'draft' ||
-      draftImage.current !== current.current?.raw ||
+      (!playbackRef.current &&
+        draftImage.current !== (sourceFrameRef.current ?? current.current?.raw)) ||
       comparison.current
     )
       processor.current?.cancelPreview();
@@ -197,7 +245,28 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
         const effects = recipe.current;
         const masterSeed = seed.current;
         const original = comparison.current;
-        const raw = image.raw;
+        const raw = sourceFrameRef.current ?? image.raw;
+        // Mask painting changes the recipe without changing the frame, so skip the cache.
+        const key = original || painting.current ? null : frameKeyRef.current;
+        const playing = playbackRef.current && !original;
+        let cachedDraft = false;
+        if (key) {
+          const hit = frameCache.current.get(key);
+          if (hit) {
+            cachedDraft = true;
+            // Refresh LRU order, show instantly, then refine only when paused.
+            frameCache.current.delete(key);
+            frameCache.current.set(key, hit);
+            await renderer.show(hit);
+            frameShown.current?.(key, true);
+            if (layer.current) layer.current.dataset.frameKey = key;
+            if (version !== revision.current) continue;
+            if (playing) {
+              if (layer.current) layer.current.dataset.previewQuality = 'playback';
+              return;
+            }
+          }
+        }
         if (budgetSource.current !== raw) {
           previewBudget.current.reset();
           budgetSource.current = raw;
@@ -205,7 +274,9 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
         const started = performance.now();
         let pixels = raw;
         const progressive =
-          !original && (needsInteractivePreview(raw, effects) || painting.current !== null);
+          !original &&
+          !cachedDraft &&
+          (playing || needsInteractivePreview(raw, effects) || painting.current !== null);
         let cached = false;
         if (!original && effects.some((effect) => effect.enabled && effect.params.amount > 0)) {
           const cache = editedCache.current;
@@ -229,7 +300,11 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                 } finally {
                   setDetectingSubject(false);
                 }
-                if (current.current !== image || raw !== image.raw || version !== revision.current)
+                if (
+                  current.current !== image ||
+                  raw !== (sourceFrameRef.current ?? image.raw) ||
+                  version !== revision.current
+                )
                   continue;
               }
               previewPhase.current = progressive ? 'draft' : 'detail';
@@ -239,7 +314,13 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                 reference: image.source,
                 purpose: 'preview',
                 subjectMask,
-                ...(progressive ? { previewMaxDimension: previewBudget.current.maximum } : {}),
+                ...(progressive
+                  ? {
+                      previewMaxDimension: playing
+                        ? playbackDimension(raw.width, raw.height)
+                        : previewBudget.current.maximum,
+                    }
+                  : {}),
                 ...(maskStroke.current && painting.current
                   ? { activeMaskId: painting.current.effectId }
                   : {}),
@@ -247,10 +328,16 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
               if (
                 progressive &&
                 current.current === image &&
-                raw === image.raw &&
+                // While playing, a finished draft is shown and cached under the
+                // frame it was rendered for, even if the clip has moved on.
+                (playing || raw === (sourceFrameRef.current ?? image.raw)) &&
                 !comparison.current
               ) {
                 await renderer.show(pixels);
+                if (playing && key) {
+                  cacheFrame(key, pixels);
+                  frameShown.current?.(key, false);
+                }
                 previewBudget.current.record(performance.now() - started);
                 if (layer.current) {
                   layer.current.dataset.previewQuality = 'interactive';
@@ -265,6 +352,13 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                   );
                 }
                 if (version !== revision.current) continue;
+                if (playing) {
+                  if (layer.current) {
+                    layer.current.dataset.previewQuality = 'playback';
+                    if (key) layer.current.dataset.frameKey = key;
+                  }
+                  return;
+                }
                 // Keep the active stroke on the fast raster. A pause while the
                 // pointer is still down must not start expensive full-detail work.
                 // Committing the stroke requests the exact refinement normally.
@@ -281,7 +375,11 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                     resolve();
                   };
                 });
-                if (current.current !== image || raw !== image.raw || version !== revision.current)
+                if (
+                  current.current !== image ||
+                  raw !== (sourceFrameRef.current ?? image.raw) ||
+                  version !== revision.current
+                )
                   continue;
                 previewPhase.current = 'detail';
                 pixels = await processor.current!.render(raw, effects, {
@@ -297,7 +395,11 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
             }
           }
         }
-        if (current.current !== image || raw !== image.raw || version !== revision.current)
+        if (
+          current.current !== image ||
+          raw !== (sourceFrameRef.current ?? image.raw) ||
+          version !== revision.current
+        )
           continue;
         if (!original) editedCache.current = { raw, effects, seed: masterSeed, pixels };
         previewPhase.current = 'detail';
@@ -308,6 +410,7 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
           layer.current.dataset.renderSource = image.source.id;
           layer.current.dataset.renderRevision = String(version);
           layer.current.dataset.renderSeed = String(masterSeed);
+          layer.current.dataset.frameKey = key ?? '';
           layer.current.dataset.renderMode = original ? 'original' : 'edited';
           layer.current.dataset.previewQuality = 'full';
           layer.current.dataset.previewWidth = String(pixels.width);
@@ -352,11 +455,24 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
     recipe.current = maskDraftRecipe(effects, painting.current?.effectId, maskStroke.current);
     seed.current = masterSeed;
     comparison.current = originalView || heldOriginal;
+    frameKeyRef.current = frameKey;
+    playbackRef.current = playback;
+    sourceFrameRef.current = sourceFrame;
     if (current.current)
       void renderCurrent().catch((error) => {
         onError(error instanceof Error ? error.message : 'Could not render effects.');
       });
-  }, [effects, masterSeed, originalView, heldOriginal, onError, renderCurrent]);
+  }, [
+    effects,
+    masterSeed,
+    originalView,
+    heldOriginal,
+    frameKey,
+    playback,
+    sourceFrame,
+    onError,
+    renderCurrent,
+  ]);
 
   const draftMaskStroke = useCallback(
     (stroke: MaskStroke | null) => {
@@ -486,6 +602,10 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
     () => ({
       cancelRender() {
         processor.current?.cancelAll();
+      },
+      clearFrameCache() {
+        frameCache.current.clear();
+        frameCacheBytes.current = 0;
       },
       clearImage() {
         maskStroke.current = null;
@@ -724,7 +844,8 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
         {source && (originalView || heldOriginal) && (
           <div className="comparison-badge">Original</div>
         )}
-        {(feedback || loadingDetail || previewBusy) && source && (
+        {/* Playback renders every frame; the header chip shows its rate instead. */}
+        {(feedback || loadingDetail || (previewBusy && !playback)) && source && (
           <div className="detail-loading" role="status">
             {feedback ? (
               <span key={feedback.id} data-feedback-id={feedback.id}>

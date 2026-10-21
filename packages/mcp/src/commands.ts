@@ -2,9 +2,26 @@ import {
   createCommandService,
   generateVariations,
   type CommandService,
+  type TimelineChange,
   type VariationCandidate,
 } from '@gleech/command-service';
 import {
+  audioIsClipSound,
+  ANIMATABLE_APPLICATION_KEYS,
+  animationDefinition,
+  assertParameterAnimation,
+  createTimeline,
+  frameCount,
+  frameTime,
+  timeFrame,
+  withoutImageData,
+  type ActiveRange,
+  type EffectAnimation,
+  type Keyframe,
+  type Modulator,
+  type ParameterAnimation,
+  type ParameterDefinition,
+  type Timeline,
   EFFECT_DEFINITIONS,
   applicationParameters,
   applicationValue,
@@ -24,10 +41,142 @@ import {
   projectSources,
 } from '@gleech/project-model';
 import { EFFECT_CATEGORY } from '@gleech/project-model/effect-catalog';
-import { requestSchema, type McpRequest, type McpOperation } from './protocol';
+import { requestSchema, type McpModulator, type McpRequest, type McpOperation } from './protocol';
 import { semanticEffects, SEMANTIC_CONTROLS } from './semantic';
 
-function effectInfo(effect: EffectInstance, index: number, count: number) {
+/** Seconds at the end of the last frame. */
+function timelineEnd(timeline: Pick<Timeline, 'fps' | 'duration'>): number {
+  return frameCount(timeline) / timeline.fps;
+}
+const seconds = (value: number) => Math.round(value * 1e6) / 1e6;
+
+/** Keys and modulators in the same shape set_keyframes and set_modulators accept. */
+function animationInfo(animation: EffectAnimation, timeline: Timeline | undefined) {
+  return Object.fromEntries(
+    Object.entries(animation).map(([key, lane]) => [
+      key,
+      {
+        keys: lane.keys.map((keyframe) => ({
+          time: keyframe.t,
+          ...(timeline ? { frame: timeFrame(keyframe.t, timeline.fps) } : {}),
+          value: keyframe.value,
+          interpolation: keyframe.interpolation,
+          ...(keyframe.inHandle ? { inHandle: keyframe.inHandle } : {}),
+          ...(keyframe.outHandle ? { outHandle: keyframe.outHandle } : {}),
+        })),
+        modulators: lane.modulators ?? [],
+      },
+    ]),
+  );
+}
+
+/** Timeline settings without media paths or audio analysis data. */
+export function timelineSummary(timeline: Timeline) {
+  return {
+    fps: timeline.fps,
+    duration: timeline.duration,
+    frameCount: frameCount(timeline),
+    end: seconds(timelineEnd(timeline)),
+    loop: timeline.loop,
+    workArea: timeline.workArea,
+    inOut: timeline.inOut ?? null,
+    seed: timeline.seed,
+    bpm: timeline.bpm ?? null,
+    tempo: timeline.bpm ?? (timeline.audio?.analysis?.bpm || 120),
+    markers: timeline.markers.map((marker) => ({
+      id: marker.id,
+      name: marker.name,
+      time: marker.t,
+      frame: timeFrame(marker.t, timeline.fps),
+      ...(marker.snapshotId ? { snapshotId: marker.snapshotId } : {}),
+    })),
+    video: timeline.video
+      ? {
+          name: timeline.video.name,
+          width: timeline.video.width,
+          height: timeline.video.height,
+          fps: timeline.video.fps,
+          duration: timeline.video.duration,
+          hasAudio: timeline.video.hasAudio,
+        }
+      : null,
+    audio: timeline.audio
+      ? {
+          name: timeline.audio.name,
+          duration: timeline.audio.duration,
+          sampleRate: timeline.audio.sampleRate,
+          channels: timeline.audio.channels,
+          analysis: timeline.audio.analysis
+            ? { bpm: timeline.audio.analysis.bpm, beats: timeline.audio.analysis.beats.length }
+            : null,
+          volume: timeline.audio.volume ?? 1,
+          muted: timeline.audio.muted ?? false,
+          fromClip: audioIsClipSound(timeline),
+        }
+      : null,
+  };
+}
+
+/** Keys that set_keyframes and set_modulators accept for a layer. */
+export function animatableParameters(effect: EffectInstance): string[] {
+  return [
+    ...Object.keys(getEffectDefinition(effect).parameters),
+    ...ANIMATABLE_APPLICATION_KEYS,
+  ].filter((key) => animationDefinition(effect, key));
+}
+
+/** get_timeline: settings, markers and every layer with keys, modulators or an active range. */
+export function timelineInfo(project: ProjectState, revision: number) {
+  const timeline = project.timeline;
+  const count = project.effects.length;
+  return {
+    revision,
+    timeline: timeline ? timelineSummary(timeline) : null,
+    layers: project.effects
+      .map((effect, index) => ({ effect, index: count - 1 - index }))
+      .reverse()
+      .filter(({ effect }) => effect.animation || effect.activeRange)
+      .map(({ effect, index }) => ({
+        instanceId: effect.instanceId,
+        type: effect.type,
+        title: getEffectDefinition(effect).title,
+        index,
+        enabled: effect.enabled,
+        locked: Boolean(effect.locked),
+        activeRange: effect.activeRange ?? null,
+        parameters: Object.entries(effect.animation ?? {}).map(([key, lane]) => {
+          const definition = animationDefinition(effect, key);
+          return {
+            parameter: key,
+            label: definition?.label ?? key,
+            kind: definition?.kind ?? null,
+            keys: lane.keys.length,
+            ...(lane.keys.length
+              ? { firstKey: lane.keys[0]!.t, lastKey: lane.keys[lane.keys.length - 1]!.t }
+              : {}),
+            interpolations: [...new Set(lane.keys.map((keyframe) => keyframe.interpolation))],
+            modulators: (lane.modulators ?? []).map((modulator) => ({
+              id: modulator.id,
+              kind: modulator.kind,
+              enabled: modulator.enabled,
+            })),
+          };
+        }),
+      })),
+    units:
+      'Times are seconds from the timeline start; frames are zero-based at the timeline fps. Key values use the get_effect_parameters units. Read a layer’s exact keys and modulators from get_project_state or get_effect_parameters.',
+    ...(timeline
+      ? {}
+      : { note: 'This project has no timeline yet. Create one with set_timeline.' }),
+  };
+}
+
+function effectInfo(
+  effect: EffectInstance,
+  index: number,
+  count: number,
+  timeline?: Timeline | undefined,
+) {
   return {
     instanceId: effect.instanceId,
     type: effect.type,
@@ -50,7 +199,81 @@ function effectInfo(effect: EffectInstance, index: number, count: number) {
     ...(effect.type === 'shader-import'
       ? { shader: { id: effect.shader.id, name: effect.shader.name } }
       : {}),
+    animation: effect.animation ? animationInfo(effect.animation, timeline) : null,
+    activeRange: effect.activeRange ?? null,
   };
+}
+
+/** Reuse unchanged layer objects so renderer caches keyed by identity stay warm. */
+function sameEffect(a: EffectInstance, b: EffectInstance): boolean {
+  if (a === b) return true;
+  const imagesA = effectImages(a);
+  const imagesB = effectImages(b);
+  return (
+    imagesA.length === imagesB.length &&
+    imagesA.every((image, index) => image.png === imagesB[index]!.png) &&
+    JSON.stringify(withoutImageData(a)) === JSON.stringify(withoutImageData(b))
+  );
+}
+
+function requireTimeline(service: CommandService): Timeline {
+  const timeline = service.getState().timeline;
+  if (!timeline)
+    throw new Error(
+      'This project has no timeline yet. Add a set_timeline operation first; it can come earlier in the same apply_operations batch.',
+    );
+  return timeline;
+}
+/** Snap seconds to the nearest frame, refusing times after the timeline end. */
+function snapTime(t: number, timeline: Timeline, label: string): number {
+  const snapped = frameTime(timeFrame(t, timeline.fps), timeline.fps);
+  const end = timelineEnd(timeline);
+  if (snapped > end + 1e-9)
+    throw new Error(
+      `${label} (${t} s) is after the timeline end (${seconds(end)} s). Extend duration with set_timeline first.`,
+    );
+  return snapped;
+}
+function snapRange(range: ActiveRange, timeline: Timeline, label: string): ActiveRange {
+  const start = snapTime(range.start, timeline, `${label} start`);
+  const end = snapTime(range.end, timeline, `${label} end`);
+  if (!(end > start))
+    throw new Error(
+      `${label} must cover at least one frame at ${timeline.fps} fps (${range.start}–${range.end} s snaps to a single frame).`,
+    );
+  return { start, end };
+}
+function animatable(effect: EffectInstance, key: string): ParameterDefinition {
+  const definition = animationDefinition(effect, key);
+  if (definition) return definition;
+  const known =
+    Object.hasOwn(getEffectDefinition(effect).parameters, key) ||
+    Object.hasOwn(applicationParameters(), key);
+  throw new Error(
+    `${known ? `Parameter ${key} cannot be animated` : `Unknown parameter: ${key}`} on ${getEffectDefinition(effect).title} (${effect.instanceId}). Animatable keys: ${animatableParameters(effect).join(', ')}. Text, gradient-stop and linked color controls stay static.`,
+  );
+}
+function checkKeyValue(value: number | string, definition: ParameterDefinition, label: string) {
+  if (definition.kind === 'number') {
+    if (typeof value !== 'number' || value < definition.min || value > definition.max)
+      throw new Error(
+        `${label}: ${definition.label} needs a number from ${definition.min} to ${definition.max}, in the same units as get_effect_parameters and set_parameters.`,
+      );
+  } else if (definition.kind === 'choice') {
+    if (!definition.options.some((option) => option.value === value))
+      throw new Error(
+        `${label}: ${definition.label} must be one of ${definition.options.map((option) => option.value).join(', ')}.`,
+      );
+  } else if (definition.kind === 'color') {
+    if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value))
+      throw new Error(`${label}: ${definition.label} needs a #RRGGBB color.`);
+  }
+}
+function modelModulator(input: McpModulator, id: string): Modulator {
+  // Omitted optional settings (invert, intensity, offset) stay absent.
+  return Object.fromEntries(
+    Object.entries({ ...input, id }).filter(([, value]) => value !== undefined),
+  ) as unknown as Modulator;
 }
 
 export function createMcpCommands(
@@ -146,6 +369,44 @@ export function createMcpCommands(
       service.setSeed(operation.seed);
       return;
     }
+    if (operation.action === 'set_timeline') {
+      if (!service.getState().timeline)
+        service.setTimeline(
+          createTimeline({
+            ...(operation.fps === undefined ? {} : { fps: operation.fps }),
+            ...(operation.duration === undefined ? {} : { duration: operation.duration }),
+          }),
+        );
+      const current = service.getState().timeline!;
+      const target = {
+        fps: operation.fps ?? current.fps,
+        duration: operation.duration ?? current.duration,
+      };
+      const next = { ...current, ...target };
+      const change: TimelineChange = { ...target };
+      if (operation.loop !== undefined) change.loop = operation.loop;
+      if (operation.workArea !== undefined)
+        change.workArea = operation.workArea && snapRange(operation.workArea, next, 'workArea');
+      if (operation.inOut !== undefined)
+        change.inOut = operation.inOut ? snapRange(operation.inOut, next, 'inOut') : undefined;
+      if (operation.bpm !== undefined) change.bpm = operation.bpm ?? undefined;
+      if (operation.seed)
+        change.seed = {
+          mode: operation.seed.mode,
+          every: operation.seed.every ?? current.seed.every,
+        };
+      if (operation.audioVolume !== undefined || operation.audioMuted !== undefined) {
+        if (!current.audio)
+          throw new Error('This timeline has no audio track; audioVolume and audioMuted need one.');
+        change.audio = {
+          ...current.audio,
+          ...(operation.audioVolume === undefined ? {} : { volume: operation.audioVolume }),
+          ...(operation.audioMuted === undefined ? {} : { muted: operation.audioMuted }),
+        };
+      }
+      service.updateTimeline(change);
+      return;
+    }
     const effect = find(service, operation.instanceId);
     if (effect.locked && operation.action !== 'set_locked')
       throw new Error('This effect is locked. Unlock it explicitly before modifying it.');
@@ -216,6 +477,94 @@ export function createMcpCommands(
           service.getState().effects.length - 1 - operation.index,
         );
         return;
+      case 'set_keyframes': {
+        const key = operation.parameter;
+        const definition = animatable(effect, key);
+        const current = effect.animation?.[key];
+        if (operation.keys === null) {
+          if (!current?.keys.length) return;
+          service.updateEffect(effect.instanceId, {
+            animation: {
+              [key]: current.modulators?.length
+                ? { keys: [], modulators: current.modulators }
+                : null,
+            },
+          });
+          return;
+        }
+        const timeline = requireTimeline(service);
+        const keys = new Map<number, Keyframe>();
+        operation.keys.forEach((input, index) => {
+          const label = `Key ${index + 1}`;
+          const t = snapTime(input.time, timeline, `${label} time`);
+          const frame = timeFrame(t, timeline.fps);
+          if (keys.has(frame))
+            throw new Error(
+              `${label} (${input.time} s) lands on frame ${frame}, which another key in this list already uses at ${timeline.fps} fps. Use one key per frame.`,
+            );
+          checkKeyValue(input.value, definition, label);
+          keys.set(frame, {
+            t,
+            value: input.value,
+            interpolation: input.interpolation,
+            ...(input.inHandle ? { inHandle: input.inHandle } : {}),
+            ...(input.outHandle ? { outHandle: input.outHandle } : {}),
+          });
+        });
+        if (operation.merge)
+          for (const existing of current?.keys ?? []) {
+            const frame = timeFrame(existing.t, timeline.fps);
+            if (!keys.has(frame)) keys.set(frame, existing);
+          }
+        const animation: ParameterAnimation = {
+          keys: [...keys.values()].sort((a, b) => a.t - b.t),
+          ...(current?.modulators ? { modulators: current.modulators } : {}),
+        };
+        assertParameterAnimation(animation, definition, key);
+        service.updateEffect(effect.instanceId, { animation: { [key]: animation } });
+        return;
+      }
+      case 'set_modulators': {
+        const key = operation.parameter;
+        const definition = animatable(effect, key);
+        const current = effect.animation?.[key];
+        if (!operation.modulators.length) {
+          if (!current?.modulators?.length) return;
+          service.updateEffect(effect.instanceId, {
+            animation: { [key]: current.keys.length ? { keys: current.keys } : null },
+          });
+          return;
+        }
+        requireTimeline(service);
+        if (definition.kind !== 'number')
+          throw new Error(
+            `Modulators need a numeric parameter; ${definition.label} (${key}) is a ${definition.kind} control. Animate it with set_keyframes instead.`,
+          );
+        const ids = new Set<string>();
+        const modulators = operation.modulators.map((input, index) => {
+          // Keep an omitted id stable so random-step LFOs keep their pattern.
+          const previous = current?.modulators?.[index];
+          const id =
+            input.id ??
+            (previous?.kind === input.kind && !ids.has(previous.id) ? previous.id : uuid());
+          if (ids.has(id)) throw new Error(`Duplicate modulator id: ${id}.`);
+          ids.add(id);
+          return modelModulator(input, id);
+        });
+        const animation: ParameterAnimation = { keys: current?.keys ?? [], modulators };
+        assertParameterAnimation(animation, definition, key);
+        service.updateEffect(effect.instanceId, { animation: { [key]: animation } });
+        return;
+      }
+      case 'set_active_range':
+        if (operation.range === null) {
+          if (effect.activeRange) service.updateEffect(effect.instanceId, { activeRange: null });
+          return;
+        }
+        service.updateEffect(effect.instanceId, {
+          activeRange: snapRange(operation.range, requireTimeline(service), 'The active range'),
+        });
+        return;
     }
   }
   function checkRevision(request: McpRequest) {
@@ -243,9 +592,10 @@ export function createMcpCommands(
       masterSeed: project.masterSeed,
       source: project.source,
       sourceSnapshotId: project.sourceSnapshotId,
+      timeline: project.timeline ? timelineSummary(project.timeline) : null,
       stackOrder: 'top-to-bottom display order; rendering starts at the bottom',
       effects: project.effects
-        .map((effect, index) => effectInfo(effect, index, project.effects.length))
+        .map((effect, index) => effectInfo(effect, index, project.effects.length, project.timeline))
         .reverse(),
       snapshots: project.snapshots.map((snapshot) => ({
         id: snapshot.id,
@@ -437,8 +787,13 @@ export function createMcpCommands(
             values: { ...effectDefaults(effect).params, ...effect.params },
             applicationParameters: applicationParameters(),
             applicationValues: effectInfo(effect, 0, 1).application,
+            animatableParameters: animatableParameters(effect),
+            animation: effectInfo(effect, 0, 1, commands.getState().timeline).animation,
+            activeRange: effect.activeRange ?? null,
           };
         }
+        case 'get_timeline':
+          return timelineInfo(commands.getState(), revision);
         case 'apply_operations': {
           if (!commands.getState().source)
             throw new Error('Open an image in GLEECH before editing the stack.');
@@ -451,12 +806,27 @@ export function createMcpCommands(
           );
           // Rehearse every edit against an isolated service; failures leave the real
           // stack, Undo, Redo and UI notifications untouched.
-          const draft = createCommandService(commands.getState());
+          const current = commands.getState();
+          const draft = createCommandService(current);
           for (const operation of operations) apply(draft, operation, context.presets ?? []);
-          commands.applyStackRecipe({
-            effects: draft.getState().effects,
-            masterSeed: draft.getState().masterSeed,
-          });
+          const next = draft.getState();
+          if (next.timeline === current.timeline)
+            commands.applyStackRecipe({ effects: next.effects, masterSeed: next.masterSeed });
+          else {
+            // Timeline edits ride along with the stack as one Undo step.
+            const originals = new Map(current.effects.map((effect) => [effect.instanceId, effect]));
+            const project: { -readonly [K in keyof ProjectState]: ProjectState[K] } = {
+              ...current,
+              masterSeed: next.masterSeed,
+              effects: next.effects.map((effect) => {
+                const original = originals.get(effect.instanceId);
+                return original && sameEffect(original, effect) ? original : effect;
+              }),
+            };
+            if (next.timeline) project.timeline = next.timeline;
+            else delete project.timeline;
+            commands.replaceProject(project);
+          }
           return { ...state(), operations };
         }
         case 'undo':
@@ -496,6 +866,11 @@ export function createMcpCommands(
         case 'copy_to_clipboard':
         case 'revert_to_operation':
           throw new Error('Previews are supplied by the desktop renderer.');
+        case 'set_playhead':
+        case 'list_render_presets':
+        case 'render_video':
+        case 'render_status':
+          throw new Error('Playback and video rendering are handled by the GLEECH desktop app.');
       }
     },
   };

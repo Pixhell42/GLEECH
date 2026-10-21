@@ -39,9 +39,53 @@ test artifacts and logs stay under ignored `test-results/`.
 Useful focused suites include `test:editing`, `test:project`, `test:presets`,
 `test:preset-transfer`, `test:snapshots`, `test:painted-mask`, `test:sliders`,
 `test:set2`, `test:beta-ui`, `test:menu`, `test:support`, `test:file-metadata`,
-`test:mcp`, `test:mcp-clients` and `test:github-feedback`. Check the current script
-names/flags in the root manifest before invoking an unfamiliar suite.
+`test:mcp`, `test:mcp-clients`, `test:github-feedback` and `test:timeline`. Check the
+current script names/flags in the root manifest before invoking an unfamiliar suite.
 Feedback tests mock GitHub; they do not submit live reports.
+
+## ffmpeg
+
+Timeline rendering (movies and loops) and video import use ffmpeg; image
+sequences and flip books do not. At runtime GLEECH looks for, in order:
+
+1. the executable chosen with **Locate ffmpeg…** in the Render dialog (stored in
+   `ffmpeg.json` in the user data folder);
+2. the pinned bundle at `resources/ffmpeg/bin/ffmpeg(.exe)` in packaged builds,
+   or `apps/desktop/out/ffmpeg/<os>-<arch>/bin/ffmpeg(.exe)` after preparation
+   in development; legacy local `apps/desktop/resources/ffmpeg/` copies remain
+   a development fallback;
+3. `ffmpeg` on the PATH.
+
+The selected executable must retain its standard name: `ffmpeg.exe` on Windows,
+or `ffmpeg` on macOS/Linux. It is launched directly from its directory without a
+shell; command strings, relative paths and other executable names are rejected.
+
+Encoders are probed with `ffmpeg -encoders`. CPU encoders (libx264/libx265) are
+preferred, with NVENC, AMF, Quick Sync, Media Foundation and VideoToolbox used when
+CPU encoders are missing or chosen in Advanced encoder settings.
+
+All packaging targets prepare FFmpeg 9.0.2 from the pinned TAS-FFMPEG v9.0.2
+release. SHA-256 and size checks cover the binary and complete source archives;
+upstream runtime hashes, build flags and required notices are checked before
+and after packaging. The GPL-2.0-or-later bundle includes x264/x265 and WebP.
+The complete corresponding source (about 375 MB compressed) travels inside
+every app at `resources/ffmpeg/sources/`; preserve it with all original notices.
+See [bundle provenance and replacement](../LICENSES/ffmpeg/README.md).
+
+For development, run `pnpm ffmpeg:prepare` before `pnpm dev` or tests. Packaging
+does this automatically. Downloads are cached under ignored
+`public-release/ffmpeg-cache/`; unchanged verified inputs work offline.
+`node tooling/ffmpeg-package-check.mjs <packaged-resources-directory>` verifies
+the actual packaged executable, encoders, runtime, notices and source archive.
+`pnpm ffmpeg:check` exercises the real selection bridge with PATH disabled;
+pass a packaged executable to run it against a package. It verifies the bundle,
+Locate override, selection persistence and missing-file fallback.
+Cross-target preparation accepts `win32-x64`, `linux-x64`, `darwin-x64` or
+`darwin-arm64`; execution checks must run on the corresponding native host.
+
+`test:timeline` covers keyframes, playback, seeds, ranges, GIF/PNG/MP4 renders,
+project reload, video import, audio analysis and audio modulation. The render and
+media checks skip their ffmpeg parts when no ffmpeg is found.
 
 ## Windows packaging
 

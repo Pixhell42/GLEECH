@@ -76,6 +76,9 @@ export function createWindowsPlan(mode, scripts, packagedPath) {
     for (const script of ['image', 'editing', 'project', 'preset-transfer', 'mcp', 'cli'])
       add([`tooling/${script}-check.mjs`, '--cpu']);
     add(['tooling/ui-color-check.mjs']);
+    add(['tooling/ffmpeg-check.mjs']);
+    add(['tooling/timeline-check.mjs']);
+    add(['tooling/timeline-media-check.mjs']);
     return commands;
   }
   for (const [name, command] of Object.entries(scripts)) {

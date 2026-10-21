@@ -14,6 +14,11 @@ on:
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - tooling/linux-*.mjs
+      - tooling/*ffmpeg*.mjs
+      - apps/desktop/build/ffmpeg-before-pack.mjs
+      - apps/desktop/build/after-pack.mjs
+      - apps/desktop/src/main/ffmpeg*.ts
+      - LICENSES/ffmpeg/**
       - tooling/mac-native-review.mjs
       - tooling/appimage-check.mjs
       - tooling/run-linux-webgpu.sh
@@ -66,12 +71,14 @@ jobs:
         id: package
         run: |
           node tooling/linux-package-check.mjs
+          node tooling/ffmpeg-package-check.mjs apps/desktop/release/linux-unpacked/resources
           node -e "const fs = require('node:fs'); const { archive } = JSON.parse(fs.readFileSync('apps/desktop/release/linux-build-x64.json', 'utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'appimage=apps/desktop/release/' + archive + '\n');"
       - name: Formatting, lint, types and unit tests
         run: pnpm check
       - name: Test unpacked image rendering and MCP clients
         run: |
           xvfb-run -a node tooling/image-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
+          xvfb-run -a node tooling/ffmpeg-check.mjs apps/desktop/release/linux-unpacked/gleech-bin
           xvfb-run -a node tooling/mcp-clients-check.mjs apps/desktop/release/linux-unpacked/gleech
           xvfb-run -a node tooling/cli-check.mjs apps/desktop/release/linux-unpacked/gleech-bin --cpu
           node tooling/cli-launcher-check.mjs apps/desktop/release/linux-unpacked/gleech

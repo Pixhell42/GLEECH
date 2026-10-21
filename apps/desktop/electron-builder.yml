@@ -1,4 +1,5 @@
-afterPack: build/cli-after-pack.mjs
+afterPack: build/after-pack.mjs
+beforePack: build/ffmpeg-before-pack.mjs
 appId: com.gleech.desktop
 productName: GLEECH
 directories:
@@ -12,6 +13,8 @@ asarUnpack:
   - node_modules/onnxruntime-node/bin/**
   - node_modules/onnxruntime-node-macos-x64/bin/**
 extraResources:
+  - from: out/ffmpeg/${os}-${arch}
+    to: ffmpeg
   - from: ../../LICENSE
     to: LICENSE.GLEECH.txt
   - from: ../../THIRD_PARTY_NOTICES.md

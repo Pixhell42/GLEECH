@@ -71,6 +71,9 @@ jobs:
       - name: Build once
         if: steps.scope.outputs.desktop == 'true'
         run: pnpm build
+      - name: Prepare pinned FFmpeg for media verification
+        if: steps.scope.outputs.desktop == 'true'
+        run: pnpm ffmpeg:prepare
       - name: Essential desktop workflows
         if: steps.scope.outputs.desktop == 'true'
         run: node tooling/windows-ci.mjs quick

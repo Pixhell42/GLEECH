@@ -82,6 +82,57 @@ export interface WindowState {
 }
 
 export interface DesktopBridge {
+  // Timeline rendering (main/render-service.ts)
+  renderStatus(refresh?: boolean): Promise<Result<import('./render').FfmpegStatus>>;
+  locateFfmpeg(): Promise<Result<import('./render').FfmpegStatus | null>>;
+  chooseRenderOutput(
+    kind: 'file' | 'folder',
+    defaultName: string,
+    extension: string,
+  ): Promise<Result<string | null>>;
+  defaultRenderFolder(): Promise<Result<string>>;
+  /** Whether a render output file already exists (only in folders renders may use). */
+  renderOutputExists(path: string): Promise<Result<boolean>>;
+  beginRender(spec: import('./render').RenderJobSpec): Promise<Result<string>>;
+  renderFrame(
+    jobId: string,
+    frame: import('./render').RenderFrame,
+    original?: import('./render').RenderFrame,
+  ): Promise<Result<void>>;
+  finishRender(jobId: string): Promise<Result<import('./render').RenderResult>>;
+  cancelRender(jobId: string): Promise<Result<void>>;
+  revealRender(path: string): Promise<Result<void>>;
+  // Timeline media (main/media-service.ts)
+  openVideo(): Promise<
+    Result<import('./render').OpenedMedia<import('./render').VideoProbe> | null>
+  >;
+  openAudio(): Promise<
+    Result<import('./render').OpenedMedia<import('./render').AudioProbe> | null>
+  >;
+  /** Re-open media referenced by a saved project. */
+  registerMedia(
+    path: string,
+    kind: 'video' | 'audio',
+  ): Promise<
+    Result<
+      import('./render').OpenedMedia<import('./render').VideoProbe | import('./render').AudioProbe>
+    >
+  >;
+  /** Mono float32 samples for analysis. */
+  readAudioSamples(mediaId: string): Promise<Result<{ sampleRate: number; samples: ArrayBuffer }>>;
+  openVideoReader(
+    mediaId: string,
+    options: { start: number; fps: number; count: number; width: number; height: number },
+  ): Promise<Result<string>>;
+  readVideoFrame(readerId: string): Promise<Result<import('./render').RenderFrame | null>>;
+  closeVideoReader(readerId: string): Promise<Result<void>>;
+  /** One decoded frame, for formats the preview player cannot decode. */
+  videoFrameAt(
+    mediaId: string,
+    t: number,
+    maxDimension: number,
+  ): Promise<Result<import('./render').RenderFrame>>;
+
   readMcpImageData(dispatchId: string): Promise<Result<{ kind: 'image'; image: ImportedImage }>>;
   mcpFolderOperation(
     dispatchId: string,
@@ -223,6 +274,13 @@ export interface DesktopBridge {
   ): Promise<Result<ProjectDocument | null>>;
   releaseImage(id: string): Promise<void>;
   captureImage(sourceId: string, pixels: ArrayBuffer, name: string): Promise<Result<ImportedImage>>;
+  /** Register decoded RGBA pixels (a video poster frame) as a new source image. */
+  importPixels(
+    width: number,
+    height: number,
+    pixels: ArrayBuffer,
+    name: string,
+  ): Promise<Result<ImportedImage>>;
   listPresets(): Promise<Result<readonly LibraryPreset[]>>;
   savePreset(
     sourceId: string,
@@ -235,9 +293,17 @@ export interface DesktopBridge {
   importPreset(): Promise<Result<EffectPreset | null>>;
   exportPreset(id: string): Promise<Result<string | null>>;
   confirmDiscard(name: string): Promise<Result<'save' | 'discard' | 'cancel'>>;
+  /** A warning with an action button and Cancel; true when the action was chosen. */
+  confirmAction(
+    title: string,
+    message: string,
+    detail: string,
+    action: string,
+  ): Promise<Result<boolean>>;
   onCloseRequested(handler: () => void): () => void;
   resolveClose(allow: boolean): Promise<void>;
   requestClose(): Promise<void>;
+  mcpRenderTarget(dispatchId: string): Promise<Result<string>>;
 }
 
 export function unwrap<T>(result: Result<T>): T {

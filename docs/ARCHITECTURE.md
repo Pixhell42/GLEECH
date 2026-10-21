@@ -42,6 +42,32 @@ viewport until committed; cursor updates avoid rerendering the editor. Mask
 rasterizers recompose dirty segment bounds while preserving exact coverage,
 opacity, erasing, cancellation and Undo behavior.
 
+Timeline rendering stays per frame: every animated parameter is evaluated at time
+t (keys, then modulators, then a clamp to the control's range), effects outside
+their active range switch off, the seed track derives the frame's seed, and the
+resolved stack goes to the same renderer as stills. Audio is analyzed once into
+per-frame band energy, beats and tempo stored in the project, and LFOs are
+computed from time and tempo, so preview, scrubbing and renders agree. Playback
+renders reduced drafts into a bounded frame cache and refines when paused. Renders
+use `apps/desktop/src/shared/timeline-runner.ts` for frame ordering, animation
+evaluation, seed selection, subject-mask reuse, backpressure and cancellation.
+The shared `render-plan.ts` and `render-request.ts` construct frame times, sizes
+and encoder settings without browser or Electron dependencies. Hosts supply a
+still/video source, resize and effect functions, subject detection and an encoder
+session. The runner closes its reader and cancels partial output on failure;
+callers retain ownership of reusable effect engines and GPU helpers.
+
+Desktop jobs adapt that runner to a dedicated effect worker and typed IPC in
+`desktop-timeline-runner.ts`; `render-queue.ts` owns only queue state and UI
+subscriptions. RGBA frames stream to the main process, which fits, mattes and
+upscales them and pipes them to ffmpeg (or writes PNG sequences, PDF flip books
+and sprite sheets directly). The terminal CPU engine and encoder backend can
+already drive the runner directly; CLI commands and TUI timeline controls still
+need their host adapters and user interface wiring.
+
+Video clips preview through Chromium's player on a range-capable `gleech-media://`
+protocol and decode exactly through ffmpeg for renders.
+
 CPU/effect outputs use straight RGBA; image sampling accounts for alpha.
 Source/procedural/imported scalar and vector fields use normalized image-space
 placement so previews and exports agree. Preview/cache limits are implementation

@@ -103,7 +103,7 @@ it('serves tools, resources, structured results, validation errors and PNG image
       version: workspacePackage.version,
     });
     const toolList = (await client.listTools()).tools;
-    expect(toolList.length).toBe(65);
+    expect(toolList.length).toBe(74);
     expect(
       toolList.every((tool) => typeof tool.description === 'string' && tool.description.length > 0),
     ).toBe(true);

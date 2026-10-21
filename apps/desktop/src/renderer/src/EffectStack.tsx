@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { getEffectDefinition, isShaderEffect, type EffectInstance } from '@gleech/project-model';
 import { MaskThumbnail } from './PaintedMaskControls';
 import { ShaderName } from './ShaderName';
-import { EyeIcon, MaskIcon } from './Icons';
+import { DiamondIcon, EyeIcon, MaskIcon } from './Icons';
 
 interface Props {
   effects: readonly EffectInstance[];
@@ -162,6 +162,15 @@ export function EffectStack({
                 >
                   <ShaderName name={title} shader={isShaderEffect(effect)} />
                 </button>
+                {effect.animation && Object.keys(effect.animation).length > 0 && (
+                  <span
+                    className="effect-animation-badge"
+                    title={`${Object.keys(effect.animation).length} animated`}
+                  >
+                    <DiamondIcon filled size={9} />
+                    {Object.keys(effect.animation).length}
+                  </span>
+                )}
                 <div className="effect-mask-row" draggable={false} data-settings-kind="mask">
                   <button
                     className={`paint-mask-button${effect.paintedMask ? ' has-mask' : ''}${effect.paintedMask && !effect.paintedMask.enabled ? ' mask-disabled' : ''}`}

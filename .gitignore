@@ -21,3 +21,6 @@ reference-materials/
 *-thumbnail-prompt.txt
 public-release/
 !LICENSES/**
+
+# Local ffmpeg for development; packaging fetches a pinned build.
+apps/desktop/resources/ffmpeg/

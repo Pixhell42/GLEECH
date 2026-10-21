@@ -15,6 +15,20 @@ import {
 } from './direction-field';
 export * from './direction-field';
 import { assertExecutableShader, assertShaderValues, type ShaderPackage } from './shader-package';
+import {
+  assertActiveRange,
+  assertEffectAnimation,
+  assertTimeline,
+  evaluateParameter,
+  inActiveRange,
+  isAnimatableParameter,
+  type ActiveRange,
+  type EffectAnimation,
+  type ModulationContext,
+  type Timeline,
+  type VideoClip,
+} from './timeline';
+export * from './timeline';
 export const PROJECT_SCHEMA_VERSION = 2 as const;
 
 export interface ProjectState {
@@ -26,6 +40,8 @@ export interface ProjectState {
   readonly origin: ImageSource | null;
   readonly sourceSnapshotId: string | null;
   readonly snapshots: readonly StageSnapshot[];
+  /** Present once Timeline mode has been opened. Still projects omit it. */
+  readonly timeline?: Timeline;
 }
 
 export interface StageSnapshot {
@@ -49,6 +65,10 @@ interface EffectBase {
   readonly application: EffectApplication;
   readonly paintedMask?: PaintedMask;
   readonly directionImage?: LayerImage;
+  /** Keyframes and modulators per parameter key; params hold the base values. */
+  readonly animation?: EffectAnimation;
+  /** Seconds where the effect is on. Absent means the whole timeline. */
+  readonly activeRange?: ActiveRange;
 }
 
 export const MASK_BRUSH_SHAPES = ['circle', 'square', 'diamond'] as const;
@@ -11283,6 +11303,9 @@ export function assertEffect(effect: EffectInstance): void {
   )
     throw new RangeError('Invalid effect pattern identity.');
   if (effect.paintedMask !== undefined) assertPaintedMask(effect.paintedMask);
+  if (effect.animation !== undefined)
+    assertEffectAnimation(effect.animation, (key) => animationDefinition(effect, key));
+  if (effect.activeRange !== undefined) assertActiveRange(effect.activeRange);
   if ('drawing' in effect && effect.drawing !== undefined) {
     if (effect.type !== 'solid') throw new Error('This effect does not support drawing.');
     assertCanvasDrawing(effect.drawing);
@@ -11552,6 +11575,7 @@ export function assertProject(value: unknown): asserts value is ProjectState {
   if (project.origin !== null) assertImageSource(project.origin);
   if (!project.source && (project.origin || project.snapshots.length))
     throw new Error('Project image is missing.');
+  if (project.timeline !== undefined) assertTimeline(project.timeline);
   projectSources(project);
   layerImages([...project.effects, ...project.snapshots.flatMap((snapshot) => snapshot.effects)]);
 }
@@ -11700,4 +11724,123 @@ export function supportsSeedVariation(effect: EffectInstance): boolean {
         (effect.params.sampling === 'dirty-nearest' && (effect.params.jitter ?? 0.5) > 0) ||
         (effect.params.sampling === 'corrupted' && (effect.params.corruption ?? 0.5) > 0)))
   );
+}
+
+// ---------------------------------------------------------------------------
+// Animation evaluation. Rendering stays per frame: resolve every animated
+// parameter at time t, then hand the resolved stack to the existing renderer.
+
+/** Application settings that can carry keys, beside an effect's own parameters. */
+export const ANIMATABLE_APPLICATION_KEYS = [
+  'application.coverage',
+  'application.softness',
+  'application.rangeStart',
+  'application.rangeEnd',
+  'application.detailScale',
+  'application.bandFrequency',
+  'application.bandOffset',
+  'application.invert',
+] as const;
+let applicationDefinitions: Readonly<Record<string, ParameterDefinition>> | null = null;
+/** The control definition an animation key refers to, or undefined when it cannot animate. */
+export function animationDefinition(
+  effect: EffectInstance,
+  key: string,
+): ParameterDefinition | undefined {
+  if (key.startsWith('application.')) {
+    if (!(ANIMATABLE_APPLICATION_KEYS as readonly string[]).includes(key)) return undefined;
+    applicationDefinitions ??= applicationParameters();
+    return applicationDefinitions[key];
+  }
+  const definition = getEffectDefinition(effect).parameters[key];
+  return isAnimatableParameter(definition) && !definition?.colorSource ? definition : undefined;
+}
+export function isParameterAnimated(effect: EffectInstance, key: string): boolean {
+  return Boolean(effect.animation && Object.hasOwn(effect.animation, key));
+}
+export function animatedParameterCount(effect: EffectInstance): number {
+  return effect.animation ? Object.keys(effect.animation).length : 0;
+}
+/** Base (static) value of a parameter or application key. */
+export function parameterBaseValue(effect: EffectInstance, key: string): number | string {
+  if (key.startsWith('application.')) return applicationValue(effect.application, key);
+  const params = effect.params as Readonly<Record<string, number | string>>;
+  return params[key] ?? animationDefinition(effect, key)?.default ?? 0;
+}
+
+export const DEFAULT_MODULATION: ModulationContext = { bpm: 120, seed: 0 };
+
+/**
+ * The effect as it renders at time t. Unanimated effects inside their active
+ * range are returned unchanged so caches keyed by identity keep working.
+ */
+export function evaluateEffectAt(
+  effect: EffectInstance,
+  t: number,
+  context: ModulationContext = DEFAULT_MODULATION,
+): EffectInstance {
+  if (!inActiveRange(effect.activeRange, t))
+    return effect.enabled ? ({ ...effect, enabled: false } as EffectInstance) : effect;
+  if (!effect.animation) return effect;
+  const params: Record<string, number | string> = {};
+  let application = effect.application;
+  let changed = false;
+  for (const [key, animation] of Object.entries(effect.animation)) {
+    const definition = animationDefinition(effect, key);
+    if (!definition) continue;
+    const base = parameterBaseValue(effect, key);
+    const value = evaluateParameter(animation, base, t, definition, context);
+    if (value === base) continue;
+    changed = true;
+    if (key.startsWith('application.')) application = setApplicationValue(application, key, value);
+    else params[key] = value;
+  }
+  if (!changed) return effect;
+  let resolved: Record<string, number | string> =
+    effect.type === 'bit-crush'
+      ? (updateBitCrushParams(effect.params, params) as unknown as Record<string, number | string>)
+      : { ...(effect.params as Readonly<Record<string, number | string>>), ...params };
+  if (
+    (effect.type === 'levels-curves' || effect.type === 'threshold') &&
+    Number(resolved.inputBlack) >= Number(resolved.inputWhite)
+  ) {
+    // Keep animated cutoffs ordered; the renderer expects black below white.
+    const black = Math.min(0.99, Number(resolved.inputBlack));
+    resolved = { ...resolved, inputBlack: black, inputWhite: Math.min(1, black + 0.01) };
+  }
+  return { ...effect, params: resolved, application } as EffectInstance;
+}
+export function evaluateEffectsAt(
+  effects: readonly EffectInstance[],
+  t: number,
+  context: ModulationContext = DEFAULT_MODULATION,
+): readonly EffectInstance[] {
+  let changed = false;
+  const resolved = effects.map((effect) => {
+    const next = evaluateEffectAt(effect, t, context);
+    if (next !== effect) changed = true;
+    return next;
+  });
+  return changed ? resolved : effects;
+}
+/**
+ * The video clip that supplies frames, if any. After Bake & Continue or a stage
+ * restore the source is a still again, and the clip stays on the timeline only
+ * for reference until its poster is the source once more.
+ */
+export function activeVideo(project: ProjectState): VideoClip | undefined {
+  const video = project.timeline?.video;
+  if (!video) return undefined;
+  return video.posterId === undefined || video.posterId === project.source?.id ? video : undefined;
+}
+/** Whether a stack has anything that changes over time. */
+export function effectsAnimate(effects: readonly EffectInstance[]): boolean {
+  return effects.some((effect) => effect.animation || effect.activeRange);
+}
+/** Drop keys, modulators and ranges, for exports that should stay still recipes. */
+export function withoutAnimation(effect: EffectInstance): EffectInstance {
+  if (!effect.animation && !effect.activeRange) return effect;
+  return Object.fromEntries(
+    Object.entries(effect).filter(([key]) => key !== 'animation' && key !== 'activeRange'),
+  ) as unknown as EffectInstance;
 }

@@ -25,9 +25,58 @@ import {
   type PresetPlacement,
   type PresetRecipe,
   type EffectInstance,
+  type EffectApplication,
   type PaintedMask,
+  createTimeline,
+  activeVideo,
+  audioIsClipSound,
+  audioTrackLevel,
+  bakeModulation,
+  restoreBaked,
+  type Timeline,
+  clampTimelineRanges,
+  evaluateKeys,
+  roundParameter,
+  snapAnimationToRate,
+  FRAME_RATES,
+  evaluateEffectsAt,
+  frameSeed,
+  frameTime,
+  frameCount,
+  timeFrame,
+  workRange,
+  formatTimecode,
+  upsertKey,
+  removeKeyAtFrame,
+  adjacentKeyFrame,
+  keyIndexAtFrame,
+  parameterBaseValue,
+  evaluateParameter,
+  animationDefinition,
+  setKeysInterpolation,
+  createLfo,
+  createAudioModulator,
+  effectsAnimate,
+  DEFAULT_MODULATION,
+  type ParameterAnimation,
+  type ModulationContext,
 } from '@gleech/project-model';
-import type { RenderInfo } from '@gleech/renderer-core';
+import { TimelineDock, type SelectedParameter } from './timeline/TimelineDock';
+import { AnimationCard } from './AnimationControls';
+import { parameterKeyInfo, type ParameterAnimationUi } from './animation-ui';
+import { RenderDialog, type RenderSettingsMemory } from './RenderDialog';
+import { RenderQueuePanel } from './RenderQueuePanel';
+import { ModulatorPanel } from './ModulatorPanel';
+import { normalizedValue } from './animation-format';
+import { SIGNAL_COLORS } from './animation-ui';
+import { renderQueue } from './render-queue';
+import { TIMELINE_MCP_ACTIONS, runTimelineMcp } from './mcp-timeline';
+import { rememberMedia, useTimelineMedia, useVideoFrame } from './timeline/use-media';
+import { VideoFrameSource } from './video-frames';
+import { analyzeMediaAudio } from './timeline-audio';
+import type { FilmstripFrame } from './timeline/TimelineDock';
+import type { VideoProbe, AudioProbe, OpenedMedia } from '../../shared/render';
+import type { PixelImage, RenderInfo } from '@gleech/renderer-core';
 import { APP_IS_BETA, APP_VERSION_LABEL } from '../../shared/branding';
 import {
   unwrap,
@@ -56,6 +105,7 @@ import {
   renderMcpImage,
   presetThumbnails as renderPresetThumbnails,
 } from './ShaderPreview';
+import { trackPointer } from './timeline/pointer';
 import { ShaderImportDialog } from './ShaderImportDialog';
 import type { ShaderImportRequest, ShaderImportPreview } from './ShaderImportDialog';
 import {
@@ -81,11 +131,110 @@ import {
   SparkleIcon,
   TrashIcon,
   UndoIcon,
+  ImageModeIcon,
+  TimelineModeIcon,
+  DiamondIcon,
 } from './Icons';
 import { FeedbackDialog } from './FeedbackDialog';
 import type { FeedbackDraft, FeedbackKind } from '../../shared/feedback';
 
 const commands = createCommandService(createProject('Untitled', 8172));
+
+// Stable small numbers for recipe identities; frame-cache keys include them.
+const recipeIds = new WeakMap<object, number>();
+let recipeSequence = 0;
+function recipeIdentity(value: object): number {
+  let id = recipeIds.get(value);
+  if (id === undefined) {
+    id = ++recipeSequence;
+    recipeIds.set(value, id);
+  }
+  return id;
+}
+const NO_FRAMES: ReadonlySet<number> = new Set();
+/** A small PNG data URL of rendered pixels, for the Render dialog preview. */
+async function previewDataUrl(image: PixelImage, maxDimension = 640): Promise<string> {
+  const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+  const full = new OffscreenCanvas(image.width, image.height);
+  full
+    .getContext('2d')!
+    .putImageData(
+      new ImageData(new Uint8ClampedArray(image.pixels), image.width, image.height),
+      0,
+      0,
+    );
+  const small = new OffscreenCanvas(
+    Math.max(1, Math.round(image.width * scale)),
+    Math.max(1, Math.round(image.height * scale)),
+  );
+  const context = small.getContext('2d')!;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(full, 0, 0, small.width, small.height);
+  const blob = await small.convertToBlob({ type: 'image/png' });
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read the preview.'));
+    reader.readAsDataURL(blob);
+  });
+}
+const DOCK_HEIGHT_KEY = 'gleech.timeline.dockHeight';
+/** Playback-only listening level; never saved in projects or used by renders. */
+const PLAYBACK_AUDIO_KEY = 'gleech.timeline.playbackAudio';
+/** Name for a source image made from a clip frame, e.g. "clip frame 75". */
+function clipFrameName(clip: string, frame: number): string {
+  const base =
+    clip
+      .replace(/\.[a-z0-9]{2,5}$/i, '')
+      .trim()
+      .slice(0, 96) || 'clip';
+  return `${base} frame ${frame}`;
+}
+
+function readPlaybackAudio(): { volume: number; muted: boolean } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLAYBACK_AUDIO_KEY) ?? 'null') as {
+      volume?: unknown;
+      muted?: unknown;
+    } | null;
+    const volume = Number(saved?.volume);
+    return {
+      volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1,
+      muted: saved?.muted === true,
+    };
+  } catch {
+    return { volume: 1, muted: false };
+  }
+}
+
+/**
+ * Register a video file's own sound as audio and analyze it, ready to be the
+ * audio track. Analysis runs once so modulators stay deterministic.
+ */
+async function clipSoundTrack(path: string) {
+  const opened = unwrap(
+    await window.gleech.registerMedia(path, 'audio'),
+  ) as OpenedMedia<AudioProbe>;
+  rememberMedia('audio', opened);
+  const result = await analyzeMediaAudio(opened.mediaId);
+  return {
+    path: opened.path,
+    name: opened.name,
+    duration: opened.info.duration || result.duration,
+    sampleRate: opened.info.sampleRate || 48000,
+    channels: opened.info.channels || result.channels || 2,
+    analysis: result.analysis,
+  };
+}
+
+function readDockHeight(): number {
+  try {
+    const value = Number(localStorage.getItem(DOCK_HEIGHT_KEY));
+    return Number.isFinite(value) && value >= 220 ? value : 420;
+  } catch {
+    return 420;
+  }
+}
 
 export function App() {
   const { setWorkspace, style: panelStyle, handle: panelHandle } = usePanelWidths();
@@ -333,6 +482,31 @@ export function App() {
   const [cutoutBackdrop, setCutoutBackdrop] = useState<PreviewBackdrop>(DEFAULT_PREVIEW_BACKDROP);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'controls' | 'details'>('controls');
+  const [mode, setMode] = useState<'image' | 'timeline'>('image');
+  const [playhead, setPlayhead] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [playbackAudio, setPlaybackAudio] = useState(readPlaybackAudio);
+  const changePlaybackAudio = (change: Partial<{ volume: number; muted: boolean }>) =>
+    setPlaybackAudio((previous) => {
+      const next = { ...previous, ...change };
+      try {
+        localStorage.setItem(PLAYBACK_AUDIO_KEY, JSON.stringify(next));
+      } catch {
+        // The level still applies for this session.
+      }
+      return next;
+    });
+  // Bumped by seeks while playing so the playback clock restarts from the new frame.
+  const [clockEpoch, setClockEpoch] = useState(0);
+  const [selectedParam, setSelectedParam] = useState<SelectedParameter | null>(null);
+  const [modulatorParam, setModulatorParam] = useState<SelectedParameter | null>(null);
+  const [laneView, setLaneView] = useState<'keys' | 'curves'>('keys');
+  const [frameCache, setFrameCache] = useState<{
+    token: string;
+    frames: ReadonlySet<number>;
+    fps: number | null;
+  }>({ token: '', frames: NO_FRAMES, fps: null });
+  const [dockHeight, setDockHeight] = useState(readDockHeight);
   const [viewportControlsContainer, setViewportControlsContainer] = useState<HTMLDivElement | null>(
     null,
   );
@@ -400,6 +574,822 @@ export function App() {
         : project.effects,
     [project.effects, maskGeometryDraft, maskTarget],
   );
+
+  // Timeline: Image mode always shows the frame at the playhead.
+  const timeline = project.timeline;
+  const timelineMode = mode === 'timeline' && Boolean(timeline && project.source);
+  const fps = timeline?.fps ?? 30;
+  const totalFrames = timeline ? frameCount(timeline) : 1;
+  const frame = Math.min(playhead, totalFrames - 1);
+  const frameT = frameTime(frame, fps);
+  const modulation = useMemo<ModulationContext>(
+    () => ({
+      bpm: timeline?.bpm ?? (timeline?.audio?.analysis?.bpm || 120),
+      seed: project.masterSeed,
+      audio: timeline?.audio?.analysis,
+    }),
+    [timeline?.bpm, timeline?.audio?.analysis, project.masterSeed],
+  );
+  const frameEffects = useMemo(
+    () => evaluateEffectsAt(previewEffects, frameT, modulation),
+    [previewEffects, frameT, modulation],
+  );
+  const frameMasterSeed = timeline
+    ? frameSeed(project.masterSeed, timeline.seed, frame)
+    : project.masterSeed;
+  const media = useTimelineMedia(timeline, setError);
+  const clip = activeVideo(project);
+  const videoFrame = useVideoFrame(
+    clip ? media.video : null,
+    frame,
+    frameT,
+    clip
+      ? playing
+        ? Math.ceil(Math.max(clip.width, clip.height) / 2)
+        : Math.max(clip.width, clip.height)
+      : 0,
+    playing,
+  );
+  const clipFrames = useRef<VideoFrameSource | null>(null);
+  const clipMediaId = useRef<string | null>(null);
+  useEffect(() => {
+    clipFrames.current = clip ? (media.video?.frames ?? null) : null;
+    clipMediaId.current = clip ? (media.video?.mediaId ?? null) : null;
+  }, [clip, media.video]);
+  const [filmstrip, setFilmstrip] = useState<{
+    mediaId: string;
+    frames: readonly FilmstripFrame[];
+  } | null>(null);
+  useEffect(() => {
+    const source = media.video;
+    if (!source || !clip || !timeline) return;
+    let active = true;
+    const span = Math.min(timeline.duration, clip.duration);
+    const count = 48;
+    const times = Array.from({ length: count }, (_, index) => (index / count) * span);
+    void source.frames
+      .thumbnails(times, 48)
+      .then((urls) => {
+        if (active)
+          setFilmstrip({
+            mediaId: source.mediaId,
+            frames: urls.map((url, index) => ({
+              frame: timeFrame(times[index]!, timeline.fps),
+              url,
+            })),
+          });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [media.video, clip, timeline]);
+  // What you hear: the track level (saved, also used by renders) times the
+  // playback level (listening only).
+  const trackLevel = timeline?.audio ? audioTrackLevel(timeline.audio) : 1;
+  useEffect(() => {
+    const player = media.audio?.player;
+    if (!player) return;
+    player.setVolume(trackLevel * playbackAudio.volume);
+    player.setMuted(playbackAudio.muted || trackLevel === 0);
+  }, [media.audio, trackLevel, playbackAudio]);
+  // Keep the audio track in step with playback.
+  useEffect(() => {
+    const player = media.audio?.player;
+    if (!player || !playing) return;
+    void player.play(frameContext.current.t).catch(() => {});
+    return () => player.pause();
+  }, [playing, media.audio]);
+  useEffect(() => {
+    const player = media.audio?.player;
+    if (!playing || !player) return;
+    // An element that reached its end stops; replay it when the loop wraps.
+    if (!player.isPlaying && frameT < player.duration - 0.05)
+      void player.play(frameT).catch(() => {});
+    else player.sync(frameT);
+  }, [playing, frameT, media.audio]);
+  const recipeToken = useMemo(
+    () =>
+      [
+        recipeIdentity(previewEffects),
+        project.masterSeed,
+        fps,
+        timeline?.seed.mode,
+        timeline?.seed.every,
+        project.source?.id,
+        timeline?.video?.path,
+        modulation.bpm,
+        timeline?.audio?.analysis ? timeline.audio.path : '',
+      ].join(':'),
+    [previewEffects, project.masterSeed, fps, timeline, project.source?.id, modulation.bpm],
+  );
+  const frameKey =
+    timeline && (!clip || videoFrame?.frame === frame) ? `${recipeToken}:${frame}` : null;
+  const cachedFrames = frameCache.token === recipeToken ? frameCache.frames : NO_FRAMES;
+  // Frames shown by the viewport arrive many times a second; batch the state updates.
+  const shownFrames = useRef<{
+    token: string;
+    frames: number[];
+    evicted: number[];
+    times: number[];
+  }>({ token: '', frames: [], evicted: [], times: [] });
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushFrames = useCallback(() => {
+    if (flushTimer.current) return;
+    flushTimer.current = setTimeout(() => {
+      flushTimer.current = null;
+      const batch = shownFrames.current;
+      const added = batch.frames;
+      const evicted = batch.evicted;
+      batch.frames = [];
+      batch.evicted = [];
+      setFrameCache((previous) => {
+        const base = previous.token === batch.token ? previous.frames : NO_FRAMES;
+        const frames = new Set(base);
+        for (const value of added) frames.add(value);
+        for (const value of evicted) frames.delete(value);
+        return {
+          token: batch.token,
+          frames,
+          fps: batch.times.length > 1 ? batch.times.length : previous.fps,
+        };
+      });
+    }, 250);
+  }, []);
+  const pendingFor = (key: string) => {
+    const split = key.lastIndexOf(':');
+    const token = key.slice(0, split);
+    const pending = shownFrames.current;
+    if (pending.token !== token) {
+      pending.token = token;
+      pending.frames = [];
+      pending.evicted = [];
+    }
+    return { pending, frame: Number(key.slice(split + 1)) };
+  };
+  const onFrameShown = useCallback(
+    (key: string) => {
+      const { pending, frame: shown } = pendingFor(key);
+      pending.frames.push(shown);
+      const now = performance.now();
+      pending.times = [...pending.times.filter((time) => now - time < 1000), now];
+      flushFrames();
+    },
+    [flushFrames],
+  );
+  const onFrameEvicted = useCallback(
+    (key: string) => {
+      const split = key.lastIndexOf(':');
+      // Only frames of the current recipe are on the ruler.
+      if (key.slice(0, split) !== shownFrames.current.token) return;
+      shownFrames.current.evicted.push(Number(key.slice(split + 1)));
+      flushFrames();
+    },
+    [flushFrames],
+  );
+  useEffect(
+    () => () => {
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+    },
+    [],
+  );
+  const frameContext = useRef({ t: 0, frame: 0, modulation: DEFAULT_MODULATION });
+  useEffect(() => {
+    frameContext.current = { t: frameT, frame, modulation };
+  }, [frameT, frame, modulation]);
+  /** The still recipe at the playhead, for exports, snapshots and MCP renders. */
+  const atPlayhead = useCallback((state: ProjectState) => {
+    const context = frameContext.current;
+    return {
+      effects: evaluateEffectsAt(state.effects, context.t, {
+        ...context.modulation,
+        seed: state.masterSeed,
+      }),
+      masterSeed: state.timeline
+        ? frameSeed(state.masterSeed, state.timeline.seed, context.frame)
+        : state.masterSeed,
+    };
+  }, []);
+
+  // The play clock restarts only when timing changes. Other timeline edits made
+  // while playing (track volume, markers, tempo) must not move the playhead.
+  const hasTimeline = Boolean(timeline);
+  const playLoop = timeline?.loop ?? false;
+  const playRange =
+    timeline?.loop && timeline.workArea
+      ? workRange(timeline)
+      : { start: 0, end: totalFrames / fps };
+  const playStart = playRange.start;
+  const playEnd = playRange.end;
+  useEffect(() => {
+    if (!playing || !hasTimeline) return;
+    const first = timeFrame(playStart, fps);
+    const last = Math.max(first + 1, Math.min(totalFrames, timeFrame(playEnd, fps)));
+    const current = frameContext.current.frame;
+    const start = current >= first && current < last - 1 ? current : first;
+    const origin = performance.now();
+    let request = requestAnimationFrame(function tick(now) {
+      let target = start + Math.floor(((now - origin) / 1000) * fps);
+      if (target >= last) {
+        if (!playLoop) {
+          setPlayhead(last - 1);
+          setPlaying(false);
+          return;
+        }
+        target = first + ((target - first) % (last - first));
+      }
+      setPlayhead(target);
+      request = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(request);
+  }, [playing, hasTimeline, fps, playLoop, playStart, playEnd, totalFrames, clockEpoch]);
+
+  const [renderDialog, setRenderDialog] = useState<'video' | 'gif' | null>(null);
+  const [renderMemory, setRenderMemory] = useState<RenderSettingsMemory>({
+    video: null,
+    gif: null,
+    outputFolder: null,
+    tab: 'video',
+  });
+  const [renderPreview, setRenderPreview] = useState<string | null>(null);
+  const openRender = (tab: 'video' | 'gif') => {
+    const state = commands.getState();
+    if (!state.timeline || !state.source || locked.current) return;
+    setFileMenu(false);
+    setPlaying(false);
+    setRenderPreview(null);
+    setRenderDialog(tab);
+    const sourceId = state.source.id;
+    void (
+      activeVideo(state) && clipFrames.current
+        ? stillPixels(sourceId)
+            .then((pixels) => renderMcpImage(sourceId, pixels, atPlayhead(state)))
+            .then((image) => previewDataUrl(image))
+        : renderMcpPreview(sourceId, atPlayhead(state))
+    )
+      .then(setRenderPreview)
+      .catch(() => setRenderPreview(null));
+  };
+  const addMarker = () => {
+    const active = commands.getState().timeline;
+    if (!active) return;
+    commands.updateTimeline({
+      markers: [
+        ...active.markers.filter((marker) => timeFrame(marker.t, active.fps) !== frame),
+        {
+          id: crypto.randomUUID(),
+          t: frameTime(frame, active.fps),
+          name: `Marker ${active.markers.length + 1}`,
+        },
+      ],
+    });
+  };
+  const seek = (target: number) => {
+    setPlayhead(Math.max(0, Math.min(totalFrames - 1, Math.round(target))));
+    if (playing) setClockEpoch((value) => value + 1);
+  };
+  const openTimeline = () => {
+    if (!commands.getState().source || busy !== null) return;
+    try {
+      if (!commands.getState().timeline) commands.setTimeline(createTimeline());
+      finishMask();
+      setMode('timeline');
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not open Timeline mode.');
+    }
+  };
+  /** Image mode edits a still: the clip frame at the playhead becomes the source image. */
+  const adoptPlayheadFrame = async () => {
+    const state = commands.getState();
+    const video = activeVideo(state);
+    const frames = clipFrames.current;
+    const { t, frame: at } = frameContext.current;
+    if (!video || !frames || !state.timeline || locked.current) return;
+    if (Math.abs((video.posterTime ?? 0) - t) < 1e-6) return;
+    locked.current = true;
+    setBusy('project');
+    setError(null);
+    const label = formatTimecode(at, state.timeline.fps);
+    setNotice(`Using frame ${label}…`);
+    let image: ImportedImage | null = null;
+    try {
+      const pixels = await frames.frameAt(t, Math.max(video.width, video.height));
+      image = unwrap(
+        await window.gleech.importPixels(
+          pixels.width,
+          pixels.height,
+          pixels.pixels,
+          clipFrameName(video.name, at),
+        ),
+      );
+      if (commands.getState() !== state || !viewport.current)
+        throw new Error('The project changed while GLEECH was reading the frame.');
+      rememberImage(image);
+      await viewport.current.showImage(image, state.effects, state.masterSeed);
+      if (commands.getState() !== state)
+        throw new Error('The project changed while GLEECH was reading the frame.');
+      commands.useClipFrame(image.source, t);
+      setNotice(`Editing frame ${label}`);
+    } catch (failure) {
+      if (image && !commands.retainedSourceIds().has(image.source.id)) {
+        // Put the current source back in the viewport before freeing the frame.
+        const current = commands.getState();
+        const previous = current.source && assets.current.get(current.source.id);
+        if (previous)
+          await viewport.current
+            ?.showImage(previous, current.effects, current.masterSeed)
+            .catch(() => {});
+        const imageId = image.source.id;
+        assets.current.delete(imageId);
+        setFieldImages((before) => {
+          const next = new Map(before);
+          next.delete(imageId);
+          return next;
+        });
+        await window.gleech.releaseImage(imageId).catch(() => {});
+      }
+      setError(failure instanceof Error ? failure.message : 'Could not use this frame.');
+      setNotice('Ready');
+    } finally {
+      locked.current = false;
+      setBusy(null);
+    }
+  };
+  const openImageMode = () => {
+    setPlaying(false);
+    setMode('image');
+    void adoptPlayheadFrame();
+  };
+  /**
+   * Open a video clip like an image: it replaces the source (and any clip), names
+   * the project, and keeps the effect stack and keys. Its first frame becomes the
+   * source image.
+   */
+  const addVideo = async () => {
+    if (locked.current || !viewport.current) return;
+    locked.current = true;
+    setBusy('project');
+    setError(null);
+    setFileMenu(false);
+    setPlaying(false);
+    setNotice('Opening video…');
+    try {
+      if (!(await confirmLeave())) return;
+      const opened = unwrap(await window.gleech.openVideo());
+      if (!opened) {
+        setNotice('Ready');
+        return;
+      }
+      rememberMedia('video', opened);
+      setNotice(`Reading ${opened.name}…`);
+      const info: VideoProbe = opened.info;
+      const frames = new VideoFrameSource(opened.mediaId, info);
+      let poster;
+      try {
+        poster = await frames.frameAt(0, Math.max(info.width, info.height));
+      } finally {
+        frames.dispose();
+      }
+      const image = unwrap(
+        await window.gleech.importPixels(
+          poster.width,
+          poster.height,
+          poster.pixels,
+          clipFrameName(opened.name, 0),
+        ),
+      );
+      const state = commands.getState();
+      const previous = state.timeline ?? createTimeline();
+      // The clip's sound becomes the audio track, unless a separate track was added.
+      const base: { -readonly [K in keyof Timeline]: Timeline[K] } = { ...previous };
+      if (audioIsClipSound(previous)) delete base.audio;
+      if (info.hasAudio && !base.audio) {
+        setNotice(`Analyzing the sound of ${opened.name}…`);
+        try {
+          base.audio = await clipSoundTrack(opened.path);
+        } catch (failure) {
+          setError(
+            `${opened.name} opened without its sound: ${
+              failure instanceof Error ? failure.message : 'the audio could not be read.'
+            }`,
+          );
+        }
+      }
+      const rate =
+        FRAME_RATES.find((candidate) => Math.abs(candidate - info.fps) < 0.01) ??
+        Math.min(120, Math.max(1, Math.round(info.fps * 1000) / 1000));
+      await viewport.current.showImage(image, state.effects, state.masterSeed);
+      rememberImage(image);
+      commands.replaceProject({
+        ...state,
+        name: opened.name,
+        source: image.source,
+        origin: image.source,
+        sourceSnapshotId: null,
+        // Keys stay on frames when the clip brings a different frame rate.
+        effects: state.effects.map((effect) =>
+          effect.animation
+            ? ({
+                ...effect,
+                animation: Object.fromEntries(
+                  Object.entries(effect.animation).map(([key, lane]) => [
+                    key,
+                    snapAnimationToRate(lane, rate),
+                  ]),
+                ),
+              } as EffectInstance)
+            : effect,
+        ),
+        timeline: clampTimelineRanges({
+          ...base,
+          fps: rate,
+          duration: Math.min(3600, Math.max(1 / rate, info.duration)),
+          workArea: null,
+          video: {
+            path: opened.path,
+            name: opened.name,
+            width: poster.width,
+            height: poster.height,
+            fps: info.fps,
+            duration: info.duration,
+            hasAudio: info.hasAudio,
+            posterId: image.source.id,
+            posterTime: 0,
+          },
+        }),
+      });
+      setDocument(null);
+      setSavedState(null);
+      setPlayhead(0);
+      finishMask();
+      setMode('timeline');
+      setNotice(`Added ${opened.name}`);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not open this video.');
+      setNotice('Ready');
+    } finally {
+      locked.current = false;
+      setBusy(null);
+    }
+  };
+  /** Add (or replace) the audio track; it is analyzed once so modulators stay deterministic. */
+  const addAudio = async () => {
+    if (locked.current || !commands.getState().timeline) return;
+    locked.current = true;
+    setBusy('project');
+    setError(null);
+    setNotice('Opening audio…');
+    try {
+      const opened = unwrap(await window.gleech.openAudio());
+      if (!opened) {
+        setNotice('Ready');
+        return;
+      }
+      rememberMedia('audio', opened);
+      setNotice(`Analyzing ${opened.name}…`);
+      const info: AudioProbe = opened.info;
+      const result = await analyzeMediaAudio(opened.mediaId);
+      commands.updateTimeline({
+        audio: {
+          path: opened.path,
+          name: opened.name,
+          duration: info.duration || result.duration,
+          sampleRate: info.sampleRate || 48000,
+          channels: info.channels || result.channels || 2,
+          analysis: result.analysis,
+        },
+      });
+      setNotice(
+        `Added ${opened.name}${result.analysis.bpm ? ` · ${result.analysis.bpm} BPM` : ''}`,
+      );
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not add this audio track.');
+      setNotice('Ready');
+    } finally {
+      locked.current = false;
+      setBusy(null);
+    }
+  };
+  /** Make the video clip's own sound the audio track again. */
+  const addClipAudio = async () => {
+    const clipInfo = commands.getState().timeline?.video;
+    if (locked.current || !clipInfo?.hasAudio) return;
+    locked.current = true;
+    setBusy('project');
+    setError(null);
+    setNotice(`Analyzing the sound of ${clipInfo.name}…`);
+    try {
+      const audio = await clipSoundTrack(clipInfo.path);
+      commands.updateTimeline({ audio });
+      setNotice(
+        `Using the sound of ${clipInfo.name}${audio.analysis.bpm ? ` · ${audio.analysis.bpm} BPM` : ''}`,
+      );
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not read the clip’s sound.');
+      setNotice('Ready');
+    } finally {
+      locked.current = false;
+      setBusy(null);
+    }
+  };
+  const ensureTimeline = () => {
+    if (!commands.getState().timeline) commands.setTimeline(createTimeline());
+    return commands.getState().timeline!;
+  };
+  /** Click a diamond: animate, add a key at the playhead, or remove the key there. */
+  const toggleKey = (effectId: string, key: string) => {
+    try {
+      const current = commands.getState().effects.find((effect) => effect.instanceId === effectId);
+      if (!current || !animationDefinition(current, key)) return;
+      const active = ensureTimeline();
+      const t = frameTime(frame, active.fps);
+      const animation = current.animation?.[key];
+      // Keys hold keyed values; modulation is applied on top at render time.
+      const definition = animationDefinition(current, key)!;
+      const keyedValue = animation?.keys.length
+        ? evaluateKeys(animation.keys, t, definition)
+        : undefined;
+      const value =
+        keyedValue === undefined
+          ? parameterBaseValue(current, key)
+          : typeof keyedValue === 'number'
+            ? roundParameter(keyedValue, definition)
+            : keyedValue;
+      if (animation && keyIndexAtFrame(animation, frame, active.fps) >= 0) {
+        const next = removeKeyAtFrame(animation, frame, active.fps);
+        const keyed = animation.keys[keyIndexAtFrame(animation, frame, active.fps)]!.value;
+        // Removing the last key keeps the value it showed as the new static value.
+        commands.updateEffect(effectId, {
+          animation: { [key]: next },
+          ...(next
+            ? {}
+            : key.startsWith('application.')
+              ? { application: { [key.slice(12)]: keyed } as Partial<EffectApplication> }
+              : { params: { [key]: keyed } }),
+        });
+      } else {
+        commands.updateEffect(effectId, {
+          animation: { [key]: upsertKey(animation, t, value, active.fps) },
+        });
+        setSelectedParam({ effectId, key });
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not change this keyframe.');
+    }
+  };
+  /** Route control edits: animated controls get a key at the playhead, others change as before. */
+  const routeChange = (
+    effectId: string,
+    params: Readonly<Record<string, number | string>>,
+    application?: Readonly<Record<string, number | string>>,
+  ) => {
+    const current = commands.getState().effects.find((effect) => effect.instanceId === effectId);
+    if (!current) return null;
+    const animation: Record<string, ParameterAnimation> = {};
+    const staticParams: Record<string, number | string> = {};
+    const staticApplication: Record<string, number | string> = {};
+    const fpsNow = commands.getState().timeline?.fps ?? 30;
+    const t = frameTime(frame, fpsNow);
+    for (const [key, value] of Object.entries(params)) {
+      const lane = current.animation?.[key];
+      if (lane?.keys.length) animation[key] = upsertKey(lane, t, value, fpsNow);
+      else staticParams[key] = value;
+    }
+    for (const [key, value] of Object.entries(application ?? {})) {
+      const lane = current.animation?.[`application.${key}`];
+      if (lane?.keys.length) animation[`application.${key}`] = upsertKey(lane, t, value, fpsNow);
+      else staticApplication[key] = value;
+    }
+    return { animation, staticParams, staticApplication };
+  };
+  const animationUi = (effect: EffectInstance): ParameterAnimationUi => ({
+    showStatic: timelineMode,
+    selectedKey: selectedParam?.effectId === effect.instanceId ? selectedParam.key : null,
+    info: (key) => {
+      const info = parameterKeyInfo(effect, key, frame, fps);
+      if (!info?.modulators) return info;
+      const audio = effect.animation?.[key]?.modulators?.find(
+        (modulator) => modulator.kind === 'audio' && modulator.enabled,
+      );
+      return audio && audio.kind === 'audio'
+        ? {
+            ...info,
+            note: `Follows ${timeline?.audio?.name ?? 'the audio track'} · ${audio.band === 'custom' ? `${audio.lowHz}–${audio.highHz} Hz` : `${audio.band[0]!.toUpperCase()}${audio.band.slice(1)} band`} · range ${Math.round(audio.outMin * 100)}–${Math.round(audio.outMax * 100)}%`,
+          }
+        : info;
+    },
+    toggleKey: (key) => toggleKey(effect.instanceId, key),
+    jump: (key, direction) => {
+      const target = adjacentKeyFrame(effect.animation?.[key], frame, fps, direction);
+      if (target !== null) seek(target);
+    },
+    select: (key) => setSelectedParam({ effectId: effect.instanceId, key }),
+    openModulators: (key) => {
+      setSelectedParam({ effectId: effect.instanceId, key });
+      setModulatorParam({ effectId: effect.instanceId, key });
+    },
+  });
+  /** Copy a modulated control's curve to editable keys; the link is kept to restore. */
+  const bakeCurve = (effectId: string, key: string) => {
+    const state = commands.getState();
+    const effect = state.effects.find((entry) => entry.instanceId === effectId);
+    const animation = effect?.animation?.[key];
+    const definition = effect && animationDefinition(effect, key);
+    if (!effect || !animation || !definition || !state.timeline) return;
+    try {
+      const baked = bakeModulation(
+        animation,
+        parameterBaseValue(effect, key),
+        definition,
+        modulation,
+        state.timeline,
+      );
+      commands.endHistoryGroup();
+      commands.updateEffect(effectId, { animation: { [key]: baked } });
+      setModulatorParam(null);
+      setSelectedParam({ effectId, key });
+      revealAnimationCard();
+      setNotice(`Copied ${definition.label} to ${baked.keys.length} keyframes`);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not copy the curve.');
+    }
+  };
+  /** Put back the link a copy replaced, after warning that the edited keys go. */
+  const restoreLink = async (effectId: string, key: string) => {
+    const before = commands.getState().effects.find((entry) => entry.instanceId === effectId)
+      ?.animation?.[key];
+    if (!before?.baked) return;
+    try {
+      const confirmed = unwrap(
+        await window.gleech.confirmAction(
+          'Restore audio link',
+          'Restore the audio link?',
+          `The edited curve (${before.keys.length} keyframe${
+            before.keys.length === 1 ? '' : 's'
+          }) will be replaced by the original link and its settings.`,
+          'Restore',
+        ),
+      );
+      const animation = commands.getState().effects.find((entry) => entry.instanceId === effectId)
+        ?.animation?.[key];
+      if (!confirmed || !animation?.baked) return;
+      const restored = restoreBaked(animation);
+      commands.endHistoryGroup();
+      commands.updateEffect(effectId, { animation: { [key]: restored } });
+      setSelectedParam({ effectId, key });
+      setModulatorParam(restored?.modulators?.length ? { effectId, key } : null);
+      setNotice('Restored the audio link');
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not restore the link.');
+    }
+  };
+  /** Scroll the inspector to the selected control's Animation card once it renders. */
+  const revealAnimationCard = () =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        window.document
+          .querySelector('.detail-panel .animation-card')
+          ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+      ),
+    );
+  const animationCardFor = (effect: EffectInstance) => {
+    if (!selectedParam || selectedParam.effectId !== effect.instanceId) return null;
+    const key = selectedParam.key;
+    const animation = effect.animation?.[key];
+    const definition = animationDefinition(effect, key);
+    if (!animation || !definition) return null;
+    const eases = new Set(animation.keys.slice(0, -1).map((entry) => entry.interpolation));
+    const update = (next: ParameterAnimation | null, extra: Record<string, unknown> = {}) => {
+      try {
+        commands.endHistoryGroup();
+        commands.updateEffect(effect.instanceId, { animation: { [key]: next }, ...extra });
+      } catch (failure) {
+        setError(failure instanceof Error ? failure.message : 'Could not change the animation.');
+      }
+    };
+    return (
+      <AnimationCard
+        label={definition.label}
+        interpolation={
+          animation.keys.length === 0
+            ? null
+            : eases.size > 1
+              ? 'mixed'
+              : (animation.keys[0]?.interpolation ?? null)
+        }
+        keyCount={animation.keys.length}
+        canLinkAudio={Boolean(timeline?.audio) && definition.kind === 'number'}
+        copied={Boolean(animation.baked)}
+        disabled={busy !== null}
+        onEase={(interpolation) => update(setKeysInterpolation(animation, 'all', interpolation))}
+        onAddLfo={() => {
+          if (definition.kind !== 'number') {
+            setError('LFOs drive numeric controls only.');
+            return;
+          }
+          update({
+            ...animation,
+            modulators: [...(animation.modulators ?? []), createLfo(crypto.randomUUID())],
+          });
+          setModulatorParam({ effectId: effect.instanceId, key });
+        }}
+        onLinkAudio={() => {
+          if (animation.baked) {
+            void restoreLink(effect.instanceId, key);
+            return;
+          }
+          update({
+            ...animation,
+            modulators: [
+              ...(animation.modulators ?? []),
+              createAudioModulator(crypto.randomUUID()),
+            ],
+          });
+          setModulatorParam({ effectId: effect.instanceId, key });
+        }}
+        onClear={() => {
+          // Clearing keeps the value shown at the playhead as the static value.
+          const value = evaluateParameter(
+            animation,
+            parameterBaseValue(effect, key),
+            frameT,
+            definition,
+            modulation,
+          );
+          update(
+            null,
+            key.startsWith('application.')
+              ? { application: { [key.slice(12)]: value } }
+              : { params: { [key]: value } },
+          );
+          setSelectedParam(null);
+        }}
+      />
+    );
+  };
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          'input:not([type="range"]):not([type="checkbox"]), textarea, select, [contenteditable="true"], dialog[open]',
+        )
+      )
+        return;
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && (key === 'r' || key === 'g')) {
+        event.preventDefault();
+        openRender(key === 'r' ? 'video' : 'gif');
+        return;
+      }
+      if (!timelineMode || event.ctrlKey || event.metaKey || event.altKey) return;
+      // The canvas keeps Space (compare) and Home (fit); sliders keep their arrows.
+      if (target?.closest('.viewport-stage')) return;
+      const onRange = target instanceof HTMLInputElement && target.type === 'range';
+      const active = commands.getState().timeline;
+      if (!active) return;
+      const step = event.shiftKey ? 10 : 1;
+      if (event.key === ' ') {
+        event.preventDefault();
+        setPlaying((value) => !value);
+      } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !onRange) {
+        event.preventDefault();
+        setPlaying(false);
+        seek(frame + (event.key === 'ArrowLeft' ? -step : step));
+      } else if (event.key === 'Home' && !onRange) {
+        event.preventDefault();
+        seek(0);
+      } else if (event.key === 'End' && !onRange) {
+        event.preventDefault();
+        seek(totalFrames - 1);
+      } else if (key === 'm') {
+        event.preventDefault();
+        addMarker();
+      } else if (key === 'i' || key === 'o') {
+        event.preventDefault();
+        const t = frameTime(frame, active.fps);
+        const end = totalFrames / active.fps;
+        const current = active.inOut ?? { start: 0, end };
+        // Out includes the frame under the playhead.
+        const out = Math.min(end, frameTime(frame + 1, active.fps));
+        const next =
+          key === 'i' ? { start: t, end: current.end } : { start: current.start, end: out };
+        if (next.end > next.start) commands.updateTimeline({ inOut: next });
+      } else if (event.key === ',' || event.key === '.') {
+        event.preventDefault();
+        const lanes = selected?.animation
+          ? Object.values(selected.animation)
+          : commands.getState().effects.flatMap((effect) => Object.values(effect.animation ?? {}));
+        const frames = lanes
+          .flatMap((lane) => lane.keys.map((entry) => timeFrame(entry.t, active.fps)))
+          .filter((value) => (event.key === ',' ? value < frame : value > frame));
+        if (frames.length) seek(event.key === ',' ? Math.max(...frames) : Math.min(...frames));
+      }
+    };
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  });
   const paintMask = (id: string) => {
     setMaskGeometryDraft(null);
     const current = commands.getState();
@@ -472,6 +1462,18 @@ export function App() {
   const originalPixels = useCallback(
     async (id: string) => unwrap(await window.gleech.originalPixels(id)),
     [],
+  );
+  /** Full-resolution source pixels at the playhead: the clip frame, or the still image. */
+  const stillPixels = useCallback(
+    async (id: string) => {
+      const state = commands.getState();
+      const frames = clipFrames.current;
+      const active = activeVideo(state);
+      if (frames && active && state.source?.id === id)
+        return frames.frameAt(frameContext.current.t, Math.max(active.width, active.height));
+      return originalPixels(id);
+    },
+    [originalPixels],
   );
 
   useEffect(() => {
@@ -731,7 +1733,7 @@ export function App() {
     setError(null);
     setNotice('Copying edited image…');
     try {
-      const pixels = await originalPixels(source.id);
+      const pixels = await stillPixels(source.id);
       const rendered = await viewport.current.exportPixels(pixels);
       unwrap(await window.gleech.copyImage(source.id, rendered.pixels));
       setNotice('Copied edited image');
@@ -743,7 +1745,7 @@ export function App() {
       locked.current = false;
       setBusy(null);
     }
-  }, [originalPixels]);
+  }, [stillPixels]);
   const exitGleech = async () => {
     setFileMenu(false);
     try {
@@ -762,7 +1764,7 @@ export function App() {
       setError(null);
       setNotice('Exporting original-resolution ' + options.format.toUpperCase() + '…');
       try {
-        const pixels = await originalPixels(source.id);
+        const pixels = await stillPixels(source.id);
         const rendered = await viewport.current.exportPixels(pixels);
         const name = unwrap(
           await window.gleech.saveImage(
@@ -782,7 +1784,7 @@ export function App() {
         setBusy(null);
       }
     },
-    [originalPixels],
+    [stillPixels],
   );
 
   const saveProject = useCallback(
@@ -849,6 +1851,17 @@ export function App() {
         setSavedState(commands.getState());
         setDocument(candidate.document);
         setSelectedId(null);
+        setPlaying(false);
+        // Image mode shows the clip frame that is the source image.
+        const reopened = activeVideo(candidate.project);
+        setPlayhead(
+          reopened && candidate.project.timeline
+            ? timeFrame(reopened.posterTime ?? 0, candidate.project.timeline.fps)
+            : 0,
+        );
+        setSelectedParam(null);
+        setModulatorParam(null);
+        setMode('image');
         setNotice(
           `Opened ${candidate.document.name}${candidate.document.recentWarning ? ` · ${candidate.document.recentWarning}` : ''}`,
         );
@@ -957,6 +1970,13 @@ export function App() {
           void window.gleech.resolveClose(false);
           return;
         }
+        if (
+          renderQueue.busy() &&
+          !window.confirm('A render is still running. Close GLEECH and cancel it?')
+        ) {
+          void window.gleech.resolveClose(false);
+          return;
+        }
         locked.current = true;
         setBusy('project');
         setError(null);
@@ -987,11 +2007,12 @@ export function App() {
       let candidate: ImportedImage | null = null;
       try {
         if (!before.source) throw new Error('Open an image first.');
-        const pixels = await originalPixels(before.source.id);
+        const pixels = await stillPixels(before.source.id);
+        const still = atPlayhead(before);
         const rendered = await viewport.current.exportPixels(
           pixels,
-          before.effects,
-          before.masterSeed,
+          still.effects,
+          still.masterSeed,
           signal,
         );
         candidate = unwrap(
@@ -1009,6 +2030,15 @@ export function App() {
           new Date().toISOString(),
           bake,
         );
+        // On a timeline, stages appear as markers at the frame they captured.
+        const active = commands.getState().timeline;
+        if (active)
+          commands.updateTimeline({
+            markers: [
+              ...active.markers,
+              { id: crypto.randomUUID(), t: frameContext.current.t, name, snapshotId },
+            ],
+          });
         setSelectedId(null);
         setExportBackend(rendered.backend);
         setNotice((bake ? 'Baked ' : 'Captured ') + name);
@@ -1036,7 +2066,7 @@ export function App() {
         setBusy(null);
       }
     },
-    [originalPixels, rememberImage],
+    [stillPixels, rememberImage, atPlayhead],
   );
 
   const restoreStage = useCallback(
@@ -1594,10 +2624,11 @@ export function App() {
               ) {
                 if (!previous.source || !viewport.current)
                   throw new Error('Open an image before exporting.');
+                const still = atPlayhead(previous);
                 const rendered = await viewport.current.exportPixels(
-                  await originalPixels(previous.source.id),
-                  previous.effects,
-                  previous.masterSeed,
+                  await stillPixels(previous.source.id),
+                  still.effects,
+                  still.masterSeed,
                   signal,
                 );
                 if (
@@ -1728,6 +2759,21 @@ export function App() {
               locked.current = false;
               setBusy(null);
             }
+          } else if (TIMELINE_MCP_ACTIONS.includes(request.action)) {
+            value = await runTimelineMcp(request, {
+              dispatchId: dispatch.id,
+              project: () => commands.getState(),
+              revision: () => adapter.state().revision,
+              playhead: () => frameContext.current.frame,
+              setPlayhead: (target) => {
+                // Playback would override a playhead set from MCP.
+                setPlaying(false);
+                setPlayhead(target);
+              },
+              videoMediaId: () => clipMediaId.current,
+              signal,
+              deadline: dispatch.deadline,
+            });
           } else if (request.action === 'undo' || request.action === 'redo') {
             if (!(request.action === 'undo' ? commands.canUndo() : commands.canRedo()))
               throw new Error(`Nothing to ${request.action}.`);
@@ -1768,7 +2814,15 @@ export function App() {
       for (const controller of controllers.values()) controller.abort();
       adapter.dispose();
     };
-  }, [restoreHistory, rememberImage, originalPixels, captureStage, restoreStage]);
+  }, [
+    restoreHistory,
+    rememberImage,
+    originalPixels,
+    stillPixels,
+    captureStage,
+    restoreStage,
+    atPlayhead,
+  ]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -1812,9 +2866,9 @@ export function App() {
 
   return (
     <div
-      className="workspace"
+      className={`workspace${timelineMode ? ' timeline-mode' : ''}`}
       ref={setWorkspace}
-      style={panelStyle}
+      style={{ ...panelStyle, ['--dock-height' as string]: `${dockHeight}px` }}
       aria-busy={busy !== null}
       onContextMenu={(event) => {
         const element = event.target instanceof Element ? event.target : null;
@@ -1942,6 +2996,12 @@ export function App() {
                 <button onClick={openImage}>
                   Open image <span>Ctrl+Shift+O</span>
                 </button>
+                <button
+                  onClick={() => void addVideo()}
+                  title="Open a video clip in Timeline mode. Its first frame becomes the source image."
+                >
+                  Open video…
+                </button>
                 <button onClick={() => void openProject()}>
                   Open project <span>Ctrl+O</span>
                 </button>
@@ -1989,6 +3049,20 @@ export function App() {
                   </button>
                   <button disabled={!project.source} onClick={() => void saveImage()}>
                     Quick PNG Export <span>Ctrl+Shift+E</span>
+                  </button>
+                  <button
+                    disabled={!timeline || !project.source}
+                    title={timeline ? undefined : 'Open Timeline mode to animate first.'}
+                    onClick={() => openRender('video')}
+                  >
+                    Render Video… <span>Ctrl+Shift+R</span>
+                  </button>
+                  <button
+                    disabled={!timeline || !project.source}
+                    title={timeline ? undefined : 'Open Timeline mode to animate first.'}
+                    onClick={() => openRender('gif')}
+                  >
+                    Export GIF… <span>Ctrl+Shift+G</span>
                   </button>
                 </MenuFlyout>
                 <MenuFlyout label="Library">
@@ -2110,7 +3184,68 @@ export function App() {
           />
         </div>
         <div className="toolbar-spacer" />
-        <div className="toolbar-comparison" ref={setComparisonContainer} />
+        <div
+          className="mode-switch"
+          role="tablist"
+          aria-label="Editor mode"
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const toTimeline = event.key === 'ArrowRight' || event.key === 'End';
+            if (toTimeline) openTimeline();
+            else openImageMode();
+            window.document
+              .getElementById(toTimeline ? 'mode-tab-timeline' : 'mode-tab-image')
+              ?.focus();
+          }}
+        >
+          <button
+            id="mode-tab-image"
+            role="tab"
+            aria-selected={!timelineMode}
+            tabIndex={timelineMode ? -1 : 0}
+            onClick={openImageMode}
+          >
+            <ImageModeIcon />
+            Image
+          </button>
+          <button
+            id="mode-tab-timeline"
+            role="tab"
+            aria-selected={timelineMode}
+            tabIndex={timelineMode ? 0 : -1}
+            disabled={!project.source || busy !== null}
+            title={
+              project.source
+                ? 'Animate effects over time and render video or GIFs'
+                : 'Open an image first'
+            }
+            onClick={openTimeline}
+          >
+            <TimelineModeIcon />
+            Timeline
+          </button>
+        </div>
+        {timelineMode ? (
+          <span className="mode-chip" role="status" title="Playback preview quality">
+            <span className="mode-chip-dot" aria-hidden="true" />
+            {playing
+              ? `Half-res preview${frameCache.fps ? ` · ${frameCache.fps.toFixed(1)} fps` : ''}`
+              : 'Full-res preview'}
+          </span>
+        ) : (
+          timeline &&
+          (clip || effectsAnimate(project.effects)) && (
+            <button
+              className="mode-chip mode-chip-time"
+              title="Image mode shows the frame at the playhead. Open Timeline to move it."
+              onClick={openTimeline}
+            >
+              <DiamondIcon filled size={10} />
+              {formatTimecode(frame, fps)}
+            </button>
+          )
+        )}
         <div className="toolbar-spacer" />
         <div className="history-actions" aria-label="Edit history">
           <button
@@ -2236,126 +3371,171 @@ export function App() {
           onClose={() => setFeedbackKind(null)}
         />
       )}
-      <aside className="stack-panel" aria-label="Effect stack">
-        <PanelResizeHandle {...panelHandle('left')} />
-        <div className="panel-heading stack-heading">
-          <strong>Effects</strong>
-          <span>
-            {project.effects.filter((effect) => effect.enabled).length} of {project.effects.length}{' '}
-            on
-          </span>
-          <button
-            className="stack-delete"
-            aria-label="Delete selected effect"
-            title={selected ? `Delete ${getEffectDefinition(selected).title}` : 'Delete effect'}
-            disabled={busy !== null || !selected}
-            onClick={() => {
-              if (!selected) return;
-              if (selected.instanceId === maskTarget) finishMask();
-              commands.removeEffect(selected.instanceId);
-            }}
-          >
-            <TrashIcon />
-          </button>
-          <button
-            className="stack-heading-add"
-            aria-label="Add effect"
-            aria-expanded={addingEffect}
-            aria-haspopup="dialog"
-            aria-controls="effect-catalog"
-            title="Add effect"
-            disabled={!project.source || busy !== null}
-            onClick={() => openPicker()}
-          >
-            <PlusIcon />
-          </button>
-        </div>
-        <div className="stack-body">
-          {project.effects.length === 0 && (
-            <p className="quiet">
-              {project.source
-                ? 'Add an effect to start shaping your image.'
-                : 'Open an image to start adding effects.'}
-            </p>
-          )}
-          <EffectStack
-            effects={project.effects}
-            selectedId={selected?.instanceId}
-            disabled={busy !== null}
-            onSelect={(id) => {
-              if (id !== maskTarget) finishMask();
-              setSelectedId(id);
-              setInspectorTab('controls');
-            }}
-            onToggle={(id, enabled) => commands.updateEffect(id, { enabled })}
-            onToggleLock={commands.setEffectLocked}
-            onMove={commands.moveEffectTo}
-            onPaintMask={paintMask}
-            onToggleMask={(id, enabled) => {
-              const mask = commands
-                .getState()
-                .effects.find((e) => e.instanceId === id)?.paintedMask;
-              if (mask) commands.setEffectMask(id, { ...mask, enabled });
-              if (!enabled && id === maskTarget) {
-                setMaskGeometryDraft(null);
-                commands.endHistoryGroup();
-              }
-            }}
-          />
-          {maskEffect && editingMask && project.source && (
-            <>
-              <PaintedMaskControls
-                effectId={maskEffect.instanceId}
-                mask={editingMask}
-                onEnable={(enabled) => {
+      {!timelineMode && (
+        <aside className="stack-panel" aria-label="Effect stack">
+          <PanelResizeHandle {...panelHandle('left')} />
+          <div className="stack-comparison" ref={setComparisonContainer} />
+          <div className="panel-heading stack-heading">
+            <strong>Effects</strong>
+            <span>
+              {project.effects.filter((effect) => effect.enabled).length} of{' '}
+              {project.effects.length} on
+            </span>
+            <button
+              className="stack-delete"
+              aria-label="Delete selected effect"
+              title={selected ? `Delete ${getEffectDefinition(selected).title}` : 'Delete effect'}
+              disabled={busy !== null || !selected}
+              onClick={() => {
+                if (!selected) return;
+                if (selected.instanceId === maskTarget) finishMask();
+                commands.removeEffect(selected.instanceId);
+              }}
+            >
+              <TrashIcon />
+            </button>
+            <button
+              className="stack-heading-add"
+              aria-label="Add effect"
+              aria-expanded={addingEffect}
+              aria-haspopup="dialog"
+              aria-controls="effect-catalog"
+              title="Add effect"
+              disabled={!project.source || busy !== null}
+              onClick={() => openPicker()}
+            >
+              <PlusIcon />
+            </button>
+          </div>
+          <div className="stack-body">
+            {project.effects.length === 0 && (
+              <p className="quiet">
+                {project.source
+                  ? 'Add an effect to start shaping your image.'
+                  : 'Open an image to start adding effects.'}
+              </p>
+            )}
+            <EffectStack
+              effects={project.effects}
+              selectedId={selected?.instanceId}
+              disabled={busy !== null}
+              onSelect={(id) => {
+                if (id !== maskTarget) finishMask();
+                setSelectedId(id);
+                setInspectorTab('controls');
+              }}
+              onToggle={(id, enabled) => commands.updateEffect(id, { enabled })}
+              onToggleLock={commands.setEffectLocked}
+              onMove={commands.moveEffectTo}
+              onPaintMask={paintMask}
+              onToggleMask={(id, enabled) => {
+                const mask = commands
+                  .getState()
+                  .effects.find((e) => e.instanceId === id)?.paintedMask;
+                if (mask) commands.setEffectMask(id, { ...mask, enabled });
+                if (!enabled && id === maskTarget) {
                   setMaskGeometryDraft(null);
                   commands.endHistoryGroup();
-                  commitCanvasMask({ ...editingMask, enabled });
-                }}
-                beginGesture={commands.beginHistoryGroup}
-                endGesture={commands.endHistoryGroup}
-                onFill={() =>
-                  commitCanvasMask({
-                    ...editingMask,
-                    base: 1,
-                    inverted: false,
-                    strokes: [],
-                    paths: [],
-                  })
                 }
-                brush={maskBrush}
-                shader={maskEffect.type.startsWith('shader-')}
-                onMask={commitCanvasMask}
-                onBrush={setMaskBrush}
-                overlay={maskOverlay}
-                onOverlay={setMaskOverlay}
-                disabled={busy !== null}
-                onDone={finishMask}
-                onClear={() => {
-                  commitCanvasMask({
-                    ...editingMask,
-                    base: 0,
-                    inverted: false,
-                    strokes: [],
-                    ...(editingMask.paths ? { paths: [] } : {}),
-                  });
-                }}
-                onInvert={() =>
-                  commitCanvasMask({
-                    ...editingMask,
-                    inverted: !editingMask.inverted,
-                  })
-                }
-                onRemove={() => {
-                  commands.setEffectMask(maskEffect.instanceId, null);
-                  finishMask();
-                }}
-              />
-            </>
-          )}
-        </div>
-      </aside>
+              }}
+            />
+            {maskEffect && editingMask && project.source && (
+              <>
+                <PaintedMaskControls
+                  effectId={maskEffect.instanceId}
+                  mask={editingMask}
+                  onEnable={(enabled) => {
+                    setMaskGeometryDraft(null);
+                    commands.endHistoryGroup();
+                    commitCanvasMask({ ...editingMask, enabled });
+                  }}
+                  beginGesture={commands.beginHistoryGroup}
+                  endGesture={commands.endHistoryGroup}
+                  onFill={() =>
+                    commitCanvasMask({
+                      ...editingMask,
+                      base: 1,
+                      inverted: false,
+                      strokes: [],
+                      paths: [],
+                    })
+                  }
+                  brush={maskBrush}
+                  shader={maskEffect.type.startsWith('shader-')}
+                  onMask={commitCanvasMask}
+                  onBrush={setMaskBrush}
+                  overlay={maskOverlay}
+                  onOverlay={setMaskOverlay}
+                  disabled={busy !== null}
+                  onDone={finishMask}
+                  onClear={() => {
+                    commitCanvasMask({
+                      ...editingMask,
+                      base: 0,
+                      inverted: false,
+                      strokes: [],
+                      ...(editingMask.paths ? { paths: [] } : {}),
+                    });
+                  }}
+                  onInvert={() =>
+                    commitCanvasMask({
+                      ...editingMask,
+                      inverted: !editingMask.inverted,
+                    })
+                  }
+                  onRemove={() => {
+                    commands.setEffectMask(maskEffect.instanceId, null);
+                    finishMask();
+                  }}
+                />
+              </>
+            )}
+          </div>
+        </aside>
+      )}
       <div className="image-workspace">
+        {timelineMode && <div className="canvas-comparison" ref={setComparisonContainer} />}
+        {timelineMode &&
+          (() => {
+            const meters = project.effects.flatMap((effect) =>
+              Object.entries(effect.animation ?? {}).flatMap(([key, lane]) => {
+                const modulators = (lane.modulators ?? []).filter((entry) => entry.enabled);
+                const definition = animationDefinition(effect, key);
+                if (!modulators.length || !definition) return [];
+                const value = evaluateParameter(
+                  lane,
+                  parameterBaseValue(effect, key),
+                  frameT,
+                  definition,
+                  modulation,
+                );
+                return [
+                  {
+                    id: `${effect.instanceId}:${key}`,
+                    label: definition.label,
+                    level: normalizedValue(definition, value),
+                    color: modulators.some((entry) => entry.kind === 'audio')
+                      ? SIGNAL_COLORS.audio
+                      : SIGNAL_COLORS.lfo,
+                  },
+                ];
+              }),
+            );
+            return meters.length ? (
+              <section className="live-modulation" aria-label="Live modulation">
+                <h3>Live modulation</h3>
+                {meters.slice(0, 6).map((meter) => (
+                  <div key={meter.id} className="live-meter">
+                    <span className="live-swatch" style={{ background: meter.color }} />
+                    <span className="live-label">{meter.label}</span>
+                    <span className="live-bar">
+                      <span style={{ width: `${meter.level * 100}%`, background: meter.color }} />
+                    </span>
+                  </div>
+                ))}
+              </section>
+            ) : null;
+          })()}
         {mcpMode !== 'off' && (
           <button
             className="mcp-control-indicator"
@@ -2375,8 +3555,13 @@ export function App() {
           controlsContainer={viewportControlsContainer}
           comparisonContainer={comparisonContainer}
           backdrop={selected?.type === 'cutout' ? cutoutBackdrop : DEFAULT_PREVIEW_BACKDROP}
-          effects={previewEffects}
-          masterSeed={project.masterSeed}
+          effects={frameEffects}
+          masterSeed={frameMasterSeed}
+          frameKey={frameKey}
+          sourceFrame={clip ? (videoFrame?.image ?? null) : null}
+          playback={playing && timelineMode}
+          onFrameShown={onFrameShown}
+          onFrameEvicted={onFrameEvicted}
           busy={busy !== null}
           onOpen={openImage}
           onOpenSample={openSampleImage}
@@ -2417,20 +3602,23 @@ export function App() {
               : null
           }
         />
-        <SnapshotPanel
-          project={project}
-          thumbnails={thumbnails}
-          disabled={busy !== null}
-          onCapture={(bake) =>
-            setStageDialog({
-              bake,
-              name: 'Snapshot ' + String(project.snapshots.length + 1).padStart(2, '0'),
-            })
-          }
-          onRestore={(id, mode) => void restoreStage(id, mode)}
-          onRename={(id, name) => setStageDialog({ bake: false, renameId: id, name })}
-        />
+        {!timelineMode && (
+          <SnapshotPanel
+            project={project}
+            thumbnails={thumbnails}
+            disabled={busy !== null}
+            onCapture={(bake) =>
+              setStageDialog({
+                bake,
+                name: 'Snapshot ' + String(project.snapshots.length + 1).padStart(2, '0'),
+              })
+            }
+            onRestore={(id, mode) => void restoreStage(id, mode)}
+            onRename={(id, name) => setStageDialog({ bake: false, renameId: id, name })}
+          />
+        )}
         <footer
+          hidden={timelineMode}
           className="status-bar"
           data-render-backend={info?.backend}
           data-max-texture-size={info?.maxTextureSize}
@@ -2500,19 +3688,66 @@ export function App() {
             hidden={inspectorTab !== 'controls'}
             tabIndex={0}
           >
-            {selected && (
+            {selected &&
+              modulatorParam?.effectId === selected.instanceId &&
+              animationDefinition(selected, modulatorParam.key) && (
+                <ModulatorPanel
+                  effect={selected}
+                  paramKey={modulatorParam.key}
+                  definition={animationDefinition(selected, modulatorParam.key)!}
+                  animation={selected.animation?.[modulatorParam.key]}
+                  t={frameT}
+                  modulation={modulation}
+                  audioName={timeline?.audio?.name ?? null}
+                  hasAudio={Boolean(timeline?.audio)}
+                  disabled={busy !== null}
+                  onBack={() => setModulatorParam(null)}
+                  onChange={(next) => {
+                    try {
+                      commands.updateEffect(selected.instanceId, {
+                        animation: { [modulatorParam.key]: next },
+                      });
+                    } catch (failure) {
+                      setError(
+                        failure instanceof Error ? failure.message : 'Could not change modulators.',
+                      );
+                    }
+                  }}
+                  onBase={(value) =>
+                    modulatorParam.key.startsWith('application.')
+                      ? commands.updateEffect(selected.instanceId, {
+                          application: {
+                            [modulatorParam.key.slice(12)]: value,
+                          } as Partial<EffectApplication>,
+                        })
+                      : commands.updateEffect(selected.instanceId, {
+                          params: { [modulatorParam.key]: value },
+                        })
+                  }
+                  onBake={() => bakeCurve(selected.instanceId, modulatorParam.key)}
+                  onRestoreLink={() => void restoreLink(selected.instanceId, modulatorParam.key)}
+                  beginGesture={commands.beginHistoryGroup}
+                  endGesture={commands.endHistoryGroup}
+                />
+              )}
+            {selected && modulatorParam?.effectId !== selected.instanceId && (
               <EffectEditor
-                masterSeed={project.masterSeed}
+                masterSeed={frameMasterSeed}
                 backdrop={cutoutBackdrop}
                 onBackdrop={setCutoutBackdrop}
-                effect={selected}
+                effect={
+                  frameEffects.find((effect) => effect.instanceId === selected.instanceId) ??
+                  selected
+                }
+                animation={animationUi(selected)}
+                animationCard={animationCardFor(selected)}
                 effects={project.effects}
                 image={project.source ? fieldImages.get(project.source.id) : undefined}
                 imageSize={project.source ?? { width: 1, height: 1 }}
                 disabled={busy !== null}
-                onChange={(params) =>
-                  commands.updateEffect(selected.instanceId, {
-                    params: {
+                onChange={(params) => {
+                  try {
+                    const routed = routeChange(selected.instanceId, {
                       ...params,
                       ...(selected.type === 'solid' &&
                       ['color', 'gradient'].includes(String(params.content))
@@ -2521,9 +3756,20 @@ export function App() {
                       ...(selected.type === 'solid' && params.fillColorMode
                         ? { content: params.fillColorMode === 'gradient' ? 'gradient' : 'color' }
                         : {}),
-                    },
-                  })
-                }
+                    });
+                    if (!routed) return;
+                    commands.updateEffect(selected.instanceId, {
+                      params: routed.staticParams,
+                      ...(Object.keys(routed.animation).length
+                        ? { animation: routed.animation }
+                        : {}),
+                    });
+                  } catch (failure) {
+                    setError(
+                      failure instanceof Error ? failure.message : 'Could not change this control.',
+                    );
+                  }
+                }}
                 onVary={() => commands.varyEffect(selected.instanceId)}
                 onGlyphFont={(atlas) => {
                   commands.endHistoryGroup();
@@ -2660,9 +3906,29 @@ export function App() {
                     ...(selected.type === 'glyph' ? { glyphFont: null } : {}),
                   });
                 }}
-                onApplication={(application) =>
-                  commands.updateEffect(selected.instanceId, { application })
-                }
+                onApplication={(application) => {
+                  const animated: Record<string, ParameterAnimation> = {};
+                  const rest: Record<string, unknown> = {};
+                  const active = commands.getState().timeline;
+                  for (const [key, value] of Object.entries(application)) {
+                    const lane = selected.animation?.[`application.${key}`];
+                    if (
+                      lane?.keys.length &&
+                      (typeof value === 'number' || typeof value === 'string')
+                    )
+                      animated[`application.${key}`] = upsertKey(
+                        lane,
+                        frameTime(frame, active?.fps ?? 30),
+                        value,
+                        active?.fps ?? 30,
+                      );
+                    else rest[key] = value;
+                  }
+                  commands.updateEffect(selected.instanceId, {
+                    application: rest as Partial<EffectApplication>,
+                    ...(Object.keys(animated).length ? { animation: animated } : {}),
+                  });
+                }}
                 beginGesture={commands.beginHistoryGroup}
                 endGesture={commands.endHistoryGroup}
               />
@@ -2702,6 +3968,159 @@ export function App() {
           </section>
         </aside>
       </InspectorSections>
+      {timelineMode && timeline && (
+        <>
+          <div
+            className="dock-resize"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize timeline"
+            aria-valuenow={dockHeight}
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+              event.preventDefault();
+              const next = Math.max(
+                220,
+                Math.min(
+                  window.innerHeight - 260,
+                  dockHeight + (event.key === 'ArrowUp' ? 24 : -24),
+                ),
+              );
+              setDockHeight(next);
+              try {
+                localStorage.setItem(DOCK_HEIGHT_KEY, String(next));
+              } catch {
+                // The height still applies for this session.
+              }
+            }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              const origin = event.clientY;
+              const initial = dockHeight;
+              const target = event.currentTarget;
+              target.setPointerCapture(event.pointerId);
+              let latest = initial;
+              const move = (moveEvent: PointerEvent) => {
+                latest = Math.max(
+                  220,
+                  Math.min(window.innerHeight - 260, initial + origin - moveEvent.clientY),
+                );
+                setDockHeight(latest);
+              };
+              const release = () => {
+                try {
+                  localStorage.setItem(DOCK_HEIGHT_KEY, String(latest));
+                } catch {
+                  // The height still applies for this session.
+                }
+              };
+              trackPointer(event.pointerId, move, release);
+            }}
+          />
+          <TimelineDock
+            project={project}
+            timeline={timeline}
+            frame={frame}
+            playing={playing}
+            cachedFrames={cachedFrames}
+            selectedEffectId={selected?.instanceId}
+            selectedParam={selectedParam}
+            disabled={busy !== null}
+            modulation={modulation}
+            stillThumbnail={project.source ? (thumbnails.get(project.source.id) ?? null) : null}
+            filmstrip={
+              filmstrip && media.video && filmstrip.mediaId === media.video.mediaId
+                ? filmstrip.frames
+                : []
+            }
+            laneView={laneView}
+            onLaneView={setLaneView}
+            onSeek={seek}
+            onTogglePlay={() => setPlaying(!playing)}
+            onTimeline={(change) => {
+              try {
+                commands.updateTimeline(change);
+              } catch (failure) {
+                setError(
+                  failure instanceof Error ? failure.message : 'Could not change the timeline.',
+                );
+              }
+            }}
+            onSelectEffect={(id) => {
+              setSelectedId(id);
+              setInspectorTab('controls');
+            }}
+            onSelectParam={(parameter, options) => {
+              setSelectedParam(parameter);
+              if (!parameter) return;
+              setSelectedId(parameter.effectId);
+              setInspectorTab('controls');
+              if (!options?.reveal) return;
+              // A click on a parameter's name shows its audio/LFO stack when it has
+              // modulators, else its Animation card (ease, Add LFO, Link to audio).
+              const lane = commands
+                .getState()
+                .effects.find((effect) => effect.instanceId === parameter.effectId)?.animation?.[
+                parameter.key
+              ];
+              if (lane?.modulators?.length) {
+                setModulatorParam(parameter);
+                return;
+              }
+              setModulatorParam(null);
+              revealAnimationCard();
+            }}
+            onToggleEffect={(id, enabled) => commands.updateEffect(id, { enabled })}
+            onLock={commands.setEffectLocked}
+            onMoveEffect={commands.moveEffectTo}
+            onRemoveEffect={(id) => commands.removeEffect(id)}
+            onAnimation={(effectId, key, animation) => {
+              try {
+                commands.updateEffect(effectId, { animation: { [key]: animation } });
+              } catch (failure) {
+                setError(
+                  failure instanceof Error ? failure.message : 'Could not change keyframes.',
+                );
+              }
+            }}
+            onActiveRange={(effectId, range) => {
+              try {
+                commands.updateEffect(effectId, { activeRange: range });
+              } catch (failure) {
+                setError(
+                  failure instanceof Error ? failure.message : 'Could not trim this effect.',
+                );
+              }
+            }}
+            onAddParameter={toggleKey}
+            beginGesture={commands.beginHistoryGroup}
+            endGesture={commands.endHistoryGroup}
+            onRender={() => openRender(renderMemory.tab)}
+            onAddEffect={() => openPicker()}
+            onAddVideo={() => void addVideo()}
+            onAddAudio={() => void addAudio()}
+            onUseClipAudio={() => void addClipAudio()}
+            onRemoveVideo={() =>
+              // The clip's own sound goes with it; a separate audio track stays.
+              commands.updateTimeline({
+                video: undefined,
+                ...(audioIsClipSound(timeline) ? { audio: undefined } : {}),
+              })
+            }
+            onRemoveAudio={() => commands.updateTimeline({ audio: undefined })}
+            onAddMarker={addMarker}
+            onRemoveMarker={(id) =>
+              commands.updateTimeline({
+                markers: timeline.markers.filter((marker) => marker.id !== id),
+              })
+            }
+            playbackVolume={playbackAudio.volume}
+            playbackMuted={playbackAudio.muted}
+            onPlaybackAudio={changePlaybackAudio}
+          />
+        </>
+      )}
 
       {stageDialog && (
         <StageDialog
@@ -2834,6 +4253,26 @@ export function App() {
         />
       )}
       {mcpDialog && <McpDialog onClose={() => setMcpDialog(false)} />}
+      {renderDialog && project.timeline && project.source && (
+        <RenderDialog
+          initialTab={renderDialog}
+          project={project}
+          projectFile={document?.name ?? null}
+          timeline={project.timeline}
+          frame={frame}
+          preview={renderPreview}
+          memory={renderMemory}
+          videoMediaId={activeVideo(project) ? (media.video?.mediaId ?? null) : null}
+          onMemory={setRenderMemory}
+          onClose={() => setRenderDialog(null)}
+          onQueue={(request, close) => {
+            renderQueue.enqueue(request);
+            setNotice(`Queued ${request.label}`);
+            if (close) setRenderDialog(null);
+          }}
+        />
+      )}
+      <RenderQueuePanel onError={setError} />
       {busy && (
         <div className="operation-banner" role="status">
           <span className="spinner" />

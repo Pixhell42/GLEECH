@@ -6,10 +6,14 @@ import { APP_ICON_FILE } from '../shared/branding';
 import { registerWindowControls } from './window-controls';
 import { registerMcp } from './mcp';
 import { createMcpAccess } from './mcp-access';
+import { bundledFfmpegCandidates, createFfmpegLocator } from './ffmpeg';
+import { registerRenderHandlers } from './render-service';
+import { registerMediaHandlers, registerMediaScheme } from './media-service';
 
 const smokeTest = process.argv.includes('--smoke-test');
 const smokeUserData = process.env['GLEECH_SMOKE_USER_DATA'];
 if (smokeTest && smokeUserData) app.setPath('userData', smokeUserData);
+if (!process.argv.includes('--gleech-cli-gpu')) registerMediaScheme();
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -38,6 +42,20 @@ function createWindow(): void {
   window.once('closed', disposeImages);
   window.once('closed', registerWindowControls(window));
   window.once('closed', registerMcp(window, mcpAccess));
+  const ffmpeg = createFfmpegLocator({
+    configFile: join(app.getPath('userData'), 'ffmpeg.json'),
+    bundled: bundledFfmpegCandidates(process.resourcesPath, app.getAppPath(), app.isPackaged),
+  });
+  window.once(
+    'closed',
+    registerRenderHandlers(window, ffmpeg, () =>
+      mcpAccess
+        .folders()
+        .filter((folder) => folder.kind === 'exports')
+        .map((folder) => folder.path),
+    ),
+  );
+  window.once('closed', registerMediaHandlers(window, ffmpeg));
   let allowClose = false;
   let closePending = false;
   let rendererReady = false;
