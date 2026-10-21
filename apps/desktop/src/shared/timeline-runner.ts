@@ -130,6 +130,15 @@ export async function runTimelineRender(
       : adapters.resize(image, width, height);
   let encoder: TimelineEncoder | null = null;
   let reader: TimelineFrameReader | null = null;
+  let readerClosure: Promise<void> | null = null;
+  const closeReader = () => {
+    const current = reader;
+    if (current)
+      readerClosure ??= Promise.resolve()
+        .then(() => current.close())
+        .catch(() => {});
+    return readerClosure;
+  };
   let cancellation: Promise<void> | null = null;
   const cancelEncoder = () => {
     const current = encoder;
@@ -146,6 +155,9 @@ export async function runTimelineRender(
       // Cleanup is best effort; encoder cancellation must still run.
     } finally {
       void cancelEncoder();
+      // A decoder may be waiting for bytes when cancellation arrives.
+      // Closing it wakes that read instead of waiting for another frame.
+      void closeReader();
     }
   };
   signal?.addEventListener('abort', abort, { once: true });
@@ -228,6 +240,6 @@ export async function runTimelineRender(
     throw error;
   } finally {
     signal?.removeEventListener('abort', abort);
-    if (reader) await reader.close().catch(() => {});
+    await closeReader();
   }
 }
