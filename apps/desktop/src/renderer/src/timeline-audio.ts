@@ -23,6 +23,9 @@ export class TimelineAudio {
     const audio = (this.element = new Audio());
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
+    audio.addEventListener('ended', () => {
+      this.playing = false;
+    });
     audio.addEventListener('error', () => {
       if (!this.disposed) onError?.();
     });

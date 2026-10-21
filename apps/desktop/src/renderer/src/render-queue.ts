@@ -214,7 +214,14 @@ class RenderQueue {
           // Past the clip's end the last frame holds, like the preview.
           const frame = unwrap(await window.gleech.readVideoFrame(reader));
           if (frame) lastClipFrame = resizePixels(frame, width, height);
-          if (!lastClipFrame) throw new Error('The video clip has no frames in the render range.');
+          if (!lastClipFrame)
+            lastClipFrame = resizePixels(
+              unwrap(
+                await window.gleech.videoFrameAt(request.videoMediaId!, t, Math.max(width, height)),
+              ),
+              width,
+              height,
+            );
           raw = lastClipFrame;
         } else
           raw = resizePixels(
