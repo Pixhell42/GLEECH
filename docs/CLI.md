@@ -1,6 +1,6 @@
 # Terminal CLI and TUI
 
-GLEECH also runs in a terminal. `gleech` renders images headlessly for scripts
+GLEECH also runs in a terminal. `gleech` renders images and timelines for scripts
 and batches, and `gleech tui` opens an interactive editor with a live preview.
 Both use the desktop app's own project model, command history, presets and CPU
 renderer, keeping effect semantics and portable `.gleech` projects shared
@@ -120,6 +120,56 @@ gleech render photo.jpg -p prism-garden --save-project photo.gleech --save-prese
   field and pattern placement aligned with the full image.
 - Outputs never replace existing files unless you pass `-y/--overwrite`.
 
+### Timeline exports
+
+Use `--timeline` with one saved `.gleech` project to export its animation through
+the shared desktop/terminal timeline runner:
+
+```sh
+gleech render animation.gleech --timeline -o movie.mp4
+gleech render animation.gleech --timeline -o loop.gif --fps 15
+gleech render animation.gleech --timeline -f png -o frames/
+gleech render animation.gleech --timeline --range work --width 960 -o draft.mp4
+gleech render animation.gleech --timeline --start 1.5 --end 4 --fps 24 -o segment.mp4 --json
+```
+
+MP4 uses H.264, the timeline's frame rate and the source dimensions (rounded to
+even pixels). GIF defaults to 15 FPS and at most 480 pixels wide; its available
+rates are 10, 12, 15, 24 and 30. PNG sequences contain 8-bit frames at the
+timeline's rate, named `<project>_0001.png` onward in a dedicated output folder.
+Choose PNG sequences explicitly with `-f png`; otherwise `.mp4`/`.gif` select
+the format, with MP4 as the default. Without `-o`, exports go beside the project.
+
+`--range whole|work|inout` selects the full timeline, work area or saved In/Out
+points. The default is `whole`; `--start` and `--end` override its boundaries in
+timeline seconds (start inclusive, end exclusive). Keys, active ranges,
+modulators and animated seeds evaluate at those original timeline times.
+`--width` preserves the source aspect ratio. MP4/PNG accept `--fps` from 1–240.
+
+Video projects decode their external clip, holding its final frame when the
+timeline outlasts it. MP4 mixes the audible audio track and the clip's own sound,
+with saved track levels and mute state. Use `--no-audio` for silent MP4; GIF and
+PNG sequences are always silent. Audio-driven effects use the project's saved
+analysis even with `--no-audio`. External media must still exist; relative paths
+resolve beside the project. Missing clips fail clearly instead of rendering
+their poster image.
+
+The same `--renderer`, shader and stack options work for timeline frames. Native
+Sharp is required; movies, GIFs and video sources also need FFmpeg. The CLI reads
+the desktop's FFmpeg selection, then tries the bundled copy and PATH. PNG
+sequences from still sources work without FFmpeg.
+
+Progress goes to stderr; `--json` writes the result to stdout, including frame
+count, range, dimensions, backends, warnings and output size. Ctrl+C cancels with
+exit code 130 and removes temporary output. Existing output is preserved until
+encoding succeeds. `-y` replaces a movie or a complete frame sequence; sequence
+replacement requires a dedicated folder containing only that project's numbered
+PNGs. Folders containing unrelated files are refused.
+
+Timeline mode accepts one project at a time. Still-only options such as
+`--quality`, `--show`, `--max-size` and `--save-preset` are rejected. Ordinary
+`render project.gleech` continues to export the base still stack.
+
 ### GLEECH rolls and variations
 
 ```sh
@@ -196,9 +246,9 @@ Undo step, as they do in the app.
 
 ## Limits
 
-- Timeline video/GIF exports, clip playback and keyframe/modulator editing
-  currently require the desktop app. The CLI and TUI use the base still-image
-  stack; they do not evaluate timeline animation or decode the clip at its playhead.
+- Interactive clip playback and keyframe/modulator editing currently require
+  the desktop app. The TUI still previews and exports the base image stack;
+  CLI timeline animation exports use the explicit `render --timeline` mode.
 - CPU fallback applies to built-in effects. Imported shaders require their GPU
   backend or explicit skipping. Unsupported imported shader programs fail clearly.
 - Reading JPEG/WebP and writing JPEG/WebP/TIFF, the JPEG Recompression effect and
@@ -216,9 +266,11 @@ Undo step, as they do in the app.
 
 ## Verification
 
+Prepare the pinned FFmpeg bundle with `pnpm ffmpeg:prepare` before media checks.
 `pnpm test:cli` builds and checks CPU workflows plus required WebGPU/WebGL2 shader
 workflows. `node tooling/cli-check.mjs --cpu` runs the CPU lane;
-`--require-gpu` exercises real shader compilation, mixed stacks and pixel-exact
+Add `--require-ffmpeg` to require MP4/GIF, external clip and audio export checks;
+PNG timeline checks always run. `--require-gpu` exercises real shader compilation, animated timelines, mixed stacks and pixel-exact
 project/preset round-trips. A positional packaged executable checks its bundled
 CLI. Windows full CI includes both source and packaged checks in the matching
 hosted/physical-GPU lanes. Mac/Linux interactive terminal behavior still needs

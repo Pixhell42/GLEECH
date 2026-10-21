@@ -47,6 +47,10 @@ test('required quick checks exercise timeline media with the pinned FFmpeg bundl
         ({ args }) => args[0] === `tooling/${name}-check.mjs` && args.includes('--require-ffmpeg'),
       ),
     );
+  const cli = createWindowsPlan('quick', scripts).find(
+    ({ args }) => args[0] === 'tooling/cli-check.mjs',
+  );
+  assert.ok(cli.args.includes('--require-ffmpeg'));
   const plan = createWindowsPlan('quick', scripts).map(({ args }) => args[0]);
   const bridge = plan.indexOf('tooling/ffmpeg-check.mjs');
   assert.ok(bridge >= 0);

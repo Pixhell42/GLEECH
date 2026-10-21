@@ -94,7 +94,7 @@ jobs:
           node tooling/image-check.mjs "$gleech_executable" --cpu
           node tooling/mcp-check.mjs "$gleech_executable" --cpu
           node tooling/mcp-clients-check.mjs "$gleech_executable"
-          node tooling/cli-check.mjs "$gleech_executable" --cpu
+          node tooling/cli-check.mjs "$gleech_executable" --cpu --require-ffmpeg
           node tooling/cli-launcher-check.mjs "$GLEECH_MAC_APP"
       - name: Test packaged timeline and media
         env:

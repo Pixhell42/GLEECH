@@ -73,8 +73,9 @@ export function createWindowsPlan(mode, scripts, packagedPath) {
   }
   add(['tooling/smoke.mjs']);
   if (mode === 'quick') {
-    for (const script of ['image', 'editing', 'project', 'preset-transfer', 'mcp', 'cli'])
+    for (const script of ['image', 'editing', 'project', 'preset-transfer', 'mcp'])
       add([`tooling/${script}-check.mjs`, '--cpu']);
+    add(['tooling/cli-check.mjs', '--cpu', '--require-ffmpeg']);
     add(['tooling/ui-color-check.mjs']);
     add(['tooling/ffmpeg-check.mjs']);
     add(['tooling/timeline-check.mjs', '--require-ffmpeg']);
