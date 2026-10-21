@@ -120,7 +120,7 @@
     "test:beta-ui": "pnpm build && node tooling/beta-ui-check.mjs && node tooling/beta-ui-check.mjs --cpu",
     "pack:linux": "pnpm build && pnpm --filter @gleech/desktop pack:linux",
     "dist:linux": "pnpm build && pnpm --filter @gleech/desktop dist:linux",
-    "test:cli": "pnpm build && node tooling/cli-check.mjs --cpu && node tooling/cli-check.mjs --require-gpu"
+    "test:cli": "pnpm build && node tooling/cli-check.mjs --cpu --require-ffmpeg && node tooling/cli-check.mjs --require-gpu --require-ffmpeg"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
