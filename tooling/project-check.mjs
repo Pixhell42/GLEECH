@@ -257,7 +257,8 @@ try {
   const seed = await page.getByRole('button', { name: 'Random seed' }).boundingBox();
   const panel = await page.locator('.stack-panel').boundingBox();
   const tools = await page.locator('.viewport-tools').boundingBox();
-  assert.ok(add.y < panel.y + 50 && seed.y < 52 && tools.x > panel.x + panel.width);
+  // Add effect stays in the panel header, below the Edited / Original toggle.
+  assert.ok(add.y < panel.y + 90 && seed.y < 52 && tools.x > panel.x + panel.width);
   assert.ok(await page.getByRole('button', { name: 'Random seed' }).getAttribute('title'));
   assert.ok(
     await page.evaluate(

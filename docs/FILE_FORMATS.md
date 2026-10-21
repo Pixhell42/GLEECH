@@ -8,6 +8,19 @@ renderer version, application metadata, validated project state and an asset
 directory with lengths and SHA-256 hashes. Data includes source/origin images,
 effect stacks, masks, snapshots/baked sources and embedded attachments.
 
+Projects that have opened Timeline mode add a `timeline` (frame rate, duration,
+work area, In/Out, loop, seed track, markers, tempo, and optional video clip and
+audio track) and effects may add `animation` (keyframes and modulators per
+control key, with times in seconds; a curve copied to keyframes keeps the keys
+and modulators it replaced in `baked`) and `activeRange`. Video clips and audio
+tracks are referenced by file path, not embedded (when the audio track is the
+clip's own sound, both name the clip file). The audio track may add `volume`
+(0–1) and `muted`, which renders use. The clip's `posterId` and `posterTime`
+name the source image made from one of its frames and that frame's time. The
+audio analysis (band energy, peaks, beats and tempo) is embedded so renders stay
+deterministic. Older GLEECH releases ignore these fields and open such projects
+as stills.
+
 Limits: 300 MiB file, 32 MiB JSON recipe, 128 megapixels across project sources.
 Subject masks are bounded to 1024 per dimension with byte coverage. Missing,
 truncated, unsupported or hash-invalid data is rejected. GLEECH01 legacy projects

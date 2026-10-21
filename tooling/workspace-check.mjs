@@ -123,7 +123,7 @@ try {
   );
   assert.equal(
     await page
-      .locator('.toolbar-comparison')
+      .locator('.stack-panel .stack-comparison')
       .getByRole('button', { name: 'Edited', exact: true })
       .count(),
     1,
@@ -137,8 +137,11 @@ try {
   const redo = await page.getByRole('button', { name: 'Redo', exact: true }).boundingBox();
   const seed = await page.locator('.seed-control').boundingBox();
   assert.ok(seed.x > redo.x + redo.width);
+  // Opening an image names the project after it, even over a typed name.
   await rename('First project');
   await openImage();
+  assert.ok((await page.locator('.project-name').textContent()).includes(basename(imagePath)));
+  await rename('First project');
   assert.ok((await page.locator('.project-name').textContent()).includes('First project'));
   await page.getByRole('button', { name: /Add effect/ }).click();
   await page

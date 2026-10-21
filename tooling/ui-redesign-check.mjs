@@ -44,7 +44,7 @@ try {
   console.log('Motion Mosh rendered');
   assert.equal(
     await page
-      .locator('.toolbar-comparison')
+      .locator('.stack-panel .stack-comparison')
       .getByRole('button', { name: 'Edited', exact: true })
       .count(),
     1,

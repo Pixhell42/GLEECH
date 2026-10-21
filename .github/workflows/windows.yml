@@ -1,9 +1,9 @@
 name: Windows development checks
 
 on:
+  # Release tags are published only after explicit release validation.
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
     inputs:
@@ -24,12 +24,12 @@ permissions:
 
 env:
   ROARR_LOG: 'false'
-  CI_SUITE: ${{ inputs.suite || (startsWith(github.ref, 'refs/tags/') && 'full' || 'quick') }}
+  CI_SUITE: ${{ inputs.suite || 'quick' }}
   CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
 
 concurrency:
-  group: windows-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || (startsWith(github.ref, 'refs/tags/') && 'full' || 'quick') }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) }}
+  group: windows-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite || 'quick' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   checks:
@@ -51,7 +51,7 @@ jobs:
 
   desktop:
     needs: checks
-    if: inputs.suite != 'full' && !startsWith(github.ref, 'refs/tags/')
+    if: inputs.suite != 'full'
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -71,6 +71,9 @@ jobs:
       - name: Build once
         if: steps.scope.outputs.desktop == 'true'
         run: pnpm build
+      - name: Prepare pinned FFmpeg for media verification
+        if: steps.scope.outputs.desktop == 'true'
+        run: pnpm ffmpeg:prepare
       - name: Essential desktop workflows
         if: steps.scope.outputs.desktop == 'true'
         run: node tooling/windows-ci.mjs quick
@@ -90,7 +93,7 @@ jobs:
 
   full:
     needs: checks
-    if: inputs.suite == 'full' || startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'full'
     runs-on: windows-latest
     timeout-minutes: 120
     strategy:
@@ -138,10 +141,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-  # Keep the branch-protection context stable and reject skipped required jobs.
+  # Keep required PR/main validation strict. Optional manual runs use a separate
+  # check name so cancellation cannot replace the branch-protection context.
   validate:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'manual-validate' || 'validate' }}
     needs: [checks, desktop, full]
-    if: always()
+    if: ${{ github.event_name != 'workflow_dispatch' || !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 5
     env:

@@ -100,19 +100,280 @@ const batchFields = {
   continueOnError: z.boolean().default(false),
   expectedRevision,
 };
+const parameterKey = z
+  .string()
+  .min(1)
+  .max(128)
+  .refine(
+    (key) => !['__proto__', 'constructor', 'prototype'].includes(key),
+    'Invalid parameter key',
+  );
 export const parameterValues = z
-  .record(
-    z
-      .string()
-      .min(1)
-      .max(128)
-      .refine(
-        (key) => !['__proto__', 'constructor', 'prototype'].includes(key),
-        'Invalid parameter key',
-      ),
-    z.union([z.number().finite(), z.string().max(8192)]),
-  )
+  .record(parameterKey, z.union([z.number().finite(), z.string().max(8192)]))
   .refine((values) => Object.keys(values).length > 0, 'At least one parameter is required');
+
+// ---------------------------------------------------------------------------
+// Timeline. Times are seconds from the timeline start; the adapter snaps them
+// to frames. Enumerations mirror @gleech/project-model's timeline constants
+// (tests keep them in sync) so this module stays light for the stdio server.
+
+export const MAX_TIMELINE_SECONDS = 3600;
+const seconds = z.number().finite().min(0).max(MAX_TIMELINE_SECONDS);
+export const timeRangeSchema = z
+  .object({ start: seconds, end: seconds })
+  .strict()
+  .refine((range) => range.end > range.start, 'The range end must be after its start.');
+export const KEY_INTERPOLATIONS = [
+  'linear',
+  'ease-in',
+  'ease-out',
+  'ease-in-out',
+  'hold',
+  'bezier',
+] as const;
+export const LFO_SHAPE_VALUES = ['sine', 'triangle', 'square', 'saw', 'random'] as const;
+export const LFO_DIVISION_VALUES = ['4', '2', '1', '1/2', '1/4', '1/8', '1/16'] as const;
+export const AUDIO_BAND_VALUES = ['low', 'mid', 'high', 'custom'] as const;
+export const keyframeSchema = z
+  .object({
+    time: seconds,
+    value: z.union([z.number().finite(), z.string().max(64)]),
+    interpolation: z.enum(KEY_INTERPOLATIONS).default('ease-in-out'),
+    /** Bezier handle into this key: seconds before it (dt ≤ 0) and a fraction of the range. */
+    inHandle: z
+      .object({
+        dt: z.number().min(-MAX_TIMELINE_SECONDS).max(0),
+        dv: z.number().min(-100).max(100),
+      })
+      .strict()
+      .optional(),
+    /** Bezier handle out of this key: seconds after it (dt ≥ 0) and a fraction of the range. */
+    outHandle: z
+      .object({
+        dt: z.number().min(0).max(MAX_TIMELINE_SECONDS),
+        dv: z.number().min(-100).max(100),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const modulatorId = z
+  .string()
+  .min(1)
+  .max(128)
+  .refine(
+    (key) => !['__proto__', 'constructor', 'prototype'].includes(key),
+    'Invalid modulator id',
+  );
+export const modulatorSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('lfo'),
+      id: modulatorId.optional(),
+      enabled: z.boolean().default(true),
+      shape: z.enum(LFO_SHAPE_VALUES).default('sine'),
+      sync: z.boolean().default(true),
+      division: z.enum(LFO_DIVISION_VALUES).default('1/2'),
+      rate: z.number().min(0.01).max(60).default(1),
+      depth: z.number().min(0).max(1).default(0.12),
+      phase: z.number().min(0).max(360).default(90),
+      combine: z.enum(['add', 'multiply']).default('add'),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('audio'),
+      id: modulatorId.optional(),
+      enabled: z.boolean().default(true),
+      band: z.enum(AUDIO_BAND_VALUES).default('low'),
+      lowHz: z.number().min(10).max(24000).default(40),
+      highHz: z.number().min(10).max(24000).default(160),
+      attackMs: z.number().min(0).max(5000).default(8),
+      releaseMs: z.number().min(0).max(10000).default(180),
+      outMin: z.number().min(0).max(1).default(0.4),
+      outMax: z.number().min(0).max(1).default(1),
+      combine: z.enum(['replace', 'add', 'subtract', 'multiply']).default('replace'),
+      invert: z.boolean().optional(),
+      intensity: z.number().min(0).max(4).optional(),
+      offset: z.number().min(-1).max(1).optional(),
+    })
+    .strict()
+    .refine((value) => value.highHz > value.lowHz, {
+      message: 'highHz must be above lowHz.',
+      path: ['highHz'],
+    })
+    .refine((value) => value.outMax >= value.outMin, {
+      message: 'outMax must be at least outMin.',
+      path: ['outMax'],
+    }),
+]);
+export type McpModulator = z.infer<typeof modulatorSchema>;
+
+// ---------------------------------------------------------------------------
+// Render settings overrides. These mirror apps/desktop/src/shared/render.ts
+// (the renderer type-checks the correspondence). Upscaling through a custom
+// command or another MCP server is deliberately not offered to MCP clients.
+
+export const VIDEO_PRESET_IDS = [
+  '8k',
+  '4k',
+  '2k-master',
+  '1080p-social',
+  'vertical',
+  'draft',
+  'edit-master',
+  '4k-edit-master',
+  'custom',
+] as const;
+export const GIF_PRESET_IDS = ['social', 'hq', 'tiny', 'sticker', 'crunchy', 'custom'] as const;
+export const VIDEO_FORMAT_IDS = [
+  'mp4-h264',
+  'mp4-hevc',
+  'mov-prores',
+  'mkv-ffv1',
+  'mov-v210',
+  'webm-vp9',
+  'mov-png',
+] as const;
+export const MCP_UPSCALE_ENGINES = [
+  'lanczos',
+  'nearest',
+  'realesrgan',
+  'realcugan',
+  'waifu2x',
+] as const;
+function settingsGroup<T extends z.ZodRawShape>(shape: T) {
+  return z.strictObject(shape).partial();
+}
+const unit = z.number().min(0).max(1);
+export const videoOverridesSchema = settingsGroup({
+  output: z.enum(['movie', 'sequence']),
+  format: z.enum(VIDEO_FORMAT_IDS),
+  fps: z.number().min(1).max(240),
+  compression: z.enum(['highest', 'high', 'web', 'small', 'lossless', 'raw']),
+  advanced: settingsGroup({
+    encoder: z.enum(['auto', 'cpu', 'nvenc', 'amf', 'qsv', 'mf', 'videotoolbox']),
+    colorDepth: z.union([z.literal(8), z.literal(10)]),
+    keyframeInterval: z.number().int().min(0).max(10000),
+    speed: z.enum(['fast', 'medium', 'slow']),
+    fastStart: z.boolean(),
+  }),
+  frame: settingsGroup({
+    width: z.number().int().min(2).max(16384),
+    height: z.number().int().min(2).max(16384),
+    fit: z.enum(['fit', 'stretch', 'crop', 'letterbox-h', 'letterbox-v']),
+    anchor: z.enum(['center', 'top', 'subject']),
+    bars: z.enum(['black', 'blur', 'color', 'transparent']),
+    barColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a #RRGGBB color.'),
+    barBlur: unit,
+    barDarken: unit,
+  }),
+  overlay: settingsGroup({
+    enabled: z.boolean(),
+    matte: z.enum(['difference', 'added-light']),
+    threshold: unit,
+    softness: unit,
+    alpha: z.enum(['straight', 'premultiplied']),
+  }),
+  audio: settingsGroup({
+    enabled: z.boolean(),
+    source: z.enum(['track', 'clip', 'mix']),
+    codec: z.enum(['aac', 'pcm', 'opus']),
+    bitrateKbps: z.number().int().min(0).max(1536),
+    normalize: z.boolean(),
+    fadeIn: z.number().min(0).max(MAX_TIMELINE_SECONDS),
+    fadeOut: z.number().min(0).max(MAX_TIMELINE_SECONDS),
+  }),
+  sequence: settingsGroup({
+    kind: z.enum(['files', 'flipbook']),
+    every: z.enum(['all', '2', 'keys', 'markers']),
+    depth: z.union([z.literal(8), z.literal(16)]),
+    separateAudio: z.boolean(),
+    flipbook: settingsGroup({
+      kind: z.enum(['pdf', 'sprite']),
+      paper: z.enum(['letter', 'a4', '4x6']),
+      perPage: z.union([z.literal(4), z.literal(8), z.literal(12)]),
+      bindingMargin: z.number().min(0).max(3),
+      cutLines: z.boolean(),
+      frameNumbers: z.boolean(),
+      cover: z.boolean(),
+      columns: z.union([z.literal('auto'), z.literal(10), z.literal(16), z.literal('row')]),
+      json: z.boolean(),
+    }),
+  }),
+  upscale: settingsGroup({
+    method: z.enum(['native', 'upscale-result', 'upscale-source']),
+    engine: z.enum(MCP_UPSCALE_ENGINES),
+    model: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, 'Use a model name such as realesr-animevideov3.'),
+    mix: unit,
+  }),
+});
+export const gifOverridesSchema = settingsGroup({
+  format: z.enum(['gif', 'webp', 'apng', 'mp4']),
+  loop: z.enum(['forward', 'reverse', 'boomerang', 'concat']),
+  segments: z.array(timeRangeSchema).max(64),
+  speed: z.number().min(0.25).max(4),
+  fps: z.union([z.literal(10), z.literal(12), z.literal(15), z.literal(24), z.literal(30)]),
+  smoothing: z.enum(['off', 'blend', 'motion']),
+  repeat: z.enum(['forever', 'once', '3']),
+  width: z.number().int().min(16).max(4096),
+  scaling: z.enum(['lanczos', 'bicubic', 'nearest']),
+  sizeLimitMb: z.union([z.literal(0), z.literal(1), z.literal(8), z.literal(15)]),
+  colors: z.number().int().min(2).max(256),
+  palette: z.enum(['whole', 'frame', 'changes']),
+  dither: z.enum(['none', 'bayer', 'floyd-steinberg', 'sierra']),
+  lossy: z.number().min(0).max(100),
+  transparent: z.boolean(),
+  audio: z.boolean(),
+});
+export type McpVideoOverrides = z.infer<typeof videoOverridesSchema>;
+export type McpGifOverrides = z.infer<typeof gifOverridesSchema>;
+function overrideIssues(
+  tab: 'video' | 'gif',
+  overrides: unknown,
+): { path: (string | number)[]; message: string }[] {
+  const parsed = (tab === 'video' ? videoOverridesSchema : gifOverridesSchema).safeParse(overrides);
+  if (parsed.success) return [];
+  const scope = tab === 'video' ? 'Video' : 'GIF & Loops';
+  return parsed.error.issues.map((issue) => {
+    const path = ['overrides', ...issue.path.map((part) => String(part))];
+    if (issue.code === 'unrecognized_keys')
+      return {
+        path,
+        message: `Unknown ${scope} render setting${issue.keys.length > 1 ? 's' : ''}: ${issue.keys
+          .map((key) => [...path, key].join('.'))
+          .join(
+            ', ',
+          )}. Use list_render_presets to see every setting with its current value; command and MCP upscalers and sequence subfolders are not available through MCP.`,
+      };
+    return { path, message: `${path.join('.')}: ${issue.message}` };
+  });
+}
+/** Settings for render_video after validation (`overrides` were checked against its tab). */
+export function renderOverrides(request: {
+  tab: 'video' | 'gif';
+  overrides: Record<string, unknown>;
+}): { tab: 'video'; overrides: McpVideoOverrides } | { tab: 'gif'; overrides: McpGifOverrides } {
+  return request.tab === 'video'
+    ? { tab: 'video', overrides: videoOverridesSchema.parse(request.overrides) }
+    : { tab: 'gif', overrides: gifOverridesSchema.parse(request.overrides) };
+}
+/**
+ * Whether render_video writes a folder of PNG files (path is then a folder).
+ * Presets never choose a sequence, so this follows the overrides alone.
+ */
+export function renderOutputIsFolder(request: {
+  tab: 'video' | 'gif';
+  overrides: Record<string, unknown>;
+}): boolean {
+  const settings = renderOverrides(request);
+  if (settings.tab !== 'video') return false;
+  const { output, sequence } = settings.overrides;
+  const kind = sequence?.kind ?? 'files';
+  return (output ?? (sequence?.kind ? 'sequence' : 'movie')) === 'sequence' && kind === 'files';
+}
 export const operationSchema = z.discriminatedUnion('action', [
   z
     .object({
@@ -175,6 +436,50 @@ export const operationSchema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('set_master_seed'), seed }).strict(),
+  z
+    .object({
+      action: z.literal('set_timeline'),
+      fps: z.number().min(1).max(120).optional(),
+      duration: z.number().gt(0).max(MAX_TIMELINE_SECONDS).optional(),
+      loop: z.boolean().optional(),
+      workArea: timeRangeSchema.nullable().optional(),
+      inOut: timeRangeSchema.nullable().optional(),
+      seed: z
+        .object({
+          mode: z.enum(['fixed', 'every-frame', 'every-n']),
+          every: z.number().int().min(1).max(1000).optional(),
+        })
+        .strict()
+        .optional(),
+      bpm: z.number().min(20).max(400).nullable().optional(),
+      audioVolume: z.number().min(0).max(1).optional(),
+      audioMuted: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('set_keyframes'),
+      instanceId: id,
+      parameter: parameterKey,
+      keys: z.array(keyframeSchema).min(1).max(4096).nullable(),
+      merge: z.boolean().default(false),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('set_modulators'),
+      instanceId: id,
+      parameter: parameterKey,
+      modulators: z.array(modulatorSchema).max(8),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('set_active_range'),
+      instanceId: id,
+      range: timeRangeSchema.nullable(),
+    })
+    .strict(),
 ]);
 export const requestSchema = z.discriminatedUnion('action', [
   z
@@ -349,6 +654,55 @@ export const requestSchema = z.discriminatedUnion('action', [
       expectedRevision: z.number().int().min(0).optional(),
     })
     .strict(),
+  z.object({ action: z.literal('get_timeline') }).strict(),
+  z
+    .object({
+      action: z.literal('set_playhead'),
+      frame: z.number().int().min(0).max(1_000_000).optional(),
+      time: seconds.optional(),
+    })
+    .strict()
+    .refine(
+      (request) => (request.frame === undefined) !== (request.time === undefined),
+      'Pass either frame or time (seconds), not both.',
+    ),
+  z.object({ action: z.literal('list_render_presets') }).strict(),
+  z
+    .object({
+      action: z.literal('render_video'),
+      tab: z.enum(['video', 'gif']).default('video'),
+      preset: z.string().min(1).max(64).optional(),
+      overrides: z.record(z.string().max(64), z.unknown()).default({}),
+      range: z.union([z.enum(['work', 'whole', 'inout']), timeRangeSchema]).optional(),
+      path,
+      overwrite: z.boolean().default(false),
+      wait: z.boolean().default(false),
+      expectedRevision,
+    })
+    .strict()
+    .superRefine((request, context) => {
+      const presets: readonly string[] =
+        request.tab === 'video' ? VIDEO_PRESET_IDS : GIF_PRESET_IDS;
+      if (request.preset !== undefined && !presets.includes(request.preset))
+        context.addIssue({
+          code: 'custom',
+          path: ['preset'],
+          message: `Unknown ${request.tab === 'video' ? 'Video' : 'GIF & Loops'} preset "${request.preset}". Choose one of: ${presets.join(', ')}.`,
+        });
+      for (const issue of overrideIssues(request.tab, request.overrides))
+        context.addIssue({ code: 'custom', ...issue });
+    }),
+  z
+    .object({
+      action: z.literal('render_status'),
+      jobId: z.string().uuid().optional(),
+      cancel: z.boolean().default(false),
+    })
+    .strict()
+    .refine((request) => !request.cancel || request.jobId !== undefined, {
+      message: 'Pass the jobId of the render to cancel.',
+      path: ['jobId'],
+    }),
 ]);
 export type McpRequest = z.infer<typeof requestSchema>;
 export type McpOperation = z.infer<typeof operationSchema>;
@@ -380,20 +734,24 @@ export const INITIAL_MCP_STATUS: McpStatus = {
   pendingRequests: 0,
 };
 export function requiresFullControl(request: McpRequest): boolean {
-  return [
-    'request_folder_access',
-    'revoke_folder_access',
-    'load_image',
-    'replace_source',
-    'open_project',
-    'save_project',
-    'export_image',
-    'import_preset',
-    'export_preset',
-    'render_full',
-    'export_batch',
-    'batch',
-  ].includes(request.action);
+  return (
+    [
+      'request_folder_access',
+      'revoke_folder_access',
+      'load_image',
+      'replace_source',
+      'open_project',
+      'save_project',
+      'export_image',
+      'import_preset',
+      'export_preset',
+      'render_full',
+      'export_batch',
+      'batch',
+      'render_video',
+    ].includes(request.action) ||
+    (request.action === 'render_status' && request.cancel)
+  );
 }
 export function isMutation(request: McpRequest): boolean {
   return (
@@ -414,6 +772,7 @@ export function isMutation(request: McpRequest): boolean {
       'redo',
       'copy_to_clipboard',
       'revert_to_operation',
+      'set_playhead',
     ].includes(request.action)
   );
 }

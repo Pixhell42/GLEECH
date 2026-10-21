@@ -2,6 +2,25 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { DesktopBridge } from '../shared/image-api';
 
 const bridge: DesktopBridge = {
+  renderStatus: (refresh) => ipcRenderer.invoke('render:ffmpeg-status', refresh),
+  locateFfmpeg: () => ipcRenderer.invoke('render:locate-ffmpeg'),
+  chooseRenderOutput: (kind, name, extension) =>
+    ipcRenderer.invoke('render:choose-output', kind, name, extension),
+  defaultRenderFolder: () => ipcRenderer.invoke('render:default-folder'),
+  renderOutputExists: (path) => ipcRenderer.invoke('render:output-exists', path),
+  beginRender: (spec) => ipcRenderer.invoke('render:begin', spec),
+  renderFrame: (id, frame, original) => ipcRenderer.invoke('render:frame', id, frame, original),
+  finishRender: (id) => ipcRenderer.invoke('render:finish', id),
+  cancelRender: (id) => ipcRenderer.invoke('render:cancel', id),
+  revealRender: (path) => ipcRenderer.invoke('render:reveal', path),
+  openVideo: () => ipcRenderer.invoke('media:open-video'),
+  openAudio: () => ipcRenderer.invoke('media:open-audio'),
+  registerMedia: (path, kind) => ipcRenderer.invoke('media:register', path, kind),
+  readAudioSamples: (id) => ipcRenderer.invoke('media:audio-samples', id),
+  openVideoReader: (id, options) => ipcRenderer.invoke('media:reader-open', id, options),
+  readVideoFrame: (id) => ipcRenderer.invoke('media:reader-next', id),
+  closeVideoReader: (id) => ipcRenderer.invoke('media:reader-close', id),
+  videoFrameAt: (id, t, max) => ipcRenderer.invoke('media:frame-at', id, t, max),
   readMcpImageData: (id) => ipcRenderer.invoke('mcp:read-image-data', id),
   mcpFolderOperation: (id) => ipcRenderer.invoke('mcp:folder-operation', id),
   preflightMcpBatch: (id) => ipcRenderer.invoke('mcp:batch-preflight', id),
@@ -114,6 +133,8 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke('project:save', project, documentId, saveAs),
   releaseImage: (id) => ipcRenderer.invoke('image:release', id),
   captureImage: (id, pixels, name) => ipcRenderer.invoke('image:capture', id, pixels, name),
+  importPixels: (width, height, pixels, name) =>
+    ipcRenderer.invoke('image:from-pixels', width, height, pixels, name),
   listPresets: () => ipcRenderer.invoke('preset:list'),
   savePreset: (id, pixels, recipe, name) =>
     ipcRenderer.invoke('preset:save', id, pixels, recipe, name),
@@ -122,6 +143,8 @@ const bridge: DesktopBridge = {
   importPreset: () => ipcRenderer.invoke('preset:import'),
   exportPreset: (id) => ipcRenderer.invoke('preset:export', id),
   confirmDiscard: (name) => ipcRenderer.invoke('document:confirm-discard', name),
+  confirmAction: (title, message, detail, action) =>
+    ipcRenderer.invoke('document:confirm-action', title, message, detail, action),
   onCloseRequested: (handler) => {
     const listener = () => handler();
     ipcRenderer.on('document:close-requested', listener);
@@ -132,5 +155,6 @@ const bridge: DesktopBridge = {
   },
   resolveClose: (allow) => ipcRenderer.invoke('document:resolve-close', allow),
   requestClose: () => ipcRenderer.invoke('document:request-close'),
+  mcpRenderTarget: (id) => ipcRenderer.invoke('mcp:render-target', id),
 };
 contextBridge.exposeInMainWorld('gleech', bridge);

@@ -1,11 +1,18 @@
 // Native menu clicks blur active text fields, just like the former toolbar actions.
 export async function fileAction(page, name, { waitForOperation = true } = {}) {
+  const command = (await page.evaluate(() => window.gleech.platform)) === 'darwin' ? 'Cmd' : 'Ctrl';
+  const displayedName = name.replaceAll('Ctrl+', `${command}+`);
   const toggle = page.getByRole('button', { name: 'File menu', exact: true });
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   const groups = {
     Save: ['Save project Ctrl+S', 'Save project as… Ctrl+Shift+S'],
     Edit: ['Copy Ctrl+C', 'Paste Ctrl+V'],
-    Export: ['Export image…', 'Quick PNG Export Ctrl+Shift+E'],
+    Export: [
+      'Export image…',
+      'Quick PNG Export Ctrl+Shift+E',
+      'Render Video… Ctrl+Shift+R',
+      'Export GIF… Ctrl+Shift+G',
+    ],
     Library: [
       'Filters and Presets',
       'Open sample image',
@@ -21,7 +28,10 @@ export async function fileAction(page, name, { waitForOperation = true } = {}) {
       .locator('.file-menu-items')
       .getByRole('button', { name: group, exact: true })
       .click();
-  await page.locator('.file-menu-items').getByRole('button', { name, exact: true }).click();
+  await page
+    .locator('.file-menu-items')
+    .getByRole('button', { name: displayedName, exact: true })
+    .click();
   // Exit may destroy the renderer; document-check waits for that native close.
   if (name === 'Exit GLEECH Alt+F4' || !waitForOperation) return;
   // Native image I/O can outlast a locator's short default timeout on hosted

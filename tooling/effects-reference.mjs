@@ -23,6 +23,7 @@ const extensionUrl = 'data:text/javascript;base64,' + Buffer.from(extensionCode)
 const glyphControlsUrl = await moduleUrl('packages/project-model/src/glyph-controls.ts');
 const glyphFontUrl = await moduleUrl('packages/project-model/src/glyph-font.ts');
 const shaderPackageUrl = await moduleUrl('packages/project-model/src/shader-package.ts');
+const timelineModelUrl = await moduleUrl('packages/project-model/src/timeline.ts');
 const modelCode = Buffer.from(
   (await moduleUrl('packages/project-model/src/index.ts')).split(',')[1],
   'base64',
@@ -32,6 +33,7 @@ const modelCode = Buffer.from(
   .replaceAll("'./set2-extensions'", `'${extensionUrl}'`)
   .replaceAll("'./direction-field'", `'${directionModelUrl}'`)
   .replaceAll("'./shader-package'", `'${shaderPackageUrl}'`)
+  .replaceAll("'./timeline'", `'${timelineModelUrl}'`)
   .replaceAll("'./glyph-controls'", `'${glyphControlsUrl}'`)
   .replaceAll("'./glyph-font'", `'${glyphFontUrl}'`);
 export const modelUrl = `data:text/javascript;base64,${Buffer.from(modelCode).toString('base64')}`;
