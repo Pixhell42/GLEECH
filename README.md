@@ -115,7 +115,8 @@ pnpm cli render shots/ -p signal-burn -o out/
 pnpm cli gleech photo.jpg -n 9 --sheet sheet.png
 ```
 
-Current source builds include GPU/CPU rendering and a `gleech` launcher under `resources/cli`. See the
+Current source builds include GPU/CPU rendering, TUI timeline playback and
+MP4/GIF/PNG sequence exports, plus a `gleech` launcher under `resources/cli`. See the
 [CLI and TUI guide](docs/CLI.md).
 
 ## Community and contributions

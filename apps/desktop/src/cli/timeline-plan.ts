@@ -6,6 +6,7 @@ import { defaultGifSettings, defaultVideoSettings } from '../shared/render-prese
 import { renderRange } from '../shared/render-plan';
 import type { GifRenderSettings, RangeKind } from '../shared/render';
 import { UsageError } from './errors';
+import { resolveTimelineMedia } from './timeline-project';
 
 export const TIMELINE_OPTIONS: ParseArgsConfig['options'] = {
   timeline: { type: 'boolean' },
@@ -54,28 +55,7 @@ export function cliTimelinePlan(
     throw new UsageError('This project has no timeline. Save it in Timeline mode first.');
   // Saved media is external. Relative references belong to the project folder,
   // independently of the shell's working directory.
-  const project: ProjectState = {
-    ...original,
-    timeline: {
-      ...original.timeline,
-      ...(original.timeline.video
-        ? {
-            video: {
-              ...original.timeline.video,
-              path: resolve(dirname(input), original.timeline.video.path),
-            },
-          }
-        : {}),
-      ...(original.timeline.audio
-        ? {
-            audio: {
-              ...original.timeline.audio,
-              path: resolve(dirname(input), original.timeline.audio.path),
-            },
-          }
-        : {}),
-    },
-  };
+  const project = resolveTimelineMedia(original, input);
   const timeline = project.timeline!;
   const output = values['output'] === undefined ? undefined : resolve(String(values['output']));
   const extension = output ? extname(output).toLowerCase().slice(1) : '';
