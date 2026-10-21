@@ -56,6 +56,10 @@ sequences and flip books do not. At runtime GLEECH looks for, in order:
    a development fallback;
 3. `ffmpeg` on the PATH.
 
+The selected executable must retain its standard name: `ffmpeg.exe` on Windows,
+or `ffmpeg` on macOS/Linux. It is launched directly from its directory without a
+shell; command strings, relative paths and other executable names are rejected.
+
 Encoders are probed with `ffmpeg -encoders`. CPU encoders (libx264/libx265) are
 preferred, with NVENC, AMF, Quick Sync, Media Foundation and VideoToolbox used when
 CPU encoders are missing or chosen in Advanced encoder settings.

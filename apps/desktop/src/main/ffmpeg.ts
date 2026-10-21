@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import { access, readFile, writeFile, rename } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { basename, delimiter, dirname, isAbsolute, join } from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import type { FfmpegStatus } from '../shared/render';
 
@@ -18,6 +18,23 @@ export interface FfmpegLocator {
 }
 
 const executable = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+
+/**
+ * Only a directory is selectable; the program name is fixed. Reject command
+ * strings, relative paths and other executables before starting any process.
+ * A literal relative command plus cwd also preserves paths containing spaces
+ * or shell metacharacters without ever invoking a shell or searching PATH.
+ */
+function ffmpegDirectory(path: string): string {
+  const name = basename(path);
+  if (
+    !isAbsolute(path) ||
+    path.includes('\0') ||
+    (process.platform === 'win32' ? name.toLowerCase() !== 'ffmpeg.exe' : name !== 'ffmpeg')
+  )
+    throw new Error(`Choose the ${executable} executable, using its full file path.`);
+  return dirname(path);
+}
 
 export function bundledFfmpegCandidates(
   resourcesPath: string,
@@ -65,7 +82,13 @@ export function runFfmpeg(
   timeoutMs = 15000,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(path, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const cwd = ffmpegDirectory(path);
+    const child = spawn(process.platform === 'win32' ? '.\\ffmpeg.exe' : './ffmpeg', args, {
+      cwd,
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
@@ -191,5 +214,11 @@ export function createFfmpegLocator(options: {
 export type FfmpegProcess = ChildProcessByStdio<Writable, Readable, Readable>;
 /** Spawn a long-running ffmpeg with piped stdio. */
 export function spawnFfmpeg(path: string, args: readonly string[]): FfmpegProcess {
-  return spawn(path, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const cwd = ffmpegDirectory(path);
+  return spawn(process.platform === 'win32' ? '.\\ffmpeg.exe' : './ffmpeg', args, {
+    cwd,
+    shell: false,
+    windowsHide: true,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
 }

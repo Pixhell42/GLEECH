@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bundledFfmpegCandidates, createFfmpegLocator } from './ffmpeg';
+import { bundledFfmpegCandidates, createFfmpegLocator, runFfmpeg, spawnFfmpeg } from './ffmpeg';
 
 vi.mock('node:child_process', () => ({ spawn: vi.fn() }));
 
@@ -18,16 +18,17 @@ const executable = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'gleech-ffmpeg-locator-'));
-  bundled = join(directory, 'bundled');
-  chosen = join(directory, 'chosen');
+  bundled = join(directory, 'bundled', executable);
+  chosen = join(directory, 'chosen', executable);
   configFile = join(directory, 'ffmpeg.json');
   for (const file of [bundled, chosen]) {
+    await mkdir(join(file, '..'), { recursive: true });
     await writeFile(file, 'test executable');
     await chmod(file, 0o755);
   }
   broken = null;
   vi.stubEnv('PATH', directory);
-  vi.mocked(spawn).mockImplementation((file, args) => {
+  vi.mocked(spawn).mockImplementation((file, args, options) => {
     const child = Object.assign(new EventEmitter(), {
       stdout: new PassThrough(),
       stderr: new PassThrough(),
@@ -40,7 +41,7 @@ beforeEach(async () => {
           : 'ffmpeg version 9.0.2-test\n',
       );
       child.stderr.end();
-      child.emit('close', file === broken ? 1 : 0);
+      child.emit('close', join(String(options?.cwd ?? ''), String(file)) === broken ? 1 : 0);
     });
     return child as unknown as ReturnType<typeof spawn>;
   });
@@ -53,6 +54,34 @@ afterEach(async () => {
 });
 
 describe('FFmpeg selection', () => {
+  it('rejects command strings and other programs before spawning anything', async () => {
+    for (const path of [
+      executable,
+      `${chosen} --help`,
+      join(directory, 'node.exe'),
+      join(directory, 'ffmpeg.cmd'),
+      chosen + '\0',
+    ]) {
+      await expect(runFfmpeg(path, ['-version'])).rejects.toThrow(/full file path/);
+      expect(() => spawnFfmpeg(path, [])).toThrow(/full file path/);
+    }
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('runs the fixed binary without a shell in the selected directory', async () => {
+    const folder = join(directory, 'chosen copy & more');
+    const path = join(folder, executable);
+    await mkdir(folder);
+    await writeFile(path, 'test executable');
+    await chmod(path, 0o755);
+    await runFfmpeg(path, ['-version']);
+    expect(spawn).toHaveBeenCalledWith(
+      process.platform === 'win32' ? '.\\ffmpeg.exe' : './ffmpeg',
+      ['-version'],
+      expect.objectContaining({ cwd: folder, shell: false }),
+    );
+  });
+
   it('prefers Locate ffmpeg over a working bundled copy and restores the bundle when cleared', async () => {
     const locator = createFfmpegLocator({ configFile, bundled: [bundled] });
     expect(await locator.status()).toMatchObject({ path: bundled, source: 'bundled' });
