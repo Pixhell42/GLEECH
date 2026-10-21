@@ -9,22 +9,21 @@ import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
 import { fileAction } from './file-action.mjs';
+import {
+  timelineTestOptions,
+  verifyTimelineRuntime,
+  verifyTimelineBackend,
+} from './timeline-test-options.mjs';
 
 const output = resolve('test-results/timeline-media');
 await mkdir(output, { recursive: true });
 const profile = await mkdtemp(resolve(output, 'profile-'));
 const work = await mkdtemp(resolve(output, 'work-'));
-const env = { ...process.env, GLEECH_SMOKE_USER_DATA: profile, GLEECH_TEST_NATIVE_FRAMES: '1' };
-delete env.ELECTRON_RUN_AS_NODE;
-delete env.ELECTRON_RENDERER_URL;
-// CI also passes a packaged GLEECH.exe to run the same check against the installer build.
-const exe = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
-const app = await electron.launch({
-  args: [...(exe ? [] : [resolve('apps/desktop')]), '--smoke-test'],
-  env,
-  ...(exe ? { executablePath: resolve(exe) } : {}),
-});
+const options = timelineTestOptions(process.argv.slice(2), profile);
+const primary = process.platform === 'darwin' ? 'Meta' : 'Control';
+const app = await electron.launch(options.launch);
 try {
+  await verifyTimelineRuntime(app, options);
   const page = await app.firstWindow();
   page.setDefaultTimeout(60000);
   const errors = [];
@@ -37,12 +36,14 @@ try {
   });
   const status = await page.evaluate(() => window.gleech.renderStatus(true));
   if (!status.ok || !status.value.available) {
+    assert.ok(!options.requireFfmpeg, 'The native timeline media test requires working FFmpeg.');
     console.log('ffmpeg not found: timeline media check skipped');
+    await closeTestApp(app);
     process.exit(0);
   }
   const ffmpeg = status.value.path;
-  const clip = join(work, 'clip.mp4');
-  const beat = join(work, 'beat.wav');
+  const clip = join(work, 'clip ü #1.mp4');
+  const beat = join(work, 'beat ü #1.wav');
   execFileSync(ffmpeg, [
     ...['-hide_banner', '-loglevel', 'error', '-y'],
     ...['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=4'],
@@ -78,8 +79,8 @@ try {
   await choose(clip);
   await fileAction(page, 'Open video…');
   await page.locator('.timeline-dock').waitFor();
-  assert.match(await projectName(), /clip\.mp4/);
-  assert.match(await page.locator('.source-row .track-name').textContent(), /clip\.mp4/);
+  assert.match(await projectName(), /clip ü #1\.mp4/);
+  assert.match(await page.locator('.source-row .track-name').textContent(), /clip ü #1\.mp4/);
   assert.match(await page.locator('.source-row .track-meta').textContent(), /Video/);
   assert.equal(await page.locator('.timecode').textContent(), '00:00:00');
   assert.match(await page.locator('.duration-button').textContent(), /00:04:00/);
@@ -88,7 +89,7 @@ try {
 
   // The clip's own sound becomes the audio track, and the player gets a small
   // audio-only copy rather than streaming the whole video file again.
-  assert.match(await page.locator('.audio-row .track-name').textContent(), /clip\.mp4/);
+  assert.match(await page.locator('.audio-row .track-name').textContent(), /clip ü #1\.mp4/);
   const { video: videoBytes, audio: audioBytes } = await page.evaluate(async (path) => {
     const size = async (kind) => {
       const opened = await window.gleech.registerMedia(path, kind);
@@ -110,7 +111,7 @@ try {
   assert.equal(await trackMute.getAttribute('aria-pressed'), 'true');
   assert.equal(await trackLevel.textContent(), 'Muted');
   assert.equal(await page.locator('.audio-row.muted').count(), 1);
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press(`${primary}+z`);
   assert.equal(await trackMute.getAttribute('aria-pressed'), 'false');
   await page.getByRole('slider', { name: 'Audio track volume', exact: true }).fill('0.5');
   assert.equal(await trackLevel.textContent(), '50%');
@@ -134,7 +135,7 @@ try {
   await choose(beat);
   await page.getByRole('menuitem', { name: 'Replace audio track…', exact: true }).click();
   await page.waitForFunction(() =>
-    /beat\.wav/.test(document.querySelector('.audio-row .track-name')?.textContent ?? ''),
+    /beat ü #1\.wav/.test(document.querySelector('.audio-row .track-name')?.textContent ?? ''),
   );
   await page.waitForFunction(() =>
     /BPM/.test(document.querySelector('.audio-row .track-meta')?.textContent ?? ''),
@@ -158,6 +159,8 @@ try {
     .locator('.effect-picker')
     .getByRole('button', { name: 'Motion Mosh', exact: true })
     .click();
+  await settle();
+  await verifyTimelineBackend(page, options);
   await page.getByRole('button', { name: 'Animate Opacity', exact: true }).click();
   await page.getByRole('button', { name: 'Link to audio', exact: true }).click();
   await page.locator('.modulator-card.audio').waitFor();
@@ -282,7 +285,7 @@ try {
   await captureTestWindow(app, join(output, 'timeline-media.png'));
   const gifPath = join(work, 'clip-loop.gif');
   await choose(gifPath);
-  await page.keyboard.press('Control+Shift+G');
+  await page.keyboard.press(`${primary}+Shift+G`);
   const dialog = page.locator('dialog.render-dialog');
   await dialog.waitFor();
   await dialog.getByRole('button', { name: 'Tiny', exact: false }).click();
@@ -307,7 +310,7 @@ try {
   await page.getByRole('button', { name: 'Enable Motion Mosh track', exact: true }).click();
   const frames = await mkdtemp(join(work, 'frames-'));
   await choose(frames);
-  await page.keyboard.press('Control+Shift+R');
+  await page.keyboard.press(`${primary}+Shift+R`);
   await dialog.waitFor();
   await dialog.getByRole('radio', { name: 'Image sequence', exact: true }).click();
   await dialog.getByRole('radio', { name: 'Every 2nd', exact: true }).click();
@@ -346,7 +349,7 @@ try {
   assert.match(await page.locator('.mode-chip-time').textContent(), /00:02:00/);
   const still = await renderSource();
   assert.equal((await recipe())[0].enabled, false);
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press(`${primary}+z`);
   await settle();
   assert.equal((await recipe())[0].enabled, true);
   assert.equal(await renderSource(), still);
@@ -360,7 +363,7 @@ try {
   await choose(projectPath);
   await fileAction(page, 'Save project as… Ctrl+Shift+S');
   await page.locator('.operation-banner').waitFor({ state: 'hidden' });
-  await page.keyboard.press('Control+o');
+  await page.keyboard.press(`${primary}+o`);
   await page.locator('.operation-banner').waitFor({ state: 'hidden', timeout: 120000 });
   await page.getByRole('tab', { name: 'Timeline', exact: true }).click();
   await page.locator('.timeline-dock').waitFor();

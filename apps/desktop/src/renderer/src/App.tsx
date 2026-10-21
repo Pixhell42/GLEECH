@@ -237,6 +237,7 @@ function readDockHeight(): number {
 }
 
 export function App() {
+  const commandKey = window.gleech.platform === 'darwin' ? 'Cmd' : 'Ctrl';
   const { setWorkspace, style: panelStyle, handle: panelHandle } = usePanelWidths();
   const project = useSyncExternalStore(commands.subscribe, commands.getState);
   const viewport = useRef<ViewportHandle>(null);
@@ -2994,7 +2995,7 @@ export function App() {
             >
               <MenuFlyoutProvider>
                 <button onClick={openImage}>
-                  Open image <span>Ctrl+Shift+O</span>
+                  Open image <span>{commandKey}+Shift+O</span>
                 </button>
                 <button
                   onClick={() => void addVideo()}
@@ -3003,7 +3004,7 @@ export function App() {
                   Open video…
                 </button>
                 <button onClick={() => void openProject()}>
-                  Open project <span>Ctrl+O</span>
+                  Open project <span>{commandKey}+O</span>
                 </button>
                 <RecentProjectsMenu
                   projects={recentProjects}
@@ -3019,10 +3020,10 @@ export function App() {
                 <hr />
                 <MenuFlyout label="Save">
                   <button onClick={() => void saveProject()} disabled={!project.source}>
-                    Save project <span>Ctrl+S</span>
+                    Save project <span>{commandKey}+S</span>
                   </button>
                   <button onClick={() => void saveProject(true)} disabled={!project.source}>
-                    Save project as… <span>Ctrl+Shift+S</span>
+                    Save project as… <span>{commandKey}+Shift+S</span>
                   </button>
                 </MenuFlyout>
                 <MenuFlyout label="Edit">
@@ -3031,10 +3032,10 @@ export function App() {
                     disabled={!project.source}
                     title="Copy the edited image at full resolution, including transparency."
                   >
-                    Copy <span>Ctrl+C</span>
+                    Copy <span>{commandKey}+C</span>
                   </button>
                   <button onClick={pasteImage} title="Open an image from the clipboard.">
-                    Paste <span>Ctrl+V</span>
+                    Paste <span>{commandKey}+V</span>
                   </button>
                 </MenuFlyout>
                 <MenuFlyout label="Export">
@@ -3048,21 +3049,21 @@ export function App() {
                     Export image…
                   </button>
                   <button disabled={!project.source} onClick={() => void saveImage()}>
-                    Quick PNG Export <span>Ctrl+Shift+E</span>
+                    Quick PNG Export <span>{commandKey}+Shift+E</span>
                   </button>
                   <button
                     disabled={!timeline || !project.source}
                     title={timeline ? undefined : 'Open Timeline mode to animate first.'}
                     onClick={() => openRender('video')}
                   >
-                    Render Video… <span>Ctrl+Shift+R</span>
+                    Render Video… <span>{commandKey}+Shift+R</span>
                   </button>
                   <button
                     disabled={!timeline || !project.source}
                     title={timeline ? undefined : 'Open Timeline mode to animate first.'}
                     onClick={() => openRender('gif')}
                   >
-                    Export GIF… <span>Ctrl+Shift+G</span>
+                    Export GIF… <span>{commandKey}+Shift+G</span>
                   </button>
                 </MenuFlyout>
                 <MenuFlyout label="Library">
@@ -3253,7 +3254,7 @@ export function App() {
             aria-label="Undo"
             disabled={busy !== null || !commands.canUndo()}
             onClick={() => void restoreHistory('undo')}
-            title="Undo (Ctrl+Z)"
+            title={`Undo (${commandKey}+Z)`}
           >
             <UndoIcon />
           </button>
@@ -3262,7 +3263,7 @@ export function App() {
             aria-label="Redo"
             disabled={busy !== null || !commands.canRedo()}
             onClick={() => void restoreHistory('redo')}
-            title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+            title={`Redo (${commandKey}+Y or ${commandKey}+Shift+Z)`}
           >
             <RedoIcon />
           </button>

@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import { load } from 'js-yaml';
 import { spawnSync } from 'node:child_process';
 import { needsNativeTestFrames } from './test-electron.mjs';
+import { timelineTestOptions } from './timeline-test-options.mjs';
+import { resolve } from 'node:path';
 import {
   createWindowsPlan,
   needsDesktop,
@@ -39,6 +41,12 @@ test('routine changes keep critical workflows without rebuilding or packaging', 
 });
 
 test('required quick checks exercise timeline media with the pinned FFmpeg bundle', () => {
+  for (const name of ['timeline', 'timeline-media'])
+    assert.ok(
+      createWindowsPlan('quick', scripts).some(
+        ({ args }) => args[0] === `tooling/${name}-check.mjs` && args.includes('--require-ffmpeg'),
+      ),
+    );
   const plan = createWindowsPlan('quick', scripts).map(({ args }) => args[0]);
   const bridge = plan.indexOf('tooling/ffmpeg-check.mjs');
   assert.ok(bridge >= 0);
@@ -49,6 +57,52 @@ test('required quick checks exercise timeline media with the pinned FFmpeg bundl
   assert.ok(prepare > steps.findIndex((step) => step.run === 'pnpm build'));
   assert.ok(prepare < steps.findIndex((step) => step.run === 'node tooling/windows-ci.mjs quick'));
   assert.equal(steps[prepare].if, "steps.scope.outputs.desktop == 'true'");
+});
+
+test('timeline checks launch the specified native package rather than the dev app', () => {
+  for (const target of [
+    'release/win-unpacked/GLEECH.exe',
+    'release/mac/GLEECH.app/Contents/MacOS/GLEECH',
+    'release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH',
+    'release/linux-unpacked/gleech-bin',
+    'release/GLEECH-linux-x86_64.AppImage',
+    'release/with spaces ü/GLEECH',
+    'tooling/run-linux-webgpu.sh',
+  ]) {
+    const options = timelineTestOptions([target, '--cpu'], 'isolated-profile', {});
+    assert.equal(options.launch.executablePath, resolve(target));
+    assert.deepEqual(options.launch.args, [
+      '--smoke-test',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+    ]);
+    assert.equal(options.requireFfmpeg, true);
+    assert.equal(options.cpu, true);
+  }
+});
+
+test('development timeline checks isolate profiles and explicitly require codecs when requested', () => {
+  const env = {
+    ELECTRON_RUN_AS_NODE: '1',
+    ELECTRON_RENDERER_URL: 'https://example.invalid',
+    PATH: 'fixture',
+  };
+  const options = timelineTestOptions(['--require-ffmpeg'], 'isolated-profile', env);
+  assert.equal(options.requireFfmpeg, true);
+  assert.equal(options.cpu, false);
+  assert.equal(options.launch.executablePath, undefined);
+  assert.deepEqual(options.launch.args, [resolve('apps/desktop'), '--smoke-test']);
+  assert.deepEqual(options.launch.env, {
+    PATH: 'fixture',
+    GLEECH_SMOKE_USER_DATA: 'isolated-profile',
+    GLEECH_TEST_NATIVE_FRAMES: '1',
+  });
+  assert.equal(env.ELECTRON_RUN_AS_NODE, '1');
+  assert.equal(timelineTestOptions([], 'profile', {}).requireFfmpeg, false);
+  assert.throws(() => timelineTestOptions(['first', 'second'], 'profile', {}));
+  assert.throws(() => timelineTestOptions(['--cpux'], 'profile', {}));
+  assert.throws(() => timelineTestOptions(['--cpu', '--require-webgpu'], 'profile', {}));
+  assert.equal(timelineTestOptions(['--require-webgpu'], 'profile', {}).requireWebgpu, true);
 });
 test('full checks retain actual scripts, flags and packaged support without fake filenames', () => {
   const plan = createWindowsPlan('full', scripts, 'GLEECH.exe');
