@@ -47,8 +47,8 @@ Run `gleech uninstall-cli` before moving or uninstalling the app. Run
 launchers point to the original image file rather than a temporary mount.
 Setup is explicit: ordinary desktop launches never change PATH.
 
-These launchers are included in builds containing the CLI/TUI feature.
-Published 0.1.1 downloads predate it. The Windows launcher restores interactive
+The 0.1.2 packages introduced these launchers; 0.2.0 adds shared timeline exports
+and TUI timeline playback and export. The Windows launcher restores interactive
 console input without a separate Node installation. Native terminal behavior
 still varies by host.
 
