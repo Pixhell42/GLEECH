@@ -1,17 +1,11 @@
-import { existsSync } from 'node:fs';
 import { lstat, link, mkdir, mkdtemp, readdir, rename, rm, unlink } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
-import { activeVideo } from '@gleech/project-model';
 import { RenderCancelledError } from '@gleech/effects';
-import { bundledFfmpegCandidates, createFfmpegLocator } from '../main/ffmpeg';
 import { createRenderJobs, safeName } from '../main/render-jobs';
 import { runTimelineRender, type TimelineRunOptions } from '../shared/timeline-runner';
 import { cliTimelinePlan } from './timeline-plan';
-import { cliVideoSource } from './timeline-video';
-import { resizeImage } from './codec';
-import { renderHeadless } from './engine';
-import { userDataCandidates } from './library';
-import { loadSharp, resourcesDir } from './runtime';
+import { terminalFfmpeg, terminalTimelineHost } from './timeline-host';
+import { loadSharp } from './runtime';
 import type { Session } from './session';
 
 export { TIMELINE_OPTIONS, validateTimelineOptions } from './timeline-plan';
@@ -25,7 +19,7 @@ async function existing(path: string) {
   }
 }
 
-/** Shared runner + Node adapters, reusable by a future TUI export action. */
+/** Shared runner + Node adapters for CLI commands and TUI exports. */
 export async function exportTimeline(
   session: Session,
   values: Record<string, unknown>,
@@ -35,8 +29,8 @@ export async function exportTimeline(
     if (options.signal?.aborted) throw new RenderCancelledError();
   };
   check();
-  if (!session.path) throw new Error('Open a saved .gleech timeline project.');
-  const plan = cliTimelinePlan(session.state, session.path, values);
+  const input = session.path ?? resolve(`${safeName(session.name)}.gleech`);
+  const plan = cliTimelinePlan(session.state, input, values);
   if (!loadSharp()) throw new Error('Timeline exports need Sharp. Run pnpm install.');
   const { request, outputPath, format, overwrite } = plan;
   const pathKey = (path: string) =>
@@ -80,41 +74,18 @@ export async function exportTimeline(
   const staged = join(temporary, sequence ? 'frames' : `render.${format}`);
   const backup = join(temporary, 'previous-frames');
   let keepBackup = false;
-  const resources = resourcesDir();
-  const configs = userDataCandidates().map((dir) => join(dir, 'ffmpeg.json'));
-  const ffmpeg = createFfmpegLocator({
-    configFile: configs.find(existsSync) ?? configs[0]!,
-    bundled: [
-      ...bundledFfmpegCandidates(resources, dirname(resources), true),
-      ...bundledFfmpegCandidates(resources, dirname(resources), false),
-    ],
-  });
-  const jobs = createRenderJobs({ ffmpeg });
-  const clip = activeVideo(request.project);
-  const video = clip ? cliVideoSource(clip, ffmpeg, options.signal) : null;
-  const warnings = new Set<string>();
-  const backends = new Set<string>();
+  const jobs = createRenderJobs({ ffmpeg: terminalFfmpeg(session) });
+  const host = terminalTimelineHost(
+    session,
+    request.project,
+    options.signal ? { signal: options.signal } : {},
+  );
   const started = performance.now();
   try {
     const result = await runTimelineRender(
       { ...request, spec: { ...request.spec, outputPath: staged } },
       {
-        source: video?.source ?? { kind: 'still', read: () => session.sourceImage() },
-        resize: resizeImage,
-        subject: () => session.subject(),
-        render: async (source, effects, context) => {
-          const result = await renderHeadless({
-            source,
-            effects,
-            masterSeed: context.masterSeed,
-            subject: () =>
-              context.subjectMask ? Promise.resolve(context.subjectMask) : session.subject(),
-            isCancelled: context.isCancelled,
-          });
-          result.warnings.forEach((warning) => warnings.add(warning));
-          backends.add(result.backend);
-          return result.image;
-        },
+        ...host.adapters,
         begin: async (spec) => {
           const id = await jobs.begin(spec);
           return {
@@ -163,13 +134,13 @@ export async function exportTimeline(
       range: plan.range,
       bytes: result.bytes,
       files: result.files,
-      backends: [...backends],
-      warnings: [...warnings],
+      backends: [...host.backends],
+      warnings: [...host.warnings],
       notes: result.notes,
       milliseconds: Math.round(performance.now() - started),
     };
   } finally {
-    video?.dispose();
+    host.dispose();
     await jobs.dispose();
     // Only remove the exact mkdtemp child allocated above, never the output.
     if (
