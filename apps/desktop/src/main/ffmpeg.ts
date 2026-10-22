@@ -80,8 +80,13 @@ export function runFfmpeg(
   path: string,
   args: readonly string[],
   timeoutMs = 15000,
+  signal?: AbortSignal,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
     const cwd = ffmpegDirectory(path);
     const child = spawn(process.platform === 'win32' ? '.\\ffmpeg.exe' : './ffmpeg', args, {
       cwd,
@@ -93,8 +98,15 @@ export function runFfmpeg(
     let stderr = '';
     const timer = setTimeout(() => {
       child.kill();
+      signal?.removeEventListener('abort', abort);
       reject(new Error('ffmpeg did not respond.'));
     }, timeoutMs);
+    const abort = () => {
+      child.kill();
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener('abort', abort, { once: true });
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
       if (stdout.length < 4 * 1024 * 1024) stdout += chunk;
     });
@@ -103,10 +115,12 @@ export function runFfmpeg(
     });
     child.once('error', (error) => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
       reject(error);
     });
     child.once('close', (code) => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
       resolve({ code, stdout, stderr });
     });
   });

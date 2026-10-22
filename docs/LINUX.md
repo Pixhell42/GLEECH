@@ -1,12 +1,12 @@
 # Experimental Linux x64 build
 
-Build with Node.js 22.16.0 and pnpm 10.11.1. On Omarchy with mise:
+Build with Node.js 22.23.4 and pnpm 10.11.1. On Omarchy with mise:
 
 ```sh
-mise install node@22.16.0
-mise exec node@22.16.0 -- corepack enable
-mise exec node@22.16.0 -- corepack pnpm install --frozen-lockfile
-mise exec node@22.16.0 -- corepack pnpm pack:linux
+mise install node@22.23.4
+mise exec node@22.23.4 -- corepack enable
+mise exec node@22.23.4 -- corepack pnpm install --frozen-lockfile
+mise exec node@22.23.4 -- corepack pnpm pack:linux
 ./apps/desktop/release/linux-unpacked/gleech
 ```
 
