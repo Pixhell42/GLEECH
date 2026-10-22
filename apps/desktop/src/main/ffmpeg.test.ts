@@ -82,6 +82,28 @@ describe('FFmpeg selection', () => {
     );
   });
 
+  it('does not spawn a cancelled probe, and kills an in-flight probe on cancellation', async () => {
+    const before = new AbortController();
+    before.abort(new Error('Probe cancelled'));
+    await expect(runFfmpeg(chosen, [], 15000, before.signal)).rejects.toThrow('Probe cancelled');
+    expect(spawn).not.toHaveBeenCalled();
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(),
+    });
+    vi.mocked(spawn).mockReturnValueOnce(child as unknown as ReturnType<typeof spawn>);
+    const abort = new AbortController();
+    const result = runFfmpeg(chosen, [], 15000, abort.signal);
+    const rejected = expect(result).rejects.toThrow('Probe cancelled');
+    abort.abort(new Error('Probe cancelled'));
+    await rejected;
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    child.stdout.end();
+    child.stderr.end();
+    child.emit('close', null);
+  });
+
   it('prefers Locate ffmpeg over a working bundled copy and restores the bundle when cleared', async () => {
     const locator = createFfmpegLocator({ configFile, bundled: [bundled] });
     expect(await locator.status()).toMatchObject({ path: bundled, source: 'bundled' });

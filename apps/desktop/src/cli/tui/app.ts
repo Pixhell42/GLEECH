@@ -10,6 +10,7 @@ import {
   EFFECT_DEFINITIONS,
   createEffect,
   createImportedShader,
+  createTimeline,
   type EffectInstance,
   type EffectType,
   type PresetPlacement,
@@ -21,6 +22,7 @@ import {
   filterEffectCatalog,
 } from '@gleech/project-model/effect-catalog';
 import { APP_VERSION } from '../../shared/branding';
+import { renderSourceSize } from '../../shared/render-request';
 import { blockCells, blockSize, type BlockCell } from '../blocks';
 import { decodeImageBytes, encodeImage, formatFromPath, type RgbaImage } from '../codec';
 import { RenderCancelledError, draftFor } from '../engine';
@@ -37,6 +39,9 @@ import {
   type ParamEntry,
 } from '../params';
 import { Session } from '../session';
+import { exportTimeline } from '../timeline';
+import { cliTimelinePlan } from '../timeline-plan';
+import { previewTimeline, type TimelinePreviewFrame } from '../timeline-preview';
 import {
   THEME,
   createPaint,
@@ -62,6 +67,13 @@ import {
 import { Screen, type Rect } from './screen';
 import { ZOOMS, clampView, viewportImage, type View } from './viewport';
 import { Terminal, type InputEvent, type KeyEvent, type MouseEvent } from './terminal';
+import {
+  TimelineTransport,
+  timelineExportModal,
+  timelineOutputPath,
+  timelineRanges,
+  type TimelineExportModal,
+} from './timeline';
 
 // ─── palette ──────────────────────────────────────────────────────────────
 
@@ -114,6 +126,7 @@ interface PromptModal {
   hint?: string;
   error?: string | undefined;
   submit(value: string): Promise<void> | void;
+  cancel?(): void;
 }
 interface EffectModal {
   kind: 'effects';
@@ -136,6 +149,7 @@ interface GleechModal {
 }
 interface HelpModal {
   kind: 'help';
+  scroll: number;
 }
 interface ConfirmModal {
   kind: 'confirm';
@@ -148,9 +162,18 @@ interface BusyModal {
   title: string;
   started: number;
   cancel?: () => void;
+  detail?: string;
 }
 type Modal =
-  PromptModal | EffectModal | PresetModal | GleechModal | HelpModal | ConfirmModal | BusyModal;
+  | PromptModal
+  | EffectModal
+  | PresetModal
+  | GleechModal
+  | HelpModal
+  | ConfirmModal
+  | BusyModal
+  | TimelineExportModal;
+type Focus = 'stack' | 'inspector' | 'timeline';
 
 type Row =
   | { kind: 'group'; group: ParamEntry['group']; count: number }
@@ -165,15 +188,21 @@ interface Hit {
 
 // ─── app ─────────────────────────────────────────────────────────────────
 
-export async function runTui(initial: Session, isSample: boolean): Promise<number> {
-  const term = new Terminal();
+export async function runTui(
+  initial: Session,
+  isSample: boolean,
+  term = new Terminal(),
+): Promise<number> {
   const level = detectColorLevel(process.stdout);
   const screen = new Screen(level || 3, C.window, C.text);
   let session = initial;
   let unsubscribe = session.service.subscribe(onChange);
 
   // UI state
-  let focus: 'stack' | 'inspector' = 'stack';
+  let focus: Focus = initial.state.timeline ? 'timeline' : 'stack';
+  const transport = new TimelineTransport(initial.state.timeline);
+  let timelineMode = !!initial.state.timeline;
+  let timelineDrag = false;
   let stackIndex = 0;
   let stackScroll = 0;
   let inspectorIndex = 0;
@@ -183,12 +212,17 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   let focusMode = false;
   let modal: Modal | null = null;
   let toast: { text: string; color: Rgb; until: number } | null = null;
+  let toastTimer: NodeJS.Timeout | null = null;
   let gleechComplexity: GleechComplexity = 'complex';
   let gleechMode: GleechMode = 'keep-locked';
   let lastGleechSeed: number | null = null;
   let hits: Hit[] = [];
+  let modalHitStart = 0;
+  let helpMaxScroll = 0;
   let spinner = 0;
   let quitting = false;
+  let busyTask: Promise<void> | null = null;
+  let busyAbort: AbortController | null = null;
 
   // Preview state. A fast draft renders first; terminals with inline images
   // then get a sharper render at the pane's real pixel size, and zoomed views
@@ -217,7 +251,11 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   let original: RgbaImage | null = null;
   let renderError: string | null = null;
   let busy = false;
-  let renderToken = { cancelled: true };
+  let renderToken = { cancelled: true, abort: new AbortController() };
+  let renderTask: Promise<void> = Promise.resolve();
+  let renderVersion = 0;
+  let previewTime: number | null = null;
+  let sourceId: string | undefined;
   let renderTimer: NodeJS.Timeout | null = null;
   let renderedFor = 0;
   let cellCache: { image: RgbaImage; cols: number; rows: number; cells: BlockCell[][] } | null =
@@ -241,10 +279,17 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   function flash(text: string, color: Rgb = C.green, ms = 2600) {
     toast = { text, color, until: Date.now() + ms };
     schedule();
-    setTimeout(schedule, ms + 20).unref();
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(schedule, ms + 20).unref();
   }
 
   function onChange() {
+    const hadTimeline = !!transport.timeline;
+    transport.sync(session.state.timeline);
+    if (!transport.timeline) {
+      timelineMode = false;
+      if (focus === 'timeline') focus = 'stack';
+    } else if (!hadTimeline) timelineMode = true;
     const count = effects().length;
     stackIndex = Math.max(0, Math.min(stackIndex, count - 1));
     requestRender();
@@ -257,21 +302,53 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     const W = screen.width;
     const H = screen.height;
     const body: Rect = { x: 0, y: 1, w: W, h: H - 2 };
+    const timelineHeight = timelineActive() ? 3 : 0;
+    const timeline: Rect | null = timelineHeight ? { x: 1, y: H - 4, w: W - 2, h: 3 } : null;
     if (focusMode)
       return {
         W,
         H,
         body,
+        timeline,
         stack: null,
         inspector: null,
-        preview: { x: 1, y: 2, w: W - 2, h: H - 4 },
+        preview: { x: 1, y: 2, w: W - 2, h: H - 4 - timelineHeight },
       };
     const left = Math.max(22, Math.min(34, Math.round(W * 0.21)));
     const right = Math.max(32, Math.min(46, Math.round(W * 0.29)));
-    const stack: Rect = { x: 1, y: 2, w: left, h: H - 4 };
-    const inspector: Rect = { x: W - right - 1, y: 2, w: right, h: H - 4 };
-    const previewRect: Rect = { x: left + 2, y: 2, w: W - left - right - 4, h: H - 4 };
-    return { W, H, body, stack, inspector, preview: previewRect };
+    const stack: Rect = { x: 1, y: 2, w: left, h: H - 4 - timelineHeight };
+    const inspector: Rect = { x: W - right - 1, y: 2, w: right, h: H - 4 - timelineHeight };
+    const previewRect: Rect = {
+      x: left + 2,
+      y: 2,
+      w: W - left - right - 4,
+      h: H - 4 - timelineHeight,
+    };
+    return { W, H, body, stack, inspector, preview: previewRect, timeline };
+  }
+
+  const timelineActive = () => timelineMode && !!session.state.timeline;
+  const displayDimensions = () =>
+    timelineActive() ? renderSourceSize(session.state) : session.state.source;
+
+  function invalidatePreview() {
+    previewState = null;
+    previewTime = null;
+    hires = null;
+    fullRes = null;
+    sourceFull = null;
+    original = null;
+    vpCache = null;
+  }
+
+  function cancelPreview() {
+    renderToken.cancelled = true;
+    renderToken.abort.abort();
+  }
+
+  function pausePlayback() {
+    transport.playing = false;
+    cancelPreview();
   }
 
   const graphicsOn = () => caps.protocol !== 'blocks';
@@ -290,7 +367,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
 
   function fitTarget(blocks: boolean): number {
     const area = imageAreaOf(layout().preview);
-    const source = session.state.source;
+    const source = displayDimensions();
     if (!source || area.w < 2 || area.h < 2) return 64;
     const px = viewportPixels(area, blocks);
     const scale = Math.min(px.w / source.width, px.h / source.height);
@@ -300,15 +377,23 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   }
 
   function requestRender(delay = 24) {
+    cancelPreview();
+    const version = ++renderVersion;
     if (renderTimer) clearTimeout(renderTimer);
-    renderTimer = setTimeout(() => void startRender(), delay);
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      renderTask = renderTask.then(async () => {
+        if (quitting || version !== renderVersion || modal?.kind === 'busy') return;
+        await startRender();
+      });
+    }, delay);
   }
 
   const pause = (ms: number) => new Promise((resolveFn) => setTimeout(resolveFn, ms));
 
   async function startRender() {
-    renderToken.cancelled = true;
-    const token = { cancelled: false };
+    cancelPreview();
+    const token = { cancelled: false, abort: new AbortController() };
     renderToken = token;
     const cancelled = () => token.cancelled;
     const state = session.state;
@@ -317,6 +402,14 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     refining = '';
     schedule();
     try {
+      if (sourceId !== state.source?.id) {
+        invalidatePreview();
+        sourceId = state.source?.id;
+      }
+      if (timelineActive()) {
+        await renderTimeline(state, target, token);
+        return;
+      }
       sourceFull ??= await session.sourceImage();
       if (!original || renderedFor !== target) original = await draftFor(sourceFull, target);
       if (previewState !== state || renderedFor !== target) {
@@ -359,6 +452,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     } catch (error) {
       if (error instanceof RenderCancelledError || token.cancelled) return;
       renderError = error instanceof Error ? error.message : String(error);
+      transport.playing = false;
     } finally {
       if (token === renderToken) {
         busy = false;
@@ -366,6 +460,70 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       }
       schedule();
     }
+  }
+
+  async function renderTimeline(state: ProjectState, target: number, token: typeof renderToken) {
+    const playing = transport.playing;
+    const time = transport.time;
+    const plan = playing ? transport.schedule() : { times: [time], fps: state.timeline!.fps };
+    if (playing || previewState !== state || previewTime !== time || renderedFor !== target) {
+      await previewTimeline(session, state, plan.times, {
+        signal: token.abort.signal,
+        maxDimension: target,
+        fps: plan.fps,
+        paced: playing,
+        ...(playing ? { endTime: transport.range.end } : {}),
+        onFrame(frame) {
+          if (token.cancelled) throw new RenderCancelledError();
+          if (playing) transport.displayed(frame.time);
+          sourceFull = frame.original;
+          original = null;
+          preview = {
+            image: frame.image,
+            ms: frame.milliseconds,
+            warnings: frame.warnings,
+            backend: frame.backend,
+          };
+          previewState = state;
+          previewTime = frame.time;
+          renderedFor = target;
+          hires = null;
+          fullRes = null;
+          busy = false;
+          renderError = null;
+          schedule();
+        },
+      });
+    }
+    if (token.cancelled) return;
+    if (playing) {
+      transport.completed();
+      requestRender(0);
+      return;
+    }
+    const highTarget = view.zoom ? undefined : fitTarget(false);
+    if (
+      view.zoom
+        ? fullRes?.state === state
+        : !graphicsOn() ||
+          highTarget! <= target ||
+          (hires?.state === state && hires.target === highTarget)
+    )
+      return;
+    await pause(160);
+    if (token.cancelled) return;
+    refining = view.zoom ? 'full resolution' : 'sharpening';
+    schedule();
+    await previewTimeline(session, state, [time], {
+      signal: token.abort.signal,
+      ...(highTarget ? { maxDimension: highTarget } : {}),
+      ...(sourceFull ? { sourceFrame: sourceFull } : {}),
+      onFrame(frame) {
+        if (token.cancelled) throw new RenderCancelledError();
+        if (view.zoom) fullRes = { image: frame.image, state };
+        else hires = { image: frame.image, state, target: highTarget! };
+      },
+    });
   }
 
   /** The best available image of the current edit (or the original, when comparing). */
@@ -390,7 +548,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
    */
   function viewportFor(area: Rect, blocks: boolean, small = false): RgbaImage | null {
     const src = displaySource();
-    const source = session.state.source;
+    const source = displayDimensions();
     if (!src || !source) return null;
     let px = viewportPixels(area, blocks);
     view = clampView(view, source, px.w, px.h);
@@ -418,7 +576,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   }
 
   function pan(dxCells: number, dyCells: number) {
-    const source = session.state.source;
+    const source = displayDimensions();
     if (!source || !view.zoom) return;
     const pxPerCellX = graphicsOn() ? caps.cellWidth : 1;
     const pxPerCellY = graphicsOn() ? caps.cellHeight : 2;
@@ -444,9 +602,9 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   }
 
   async function openInViewer() {
-    await runBusy('OPENING', async (isCancelled) => {
+    await runBusy('OPENING', async (isCancelled, signal) => {
       try {
-        const result = await session.render(isCancelled);
+        const result = await renderCurrentPicture(isCancelled, signal);
         const directory = await mkdtemp(join(tmpdir(), 'gleech-viewer-'));
         const path = join(directory, 'preview.png');
         await writeFile(path, await encodeImage(result.image, 'png'), { flag: 'wx', mode: 0o600 });
@@ -917,54 +1075,140 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       screen.text(1, y, truncate(toast.text, W - 2), { fg: toast.color, bg: C.window });
       return;
     }
-    const hints: [string, string][] = focusMode
-      ? [
-          ['z', view.zoom ? `zoom ${view.zoom}:1` : 'zoom'],
-          ['Z', 'fit'],
-          ['←→↑↓', view.zoom ? 'pan' : 'pan when zoomed'],
-          ['drag', 'pan'],
-          ['v', 'compare'],
-          ['O', 'open full res'],
-          ['f', 'exit focus'],
-          ['g', 'gleech'],
-          ['u', 'undo'],
-          ['?', 'help'],
-        ]
-      : focus === 'stack'
+    const hints: [string, string][] =
+      focus === 'timeline' && timelineActive()
         ? [
-            ['↑↓', 'select'],
-            ['␣', 'on/off'],
-            ['⏎', 'edit'],
-            ['⇧↑↓', 'move'],
-            ['a', 'add'],
-            ['p', 'presets'],
-            ['g', 'gleech'],
-            ['r', 'reseed'],
-            ['d', 'delete'],
-            ['u', 'undo'],
+            ['␣', transport.playing ? 'pause' : 'play'],
+            ['←→', 'frame'],
+            ['⇧←→', '1 second'],
+            ['g', 'go to'],
+            ['r', 'range'],
             ['e', 'export'],
-            ['s', 'save'],
+            ['tab', 'stack'],
             ['?', 'help'],
-            ['q', 'quit'],
           ]
-        : [
-            ['↑↓', 'param'],
-            ['←→', 'adjust'],
-            ['⇧←→', 'big steps'],
-            ['⏎', 'type value'],
-            ['⌫', 'reset'],
-            ['esc', 'stack'],
-            ['v', 'compare'],
-            ['z', 'zoom'],
-            ['u', 'undo'],
-            ['?', 'help'],
-          ];
+        : focusMode
+          ? [
+              ['z', view.zoom ? `zoom ${view.zoom}:1` : 'zoom'],
+              ['Z', 'fit'],
+              ['←→↑↓', view.zoom ? 'pan' : 'pan when zoomed'],
+              ['drag', 'pan'],
+              ['v', 'compare'],
+              ['O', 'open full res'],
+              ['f', 'exit focus'],
+              ['g', 'gleech'],
+              ['u', 'undo'],
+              ['?', 'help'],
+            ]
+          : focus === 'stack'
+            ? [
+                ['↑↓', 'select'],
+                ['␣', 'on/off'],
+                ['⏎', 'edit'],
+                ['⇧↑↓', 'move'],
+                ['a', 'add'],
+                ['p', 'presets'],
+                ['t', 'timeline'],
+                ['g', 'gleech'],
+                ['r', 'reseed'],
+                ['d', 'delete'],
+                ['u', 'undo'],
+                ['e', 'export'],
+                ['s', 'save'],
+                ['?', 'help'],
+                ['q', 'quit'],
+              ]
+            : [
+                ['↑↓', 'param'],
+                ['←→', 'adjust'],
+                ['⇧←→', 'big steps'],
+                ['⏎', 'type value'],
+                ['⌫', 'reset'],
+                ['esc', 'stack'],
+                ['v', 'compare'],
+                ['z', 'zoom'],
+                ['u', 'undo'],
+                ['?', 'help'],
+              ];
     let x = 1;
     for (const [k, label] of hints) {
       const need = cellWidth(k) + cellWidth(label) + 3;
       if (x + need > W - 1) break;
       x = key(x, y, k, label, C.window);
     }
+  }
+
+  function seekTimeline(frame: number, delay = 0) {
+    transport.seek(frame);
+    invalidatePreview();
+    requestRender(delay);
+  }
+
+  function scrubTimeline(x: number, delay = 0) {
+    const r = layout().timeline;
+    if (!r) return;
+    const fraction = Math.max(0, Math.min(1, (x - r.x - 1) / Math.max(1, r.w - 3)));
+    focus = 'timeline';
+    seekTimeline(Math.round(fraction * (transport.count - 1)), delay);
+  }
+
+  function drawTimeline(rect: Rect) {
+    const timeline = session.state.timeline!;
+    screen.fill(rect, C.panel);
+    const status = transport.playing ? 'PLAY' : 'PAUSED';
+    screen.text(rect.x + 1, rect.y, 'TIMELINE', {
+      fg: focus === 'timeline' ? C.accent : C.muted,
+      bg: C.panel,
+      bold: true,
+    });
+    screen.text(
+      rect.x + 11,
+      rect.y,
+      `${status}  ${transport.time.toFixed(3)}s  frame ${transport.frame + 1}/${transport.count}  ${timeline.fps}fps  ${transport.rangeKind}  · silent preview`,
+      { fg: C.text, bg: C.panel },
+      rect.w - 12,
+    );
+    const width = Math.max(2, rect.w - 2);
+    const at = (t: number) =>
+      rect.x +
+      1 +
+      Math.max(
+        0,
+        Math.min(
+          width - 1,
+          Math.round(((t * timeline.fps) / Math.max(1, transport.count - 1)) * (width - 1)),
+        ),
+      );
+    const range = transport.range;
+    for (let i = 0; i < width; i++) {
+      const time = ((i / (width - 1)) * (transport.count - 1)) / timeline.fps;
+      screen.set(rect.x + 1 + i, rect.y + 1, '─', {
+        fg: time >= range.start && time < range.end ? C.accent : C.faint,
+        bg: C.panel,
+      });
+    }
+    for (const marker of timeline.markers)
+      screen.set(at(marker.t), rect.y + 1, '│', { fg: C.cyan, bg: C.panel });
+    for (const lane of Object.values(selected()?.animation ?? {}))
+      for (const keyframe of lane.keys)
+        screen.set(at(keyframe.t), rect.y + 1, '◆', { fg: C.hot, bg: C.panel });
+    screen.set(at(transport.time), rect.y + 1, '┃', { fg: C.text, bg: C.accent });
+    screen.text(
+      rect.x + 1,
+      rect.y + 2,
+      `t image/timeline · tab focus · space play/pause · ←→ frame · i/o In/Out · r range · e export`,
+      { fg: C.muted, bg: C.panel },
+      rect.w - 2,
+    );
+    hits.push({
+      rect,
+      press(event) {
+        timelineDrag = true;
+        scrubTimeline(event.x);
+      },
+      drag: (event) => scrubTimeline(event.x, 60),
+      wheel: (direction) => seekTimeline(transport.frame + direction),
+    });
   }
 
   // ─── modals ─────────────────────────────────────────────────────────
@@ -988,7 +1232,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       bg: mix(C.elevated, C.accent, 0.1),
       bold: true,
     });
-    hits = [{ rect: { x: 0, y: 0, w: W, h: H }, press: () => {} }]; // modal captures the mouse
+    hits.push({ rect: { x: 0, y: 0, w: W, h: H }, press: () => {} }); // modal captures the mouse
     return rect;
   }
 
@@ -1239,7 +1483,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     screen.text(
       r.x + 2,
       r.y + 2,
-      `${SPINNER[spinner % SPINNER.length]} working at full resolution`,
+      `${SPINNER[spinner % SPINNER.length]} ${m.detail ?? 'working at full resolution'}`,
       { fg: C.accent, bg: C.elevated },
     );
     screen.text(r.x + 2, r.y + 3, `${seconds}s`, { fg: C.faint, bg: C.elevated });
@@ -1247,20 +1491,212 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       screen.text(r.x + 2, r.y + r.h - 1, 'esc cancel', { fg: C.faint, bg: C.elevated });
   }
 
-  function drawHelp() {
+  function drawTimelineExport(m: TimelineExportModal) {
+    const r = box(82, 15, 'EXPORT TIMELINE');
+    const rows = [
+      ['Format', m.format === 'png' ? 'PNG sequence' : m.format.toUpperCase()],
+      [
+        'Range',
+        m.range === 'whole' ? 'Whole timeline' : m.range === 'work' ? 'Work area' : 'In / Out',
+      ],
+      ['FPS', m.fps],
+      ['Width', `${m.width} px · preserve aspect ratio`],
+      [
+        'Audio',
+        m.format === 'mp4' ? (m.audio ? 'On · saved track and clip sound' : 'Off') : 'Silent',
+      ],
+      [m.format === 'png' ? 'Folder' : 'File', m.path],
+      ['Render', 'Enter to export'],
+    ];
+    rows.forEach(([label, value], index) => {
+      const y = r.y + 2 + index;
+      const bg = m.row === index ? C.select : C.elevated;
+      screen.fill({ x: r.x + 1, y, w: r.w - 2, h: 1 }, bg);
+      screen.text(r.x + 2, y, label!, { fg: m.row === index ? C.hot : C.muted, bg }, 8);
+      screen.text(r.x + 12, y, value!, { fg: C.text, bg }, r.w - 14);
+      hits.push({
+        rect: { x: r.x + 1, y, w: r.w - 2, h: 1 },
+        press() {
+          m.row = index;
+          if (index === 6) void startTimelineExport(m);
+          else editTimelineExport(m);
+          schedule();
+        },
+      });
+    });
+    screen.text(
+      r.x + 2,
+      r.y + 10,
+      m.error ?? 'Existing output needs a second Enter to replace.',
+      { fg: m.error ? C.warn : C.faint, bg: C.elevated },
+      r.w - 4,
+    );
+    screen.text(
+      r.x + 2,
+      r.y + r.h - 2,
+      '↑↓/tab field · ←→ change · enter edit/render · esc close',
+      { fg: C.muted, bg: C.elevated },
+      r.w - 4,
+    );
+  }
+
+  function changeTimelineExport(m: TimelineExportModal, direction: number) {
+    m.error = undefined;
+    m.overwritePath = undefined;
+    if (m.row === 0) {
+      const formats = ['mp4', 'gif', 'png'] as const;
+      m.format =
+        formats[(formats.indexOf(m.format) + direction + formats.length) % formats.length]!;
+      if (!m.pathEdited) m.path = timelineOutputPath(session, m.format);
+      if (!m.fpsEdited) m.fps = String(m.format === 'gif' ? 15 : session.state.timeline!.fps);
+      if (!m.widthEdited)
+        m.width = String(
+          m.format === 'gif'
+            ? Math.max(16, Math.min(480, renderSourceSize(session.state).width))
+            : renderSourceSize(session.state).width,
+        );
+    } else if (m.row === 1) {
+      const ranges = timelineRanges(session.state.timeline!);
+      m.range = ranges[(ranges.indexOf(m.range) + direction + ranges.length) % ranges.length]!;
+    } else if (m.row === 2) {
+      if (m.format === 'gif') {
+        const rates = [10, 12, 15, 24, 30];
+        const index = Math.max(0, rates.indexOf(Number(m.fps)));
+        m.fps = String(rates[(index + direction + rates.length) % rates.length]);
+      } else m.fps = String(Math.max(1, Math.min(240, (Number(m.fps) || 30) + direction)));
+      m.fpsEdited = true;
+    } else if (m.row === 3) {
+      m.width = String(
+        Math.max(
+          m.format === 'gif' ? 16 : 2,
+          Math.min(m.format === 'gif' ? 4096 : 8192, (Number(m.width) || 480) + direction * 32),
+        ),
+      );
+      m.widthEdited = true;
+    } else if (m.row === 4 && m.format === 'mp4') m.audio = !m.audio;
+  }
+
+  function editTimelineExport(m: TimelineExportModal) {
+    if ([0, 1, 4].includes(m.row)) return changeTimelineExport(m, 1);
+    if (![2, 3, 5].includes(m.row)) return;
+    const field = m.row === 2 ? 'fps' : m.row === 3 ? 'width' : 'path';
+    prompt({
+      title:
+        field === 'path'
+          ? 'TIMELINE OUTPUT'
+          : field === 'fps'
+            ? 'OUTPUT FRAME RATE'
+            : 'OUTPUT WIDTH',
+      label:
+        field === 'path'
+          ? m.format === 'png'
+            ? 'Dedicated folder for numbered PNG frames'
+            : `Output .${m.format} file`
+          : field === 'fps'
+            ? 'Frames per second'
+            : 'Width in pixels; height follows the source aspect ratio',
+      value: m[field],
+      cancel: () => {
+        modal = m;
+      },
+      submit(value) {
+        if (!value.trim()) throw new Error('Enter a value.');
+        m[field] = value.trim();
+        m.error = undefined;
+        m.overwritePath = undefined;
+        if (field === 'path') m.pathEdited = true;
+        else if (field === 'fps') m.fpsEdited = true;
+        else m.widthEdited = true;
+        modal = m;
+      },
+    });
+  }
+
+  async function startTimelineExport(m: TimelineExportModal) {
+    try {
+      if (!m.path.trim()) throw new Error('Choose an output file or frame folder.');
+      const values = {
+        timeline: true,
+        format: m.format,
+        range: m.range,
+        fps: m.fps,
+        width: m.width,
+        'no-audio': !m.audio,
+        output: resolve(m.path.trim()),
+      };
+      const plan = cliTimelinePlan(
+        session.state,
+        session.path ?? resolve(`${defaultStem()}.gleech`),
+        values,
+      );
+      if (existsSync(plan.outputPath) && m.overwritePath !== plan.outputPath) {
+        m.overwritePath = plan.outputPath;
+        m.error = 'Output exists. Press Enter on Render again to replace it.';
+        schedule();
+        return;
+      }
+      await runBusy('EXPORTING TIMELINE', async (_isCancelled, signal, report) => {
+        try {
+          const result = await exportTimeline(
+            session,
+            { ...values, overwrite: m.overwritePath === plan.outputPath },
+            {
+              signal,
+              onProgress: ({ phase, done, total }) =>
+                report(
+                  `${phase === 'encoding' ? 'Encoding' : 'Rendering'} ${done}/${total} frames`,
+                ),
+            },
+          );
+          flash(
+            `Exported ${result.frames} frames · ${basename(result.output)} · ${(result.milliseconds / 1000).toFixed(1)}s`,
+            result.warnings.length ? C.warn : C.green,
+            5000,
+          );
+        } catch (error) {
+          if (signal.aborted || error instanceof RenderCancelledError)
+            flash('Timeline export cancelled.', C.warn);
+          else {
+            m.error = error instanceof Error ? error.message : String(error);
+            modal = m;
+          }
+        }
+      });
+    } catch (error) {
+      m.error = error instanceof Error ? error.message : String(error);
+      schedule();
+    }
+  }
+
+  function drawHelp(m: HelpModal) {
     const sections: [string, [string, string][]][] = [
       [
-        'STACK',
-        [
-          ['↑↓ jk', 'select layer'],
-          ['space', 'toggle layer'],
-          ['⇧↑↓ JK', 'move layer'],
-          ['⏎ →', 'edit parameters'],
-          ['r', 'reseed layer'],
-          ['l', 'lock / unlock'],
-          ['D', 'duplicate'],
-          ['d del', 'delete'],
-        ],
+        timelineActive() ? 'TIMELINE' : 'STACK',
+        timelineActive()
+          ? [
+              ['t', 'image / timeline'],
+              ['tab', 'focus timeline'],
+              ['space', 'play / pause'],
+              ['←→', 'step one frame'],
+              ['⇧←→', 'step one second'],
+              ['home end', 'first / last frame'],
+              ['g', 'go to time (seconds)'],
+              ['i o', 'set In / Out'],
+              ['r', 'cycle render range'],
+              ['w W', 'set / clear work area'],
+              ['L', 'toggle loop'],
+              ['e E', 'export timeline / frame'],
+            ]
+          : [
+              ['↑↓ jk', 'select layer'],
+              ['space', 'toggle layer'],
+              ['⇧↑↓ JK', 'move layer'],
+              ['⏎ →', 'edit parameters'],
+              ['r', 'reseed layer'],
+              ['l', 'lock / unlock'],
+              ['D', 'duplicate'],
+              ['d del', 'delete'],
+            ],
       ],
       [
         'PARAMETERS',
@@ -1287,9 +1723,10 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
           ['z Z', 'zoom 1:1/2:1/4:1 · fit'],
           ['f', 'focus preview'],
           ['O', 'open full res'],
-          ['e', 'export image'],
+          ['e', timelineActive() ? 'export timeline' : 'export image'],
+          ['t', 'image / timeline mode'],
           ['b', 'cycle renderer: Auto / GPU / CPU'],
-          ['t', 'add local/library shader'],
+          ['⇧T', 'add local/library shader'],
           ['s S', 'save · save as'],
           ['o', 'open file'],
           ['q', 'quit'],
@@ -1297,11 +1734,15 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       ],
     ];
     const r = box(100, 25, 'KEYS');
+    helpMaxScroll = Math.max(
+      0,
+      Math.max(...sections.map(([, keys]) => keys.length)) - Math.max(1, r.h - 7),
+    );
     const colW = Math.floor((r.w - 4) / 3);
     sections.forEach(([title, keys], col) => {
       const x = r.x + 2 + col * colW;
       screen.text(x, r.y + 2, title, { fg: C.accent, bg: C.elevated, bold: true });
-      keys.forEach(([k, label], i) => {
+      keys.slice(m.scroll, m.scroll + Math.max(1, r.h - 7)).forEach(([k, label], i) => {
         screen.text(x, r.y + 4 + i, k, { fg: C.hot, bg: C.elevated }, 9);
         screen.text(x + 10, r.y + 4 + i, truncate(label, colW - 11), {
           fg: C.muted,
@@ -1312,7 +1753,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     screen.text(
       r.x + 2,
       r.y + r.h - 2,
-      `GLEECH v${APP_VERSION} · ${caps.terminal} · preview: ${caps.protocol === 'blocks' ? 'truecolor half-blocks' : `${caps.protocol} images`} · any key closes`,
+      `↑↓ scroll · any other key closes · ${caps.terminal} · ${caps.protocol} · v${APP_VERSION}`,
       { fg: C.faint, bg: C.elevated },
       r.w - 4,
     );
@@ -1343,7 +1784,9 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     if (l.stack) drawStack(l.stack);
     if (l.inspector) drawInspector(l.inspector);
     drawPreview(l.preview);
+    if (l.timeline) drawTimeline(l.timeline);
     drawFooter(W, H);
+    modalHitStart = hits.length;
     if (modal) {
       if (modal.kind === 'effects') drawEffectModal(modal);
       else if (modal.kind === 'presets') drawPresetModal(modal);
@@ -1351,7 +1794,8 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       else if (modal.kind === 'prompt') drawPrompt(modal);
       else if (modal.kind === 'confirm') drawConfirm(modal);
       else if (modal.kind === 'busy') drawBusy(modal);
-      else drawHelp();
+      else if (modal.kind === 'timeline-export') drawTimelineExport(modal);
+      else drawHelp(modal);
     }
     // A dialog's cells may equal the plain canvas cells beneath an inline
     // image; write them anyway so the dialog actually covers the image.
@@ -1482,6 +1926,10 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   }
 
   function prompt(options: Omit<PromptModal, 'kind' | 'cursor'>) {
+    if (transport.playing) {
+      pausePlayback();
+      requestRender(0);
+    }
     modal = { kind: 'prompt', cursor: options.value.length, ...options };
     schedule();
   }
@@ -1492,22 +1940,67 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     return source ? basename(source.name, extname(source.name)) : 'gleech';
   }
 
-  async function runBusy(title: string, work: (isCancelled: () => boolean) => Promise<void>) {
-    let cancelled = false;
+  async function runBusy(
+    title: string,
+    work: (
+      isCancelled: () => boolean,
+      signal: AbortSignal,
+      report: (text: string) => void,
+    ) => Promise<void>,
+  ) {
+    pausePlayback();
+    if (renderTimer) {
+      clearTimeout(renderTimer);
+      renderTimer = null;
+    }
+    renderVersion++;
+    const controller = new AbortController();
+    busyAbort = controller;
     const busyModal: BusyModal = {
       kind: 'busy',
       title,
       started: performance.now(),
-      cancel: () => (cancelled = true),
+      cancel: () => controller.abort(),
     };
     modal = busyModal;
     schedule();
+    const pending = (async () => {
+      await renderTask;
+      await work(
+        () => controller.signal.aborted,
+        controller.signal,
+        (detail) => {
+          busyModal.detail = detail;
+          schedule();
+        },
+      );
+    })();
+    busyTask = pending;
     try {
-      await work(() => cancelled);
+      await pending;
     } finally {
+      if (busyTask === pending) {
+        busyTask = null;
+        busyAbort = null;
+      }
       if (modal === busyModal) modal = null;
+      if (!quitting) requestRender(0);
       schedule();
     }
+  }
+
+  async function renderCurrentPicture(isCancelled: () => boolean, signal?: AbortSignal) {
+    if (!timelineActive()) return session.render(isCancelled);
+    let result: TimelinePreviewFrame | null = null;
+    await previewTimeline(session, session.state, [transport.time], {
+      ...(signal ? { signal } : {}),
+      onFrame: (frame) => {
+        result = frame;
+      },
+    });
+    if (isCancelled()) throw new RenderCancelledError();
+    if (!result) throw new Error('No timeline frame could be rendered.');
+    return result as TimelinePreviewFrame;
   }
 
   function exportImage() {
@@ -1527,10 +2020,12 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
           throw new Error(`${basename(path)} exists.`);
         }
         modal = null;
-        await runBusy('EXPORTING', async (isCancelled) => {
+        await runBusy('EXPORTING', async (isCancelled, signal) => {
           try {
-            const result = await session.render(isCancelled);
-            await writeFile(path, await encodeImage(result.image, format));
+            const result = await renderCurrentPicture(isCancelled, signal);
+            const bytes = await encodeImage(result.image, format);
+            if (isCancelled()) throw new RenderCancelledError();
+            await writeFile(path, bytes);
             flash(
               `Exported ${basename(path)} · ${result.image.width}×${result.image.height} · ${(result.milliseconds / 1000).toFixed(1)}s`,
             );
@@ -1593,10 +2088,16 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
         const path = resolve(value.trim().replace(/^['"]|['"]$/g, ''));
         if (!existsSync(path)) throw new Error('No such file.');
         const next = await Session.open(path);
+        pausePlayback();
         unsubscribe();
         session = next;
         unsubscribe = session.service.subscribe(onChange);
-        original = null;
+        invalidatePreview();
+        sourceId = undefined;
+        timelineMode = !!next.state.timeline;
+        transport.sync(next.state.timeline);
+        transport.seek(0);
+        focus = timelineMode ? 'timeline' : 'stack';
         preview = null;
         renderError = null;
         stackIndex = 0;
@@ -1672,9 +2173,13 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   }
 
   let resolveExit: (code: number) => void = () => {};
-  function finish() {
+  const exitPromise = new Promise<number>((resolveFn) => (resolveExit = resolveFn));
+  function finish(code = 0) {
+    pausePlayback();
+    busyAbort?.abort();
+    renderVersion++;
     quitting = true;
-    resolveExit(0);
+    resolveExit(code);
   }
 
   // ─── input ─────────────────────────────────────────────────────────
@@ -1735,11 +2240,33 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       return;
     }
     if (k?.name === 'escape' && m.kind !== 'confirm') {
-      modal = null;
+      if (m.kind === 'prompt' && m.cancel) m.cancel();
+      else modal = null;
       return;
     }
     if (m.kind === 'help') {
-      modal = null;
+      if (k && ['up', 'down', 'pageup', 'pagedown'].includes(k.name))
+        m.scroll = Math.max(
+          0,
+          Math.min(
+            helpMaxScroll,
+            m.scroll +
+              (k.name === 'up' ? -1 : k.name === 'down' ? 1 : k.name === 'pageup' ? -5 : 5),
+          ),
+        );
+      else modal = null;
+      return;
+    }
+    if (m.kind === 'timeline-export') {
+      if (k?.name === 'up' || k?.name === 'down' || k?.name === 'tab') {
+        const direction = k.name === 'up' || (k.name === 'tab' && k.shift) ? -1 : 1;
+        m.row = (m.row + direction + 7) % 7;
+      } else if (k?.name === 'left' || k?.name === 'right' || k?.name === 'space')
+        changeTimelineExport(m, k.name === 'left' ? -1 : 1);
+      else if (k?.name === 'enter') {
+        if (m.row === 6) await startTimelineExport(m);
+        else editTimelineExport(m);
+      }
       return;
     }
     if (m.kind === 'confirm') {
@@ -1861,7 +2388,24 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       return flash('Redo', C.muted);
     }
     if (event.ctrl) return;
-    if (n === 't') {
+    if (n === 't' && !event.shift) {
+      endGesture();
+      pausePlayback();
+      if (!session.state.timeline) {
+        timelineMode = true;
+        session.service.setTimeline(createTimeline());
+      } else timelineMode = !timelineMode;
+      focus = timelineMode ? 'timeline' : 'stack';
+      invalidatePreview();
+      requestRender(0);
+      flash(
+        timelineMode ? 'Timeline · tab to focus · space play · e export' : 'Image mode',
+        C.muted,
+      );
+      return;
+    }
+    if (focus === 'timeline' && timelineActive() && timelineKey(event)) return;
+    if (n === 't' && event.shift) {
       prompt({
         title: 'ADD SHADER',
         label: 'Shader name/ID or local .gleech-shader / .wgsl / .isf file',
@@ -1875,9 +2419,14 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       return;
     }
     if (n === 'q') return quit();
-    if (n === '?') return void (modal = { kind: 'help' });
+    if (n === '?') return void (modal = { kind: 'help', scroll: 0 });
     if (n === 'tab') {
-      focus = focus === 'stack' && effect ? 'inspector' : 'stack';
+      const order: Focus[] = [
+        'stack',
+        ...(effect ? ['inspector' as const] : []),
+        ...(timelineActive() ? ['timeline' as const] : []),
+      ];
+      focus = order[(order.indexOf(focus) + (event.shift ? -1 : 1) + order.length) % order.length]!;
       return;
     }
     if (n === 'a')
@@ -1906,7 +2455,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     if (n === 'b') {
       const modes = ['auto', 'gpu', 'cpu'] as const;
       const renderer = modes[(modes.indexOf(renderingSettings().renderer) + 1) % modes.length]!;
-      renderToken.cancelled = true;
+      cancelPreview();
       configureRendering({ renderer });
       previewState = null;
       hires = null;
@@ -1915,7 +2464,15 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       requestRender(0);
       return;
     }
-    if (n === 'e') return exportImage();
+    if (n === 'e') {
+      if (timelineActive() && !event.shift) {
+        pausePlayback();
+        requestRender(0);
+        modal = timelineExportModal(session, transport.rangeKind);
+        return;
+      }
+      return exportImage();
+    }
     if (n === 's') return saveProject(event.shift);
     if (n === 'o') return openFile();
     if (n === 'n') return attempt(() => session.service.setSeed(randomInt(0, 0xffffffff)));
@@ -2011,7 +2568,97 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       return setValue(entry, entry.definition.default, false);
   }
 
+  function timelineKey(event: KeyEvent): boolean {
+    const n = event.name;
+    const timeline = session.state.timeline!;
+    if (n === 'space') {
+      if (transport.playing) pausePlayback();
+      else transport.play();
+      requestRender(0);
+      return true;
+    }
+    if (['left', 'right', 'h', 'l'].includes(n) && !(n === 'l' && event.shift)) {
+      const delta = event.shift ? Math.max(1, Math.round(timeline.fps)) : 1;
+      seekTimeline(transport.frame + (n === 'left' || n === 'h' ? -delta : delta));
+      return true;
+    }
+    if (n === 'home' || n === 'end') {
+      seekTimeline(n === 'home' ? 0 : transport.count - 1);
+      return true;
+    }
+    if (n === 'escape') {
+      pausePlayback();
+      focus = 'stack';
+      requestRender(0);
+      return true;
+    }
+    if (n === 'g' && !event.shift) {
+      prompt({
+        title: 'GO TO TIME',
+        label: 'Timeline time in seconds',
+        value: transport.time.toFixed(3),
+        submit(value) {
+          const time = Number(value);
+          if (
+            !value.trim() ||
+            !Number.isFinite(time) ||
+            time < 0 ||
+            time > transport.count / timeline.fps
+          )
+            throw new Error('Enter a time inside this timeline.');
+          modal = null;
+          seekTimeline(Math.round(time * timeline.fps));
+        },
+      });
+      return true;
+    }
+    if (n === 'r') {
+      pausePlayback();
+      transport.cycleRange();
+      requestRender(0);
+      return true;
+    }
+    if (n === 'l' && event.shift) {
+      session.service.updateTimeline({ loop: !timeline.loop });
+      return true;
+    }
+    if (n === 'i' || (n === 'o' && !event.shift)) {
+      pausePlayback();
+      const end = transport.count / timeline.fps;
+      const range =
+        n === 'i'
+          ? {
+              start: transport.time,
+              end: Math.max(timeline.inOut?.end ?? end, transport.time + 1 / timeline.fps),
+            }
+          : {
+              start: Math.min(timeline.inOut?.start ?? 0, transport.time),
+              end: Math.min(end, transport.time + 1 / timeline.fps),
+            };
+      session.service.updateTimeline({ inOut: range });
+      transport.rangeKind = 'inout';
+      return true;
+    }
+    if (n === 'w') {
+      pausePlayback();
+      session.service.updateTimeline({
+        workArea: event.shift
+          ? null
+          : (timeline.inOut ?? { start: transport.range.start, end: transport.range.end }),
+      });
+      transport.rangeKind = event.shift ? 'whole' : 'work';
+      return true;
+    }
+    return false;
+  }
+
   function onMouse(event: MouseEvent) {
+    if (modal?.kind === 'busy') return;
+    if (!modal && timelineDrag && event.action === 'drag') {
+      scrubTimeline(event.x, 60);
+      return;
+    }
+    const firstHit = modal ? modalHitStart : 0;
     if (event.button === 'wheel-up' || event.button === 'wheel-down') {
       const direction = event.button === 'wheel-up' ? -1 : 1;
       if (modal?.kind === 'effects' || modal?.kind === 'presets') {
@@ -2019,7 +2666,7 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
         schedule();
         return;
       }
-      for (let i = hits.length - 1; i >= 0; i--) {
+      for (let i = hits.length - 1; i >= firstHit; i--) {
         const hit = hits[i]!;
         const r = hit.rect;
         if (event.x >= r.x && event.x < r.x + r.w && event.y >= r.y && event.y < r.y + r.h) {
@@ -2030,11 +2677,12 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       return;
     }
     if (event.action === 'release') {
+      timelineDrag = false;
       drag = null;
       return;
     }
     if (event.button !== 'left') return;
-    for (let i = hits.length - 1; i >= 0; i--) {
+    for (let i = hits.length - 1; i >= firstHit; i--) {
       const hit = hits[i]!;
       const r = hit.rect;
       if (event.x >= r.x && event.x < r.x + r.w && event.y >= r.y && event.y < r.y + r.h) {
@@ -2051,6 +2699,10 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       else if (event.kind === 'paste') {
         if (modal) await onModalKey(modal, event);
       } else await onKey(event);
+      if (modal && transport.playing) {
+        pausePlayback();
+        requestRender(0);
+      }
     } catch (error) {
       flash(error instanceof Error ? error.message : String(error), C.red, 5000);
     }
@@ -2069,6 +2721,10 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
   };
   process.on('uncaughtException', crash);
   process.on('unhandledRejection', crash);
+  const interrupt = () => finish(130);
+  const terminate = () => finish(143);
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', terminate);
   term.enter();
   // Ask the terminal what it can draw. Known image-less terminals skip the query.
   const fromEnv = protocolFromEnv();
@@ -2077,8 +2733,8 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
       ? null
       : parseProbe(await term.probe(fromEnv ? '\x1b[16t\x1b[c' : PROBE_QUERY));
   caps = resolveCaps(process.env, probe);
-  term.onInput((event) => void onInput(event));
-  term.onResizeEvent(() => {
+  const offInput = term.onInput((event) => void onInput(event));
+  const offResize = term.onResizeEvent(() => {
     hideImage();
     screen.resize(term.columns, term.rows);
     term.write('\x1b[2J');
@@ -2099,15 +2755,23 @@ export async function runTui(initial: Session, isSample: boolean): Promise<numbe
     );
   requestRender(0);
   schedule();
-  const code = await new Promise<number>((resolveFn) => (resolveExit = resolveFn));
+  const code = await exitPromise;
   clearInterval(ticker);
   if (renderTimer) clearTimeout(renderTimer);
   endGesture();
-  renderToken.cancelled = true;
+  if (emitTimer) clearTimeout(emitTimer);
+  if (toastTimer) clearTimeout(toastTimer);
+  cancelPreview();
+  await Promise.allSettled([renderTask, ...(busyTask ? [busyTask] : [])]);
+  unsubscribe();
+  offInput();
+  offResize();
   hideImage();
   restore();
   process.off('uncaughtException', crash);
   process.off('unhandledRejection', crash);
+  process.off('SIGINT', interrupt);
+  process.off('SIGTERM', terminate);
   const saved = session.path && !session.dirty ? ` · ${session.path}` : '';
   const paint = createPaint(process.stdout);
   process.stdout.write(`${paint.accent('▍')}${paint.bold('GLEECH')}${paint.muted(saved)}\n`);
