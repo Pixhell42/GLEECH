@@ -6,6 +6,7 @@ directories:
   output: release
 files:
   - out/**
+  - '!out/ffmpeg{,/**}'
   - package.json
 asar: true
 asarUnpack:
