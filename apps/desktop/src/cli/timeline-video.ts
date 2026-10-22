@@ -37,6 +37,7 @@ export function cliVideoSource(clip: VideoClip, ffmpeg: FfmpegLocator, signal?: 
       path,
       ['-hide_banner', '-nostdin', '-i', ffmpegInput(clip.path)],
       30000,
+      signal,
     );
     check();
     const info = parseFfmpegProbe(result.stderr);
