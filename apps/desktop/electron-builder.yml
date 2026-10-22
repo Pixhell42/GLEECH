@@ -43,7 +43,11 @@ extraResources:
 # Shared workspace packages are bundled by Vite into the renderer.
 npmRebuild: false
 win:
+  # Keep the app allowlist here too: platform filters form a separate matcher.
   files:
+    - out/**
+    - '!out/ffmpeg{,/**}'
+    - package.json
     - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/**'
     - '!**/onnxruntime-node/bin/napi-v6/win32/arm64/**'
@@ -63,6 +67,9 @@ mac:
     - from: out/mac-native-notices
       to: mac-native-notices
   files:
+    - out/**
+    - '!out/ffmpeg{,/**}'
+    - package.json
     - '!**/onnxruntime-node/bin/napi-v6/win32/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/**'
     - '!**/onnxruntime-node-macos-x64/bin/napi-v6/win32/**'
@@ -79,6 +86,9 @@ linux:
     - from: out/linux-native-notices
       to: linux-native-notices
   files:
+    - out/**
+    - '!out/ffmpeg{,/**}'
+    - package.json
     - '!**/onnxruntime-node/bin/napi-v6/win32/**'
     - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/arm64/**'
