@@ -66,7 +66,7 @@ and WebGL2 availability; `--renderer cpu` skips probing.
 Imported WGSL and supported single-pass ISF shaders run through the desktop's
 WebGPU and WebGL2 implementations. They remain embedded in projects/presets,
 including original creator/license metadata. Browse `gleech shaders`; add one
-with repeatable `--shader <name|local file>` or press `t` in the TUI.
+with repeatable `--shader <name|local file>` or press `Shift+T` in the TUI.
 Raw imports use the same parser/subset as the desktop. No URL fetching is added.
 
 ```sh
@@ -220,35 +220,70 @@ shows every exported pixel. Drag the preview to pan, or press `f` for focus
 mode (panels hidden) and pan with the arrow keys. `O` renders the full image and
 opens it in your system's image viewer.
 
-| Keys                      | Action                                              |
-| ------------------------- | --------------------------------------------------- |
-| `↑↓` `j k`                | select layer / parameter                            |
-| `tab` `⏎` `esc`           | move between stack and inspector                    |
-| `space`                   | toggle a layer                                      |
-| `⇧↑ ⇧↓` `J K`             | move a layer                                        |
-| `← →` (`⇧` for big steps) | adjust the selected parameter                       |
-| `⏎` on a parameter        | type an exact value                                 |
-| `⌫`                       | reset the parameter to its default                  |
-| `a` / `p`                 | add an effect / apply a preset                      |
-| `g` / `G`                 | roll a GLEECH / GLEECH options                      |
-| `r` `l` `D` `d`           | reseed, lock, duplicate, delete a layer             |
-| `u` `U` (`^z` `^y`)       | undo / redo                                         |
-| `v` / `f`                 | compare with the original / focus preview           |
-| `z` `Z` / `O`             | zoom, fit / open full res in your viewer            |
-| `n` `[` `]`               | new, previous, next master seed                     |
-| `e` / `s` `S` / `o`       | export / save (as) `.gleech` / open                 |
-| `b` / `t`                 | Cycle Auto/GPU/CPU / add a local or library shader. |
-| `?` / `q`                 | all keys / quit                                     |
+| Keys                      | Action                                                     |
+| ------------------------- | ---------------------------------------------------------- |
+| `↑↓` `j k`                | select layer / parameter                                   |
+| `tab` `⏎` `esc`           | move between stack and inspector                           |
+| `space`                   | toggle a layer                                             |
+| `⇧↑ ⇧↓` `J K`             | move a layer                                               |
+| `← →` (`⇧` for big steps) | adjust the selected parameter                              |
+| `⏎` on a parameter        | type an exact value                                        |
+| `⌫`                       | reset the parameter to its default                         |
+| `a` / `p`                 | add an effect / apply a preset                             |
+| `g` / `G`                 | roll a GLEECH / GLEECH options                             |
+| `r` `l` `D` `d`           | reseed, lock, duplicate, delete a layer                    |
+| `u` `U` (`^z` `^y`)       | undo / redo                                                |
+| `v` / `f`                 | compare with the original / focus preview                  |
+| `z` `Z` / `O`             | zoom, fit / open full res in your viewer                   |
+| `n` `[` `]`               | new, previous, next master seed                            |
+| `e` / `s` `S` / `o`       | export / save (as) `.gleech` / open                        |
+| `b` / `Shift+T`           | Cycle Auto/GPU/CPU / add a local or library shader.        |
+| `t`                       | Switch image / timeline mode; create a timeline if needed. |
+| `?` / `q`                 | all keys / quit                                            |
 
 The mouse works too: click layers and their on/off dots, click or drag sliders,
 click choices to cycle them and scroll lists. Slider gestures group into one
 Undo step, as they do in the app.
 
+### Timelines
+
+Open a saved timeline with `gleech tui animation.gleech`. The TUI opens in
+timeline mode and evaluates saved keys, active ranges, modulation and animated
+seeds through the same runner as desktop and CLI exports. External video clips
+stream through FFmpeg and hold their last frame after the clip ends.
+
+Press `t` (without Shift) to switch between image and timeline mode. On an image
+without a timeline, `t` creates a default timeline that you can undo or save. Use `tab` to
+cycle between stack, inspector and timeline; the footer shows the focused
+panel's controls. With the timeline focused:
+
+- `space` plays or pauses; `← →` step one frame, `⇧← ⇧→` step one second.
+- `home` / `end` seek to the first / last frame; `g` enters a time in seconds.
+  Click or drag the timeline rail to scrub, or scroll over it to step frames.
+- `i` / `o` set In / Out, including the displayed frame at Out. `w` copies
+  In / Out to the work area; `W` clears it. `r` cycles the available ranges and
+  `L` toggles looping. Playback follows the selected range.
+
+Playback is silent and samples exact project frames at up to 15 FPS. Complex
+stacks may play more slowly. Seeking and playback leave project history alone;
+range and loop edits support undo. The rail shows markers and the selected
+effect's saved keyframes.
+
+In timeline mode, `e` opens export settings for MP4, GIF or a PNG sequence.
+Choose the range, FPS, width, audio and output path with arrows / `tab`, then
+press Enter on Render. MP4 can include the saved audio track and clip sound;
+GIF and PNG are silent. Exports use the chosen FPS at full output resolution.
+Existing output requires a second Enter to replace; Escape cancels an active
+export and preserves prior output. `E` exports the current frame as an image,
+and `O` opens that frame at full resolution in your image viewer. Switch to
+image mode with `t` to preview or export the base image stack. `Shift+T` opens
+Add Shader in either mode.
+
 ## Limits
 
-- Interactive clip playback and keyframe/modulator editing currently require
-  the desktop app. The TUI still previews and exports the base image stack;
-  CLI timeline animation exports use the explicit `render --timeline` mode.
+- Creating and editing keyframes, modulators, clip/audio attachments, timeline
+  duration and project FPS still require the desktop app. The TUI plays and
+  exports saved animation and edits playback ranges; its preview is silent.
 - CPU fallback applies to built-in effects. Imported shaders require their GPU
   backend or explicit skipping. Unsupported imported shader programs fail clearly.
 - Reading JPEG/WebP and writing JPEG/WebP/TIFF, the JPEG Recompression effect and
