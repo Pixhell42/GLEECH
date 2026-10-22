@@ -89,10 +89,21 @@ other October 21 Node fixes. Recheck upstream release/backport evidence before
 publication; the toolchain update alone does not close embedded-runtime review.
 
 The production npm audit on this dependency set reports zero advisories; it
-does not audit Electron's embedded Node/Chromium. The full npm audit still
-reports Vite 7.3.6 development-tool advisories (patched in 7.3.7), alongside the
-two packaging-tool advisories reviewed below. Those are separate from this
-Node/Electron update and must remain visible in release review.
+does not audit Electron's embedded Node/Chromium. The initial full audit also
+identified Vite 7.3.6 development-tool advisories, addressed by the follow-up
+below. The two packaging-tool advisories reviewed later remain outstanding.
+
+## Vite security update — 2026-10-22
+
+Vite is pinned to [7.3.7](https://github.com/vitejs/vite/releases/tag/v7.3.7),
+with matching lockfile resolutions for the desktop build, React plugin,
+Electron build tooling and Vitest. A frozen-lockfile install succeeds, and the
+full dependency audit no longer reports the five Vite advisories identified
+during the Node/Electron review.
+
+The follow-up production audit reports zero advisories. The full audit reports
+only the existing packaging-tool findings: high-severity `http-cache-semantics`
+and moderate-severity `sprintf-js`, neither with a published patched version.
 
 ## Dependency audit baseline — 2026-10-14
 
