@@ -42,7 +42,7 @@ See [Known Issues](docs/KNOWN_ISSUES.md) for current bugs and areas being tuned.
 ### macOS (Intel and Apple Silicon)
 
 The experimental macOS build targets the build machine's architecture and includes local MCP over a Unix socket.
-Use Node.js **22.16.0** and pnpm **10.11.1**, then:
+Use Node.js **22.23.4** and pnpm **10.11.1**, then:
 
 ```sh
 corepack enable
@@ -63,7 +63,7 @@ your client. MCP starts Off on every launch. See [Mac setup and Resolve workflow
 
 ### Linux x64
 
-Use Node.js **22.16.0** and pnpm **10.11.1**:
+Use Node.js **22.23.4** and pnpm **10.11.1**:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -76,7 +76,7 @@ native testing and the current portability limits.
 
 ### Windows
 
-Use Windows PowerShell, Node.js **22.16.0** and pnpm **10.11.1**.
+Use Windows PowerShell, Node.js **22.23.4** and pnpm **10.11.1**.
 
 ```powershell
 pnpm install --frozen-lockfile

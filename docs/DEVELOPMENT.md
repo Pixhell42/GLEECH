@@ -2,7 +2,7 @@
 
 ## Supported baseline
 
-Windows x64, Node.js 22.16.0 (`.node-version`), pnpm 10.11.1 (`packageManager`).
+Windows x64, Node.js 22.23.4 (`.node-version`), pnpm 10.11.1 (`packageManager`).
 Use PowerShell. The current Electron/React/Sharp/ONNX Runtime versions are pinned
 in the workspace manifests and `pnpm-lock.yaml`. Packaged apps include their runtime.
 Sharp and ONNX Runtime use Windows prebuilt binaries; the standard checkout does
