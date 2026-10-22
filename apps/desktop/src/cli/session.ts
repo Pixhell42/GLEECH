@@ -14,6 +14,7 @@ import { decodeProject, encodeProject, type SavedAsset } from '../main/project-f
 import { decodeImageBytes, encodeImage, type RgbaImage } from './codec';
 import { draftFor, renderHeadless, type HeadlessRenderResult } from './engine';
 import { loadOnnx, loadSharp, sampleImagePath, subjectModelPath } from './runtime';
+import { resolveTimelineMedia } from './timeline-project';
 
 interface Asset {
   png?: ArrayBuffer;
@@ -90,7 +91,7 @@ export class Session {
         png: saved.png,
         ...(saved.subject ? { subject: Promise.resolve(saved.subject) } : {}),
       });
-    const session = new Session(project, map, path);
+    const session = new Session(path ? resolveTimelineMedia(project, path) : project, map, path);
     session.dirty = false;
     return session;
   }
@@ -109,10 +110,9 @@ export class Session {
     return asset;
   }
 
-  async sourceImage(): Promise<RgbaImage> {
-    const source = this.state.source;
-    if (!source) throw new Error('This project has no source image.');
-    const asset = this.asset(source.id);
+  async sourceImage(sourceId = this.state.source?.id): Promise<RgbaImage> {
+    if (!sourceId) throw new Error('This project has no source image.');
+    const asset = this.asset(sourceId);
     if (!asset.image) {
       if (!asset.png) throw new Error('The project source image is missing.');
       asset.image = (await decodeImageBytes(new Uint8Array(asset.png))).image;
@@ -120,12 +120,11 @@ export class Session {
     return asset.image;
   }
 
-  subject(): Promise<SubjectMask> {
-    const source = this.state.source;
-    if (!source) return Promise.reject(new Error('Open an image first.'));
-    const asset = this.asset(source.id);
+  subject(sourceId = this.state.source?.id): Promise<SubjectMask> {
+    if (!sourceId) return Promise.reject(new Error('Open an image first.'));
+    const asset = this.asset(sourceId);
     if (!asset.subject) {
-      asset.subject = this.sourceImage().then(detectSubject);
+      asset.subject = this.sourceImage(sourceId).then(detectSubject);
       asset.subject.catch(() => delete asset.subject);
     }
     return asset.subject;
@@ -135,10 +134,10 @@ export class Session {
   async render(isCancelled?: () => boolean): Promise<HeadlessRenderResult> {
     const state = this.state;
     return renderHeadless({
-      source: await this.sourceImage(),
+      source: await this.sourceImage(state.source?.id),
       effects: state.effects,
       masterSeed: state.masterSeed,
-      subject: () => this.subject(),
+      subject: () => this.subject(state.source?.id),
       ...(isCancelled ? { isCancelled } : {}),
     });
   }
@@ -146,7 +145,7 @@ export class Session {
   /** Reduced draft render that keeps field placement aligned with the full image. */
   async preview(maxDimension: number, isCancelled?: () => boolean): Promise<HeadlessRenderResult> {
     const state = this.state;
-    const source = await this.sourceImage();
+    const source = await this.sourceImage(state.source?.id);
     let cached = this.drafts.get(maxDimension);
     if (!cached || cached.source !== source) {
       cached = { source, draft: draftFor(source, maxDimension) };
@@ -159,7 +158,7 @@ export class Session {
       previewMaxDimension: maxDimension,
       effects: state.effects,
       masterSeed: state.masterSeed,
-      subject: () => this.subject(),
+      subject: () => this.subject(state.source?.id),
       ...(isCancelled ? { isCancelled } : {}),
     });
   }
