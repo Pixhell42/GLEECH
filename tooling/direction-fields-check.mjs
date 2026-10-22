@@ -132,7 +132,10 @@ try {
             });
           });
           if (reply.kind !== 'success') throw new Error(reply.error);
-          return [...new Uint8Array(reply.image.pixels)];
+          return {
+            pixels: [...new Uint8Array(reply.image.pixels)],
+            shaderBackend: reply.image.shaderBackend,
+          };
         },
         {
           worker: `assets/${worker}`,
@@ -149,7 +152,26 @@ try {
           layerImages: new Map([['test-vector', decoded]]),
         }).pixels,
       );
-      assert.deepEqual(actual, [...expected], `${type}/${source}`);
+      if (actual.shaderBackend === 'webgpu' && type.startsWith('shader-')) {
+        // Match the shader suites' CPU/GPU tolerance for floating-point rounding.
+        let visible = 0,
+          alpha = 0;
+        for (let i = 0; i < expected.length; i += 4) {
+          alpha = Math.max(alpha, Math.abs(expected[i + 3] - actual.pixels[i + 3]));
+          for (let c = 0; c < 3; c++)
+            visible = Math.max(
+              visible,
+              Math.abs(
+                (expected[i + c] * expected[i + 3]) / 255 -
+                  (actual.pixels[i + c] * actual.pixels[i + 3]) / 255,
+              ),
+            );
+        }
+        assert.ok(
+          visible <= 3 && alpha <= 1,
+          `${type}/${source}: visible ${visible}, alpha ${alpha}`,
+        );
+      } else assert.deepEqual(actual.pixels, [...expected], `${type}/${source}`);
       cases++;
     }
     console.log(JSON.stringify({ type, cases }));
