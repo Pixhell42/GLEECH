@@ -62,6 +62,38 @@ Passing development checks does not publish a release.
       masks, local MCP and uninstall without deleting artwork/projects unexpectedly.
 - [ ] Publish source and binaries only after final review/approval.
 
+## Runtime security review — 2026-10-21
+
+The build/CI Node.js baseline is 22.23.4, including the workspace engine minimum
+and all workflows that read `.node-version`. This is the
+[October 21 security release](https://nodejs.org/en/blog/release/v22.23.4/),
+covering DNS input validation, TLS hostname checks, Brotli decoding, HTTP agent
+handling, snapshot randomness and the permission model.
+
+Packaged desktop, CLI/TUI and MCP processes use Electron's embedded Node.js,
+independently of the build machine's Node. Electron is pinned to
+[44.9.3](https://releases.electronjs.org/release/v44.9.3), which includes upstream
+Chromium/V8 fixes and still reports Node.js 24.22.0. Its tagged source also
+contains a
+[Node TLS certificate-blocklist backport](https://github.com/electron/electron/blob/v44.9.3/patches/node/tls_reject_chains_containing_blocked_public_keys.patch)
+that rejects chains containing blocked public keys.
+
+This does **not** establish coverage of every fix in
+[Node.js 24.22.1](https://nodejs.org/en/blog/release/v24.22.1/). A loopback-only
+`dns.Resolver.resolve4` probe with an embedded NUL confirms that standalone
+22.23.4 rejects the name synchronously with `ERR_INVALID_ARG_VALUE`, while
+Electron 44.9.3 still attempts DNS resolution. The DNS input-validation fix
+(CVE-2026-105482) therefore remains outstanding in this embedded runtime.
+Electron's public release notes and tagged Node patch list did not confirm the
+other October 21 Node fixes. Recheck upstream release/backport evidence before
+publication; the toolchain update alone does not close embedded-runtime review.
+
+The production npm audit on this dependency set reports zero advisories; it
+does not audit Electron's embedded Node/Chromium. The full npm audit still
+reports Vite 7.3.6 development-tool advisories (patched in 7.3.7), alongside the
+two packaging-tool advisories reviewed below. Those are separate from this
+Node/Electron update and must remain visible in release review.
+
 ## Dependency audit baseline — 2026-10-14
 
 The production `pnpm audit --prod` scan reported zero known advisories.

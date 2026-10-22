@@ -1,7 +1,7 @@
 # GLEECH on macOS
 
 The experimental macOS build targets Intel or Apple Silicon, matching the native
-Node.js architecture. Use Node.js 22.16.0 and pnpm 10.11.1:
+Node.js architecture. Use Node.js 22.23.4 and pnpm 10.11.1:
 
 ```sh
 corepack enable
