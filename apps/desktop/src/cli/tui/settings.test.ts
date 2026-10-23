@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createTuiSettings, terminalSettingsText } from './settings';
@@ -29,6 +29,23 @@ const release: UpdateRelease = {
 };
 
 describe('terminal Settings', () => {
+  it('opens bundled licenses from a configured resource folder with spaces and Unicode', async () => {
+    const root = await folder();
+    const resources = join(root, 'portable resources ü #1');
+    await mkdir(resources);
+    await writeFile(join(resources, 'LICENSE.GLEECH.txt'), 'bundled license');
+    const open = vi.fn<(destination: string) => Promise<void>>(async () => {});
+    const settings = createTuiSettings({ folder: root, resources, open });
+    await settings.ready;
+    for (const action of settings.actions('About').slice(1)) await action.run();
+    expect(open.mock.calls.map((call) => call[0])).toEqual([
+      join(resources, 'LICENSE.GLEECH.txt'),
+      join(resources, 'THIRD_PARTY_NOTICES.md'),
+      join(resources, 'licenses'),
+    ]);
+    expect(await readFile(join(resources, 'LICENSE.GLEECH.txt'), 'utf8')).toBe('bundled license');
+    settings.dispose();
+  });
   it('persists opt-out and dismissal without altering desktop settings or user libraries', async () => {
     const root = await folder();
     for (const name of ['updates.json', 'presets.json', 'shaders.json', 'recent-projects.json'])

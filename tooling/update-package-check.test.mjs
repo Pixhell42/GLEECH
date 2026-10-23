@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, test } from 'node:test';
-import { verifyUpdatePackage } from './update-package-check.mjs';
+import { verifyUpdatePackage } from './update-package-verifier.mjs';
 
 const folders = [];
 const output = resolve('test-results');
