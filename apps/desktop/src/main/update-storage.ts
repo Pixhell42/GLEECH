@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
-import { dirname, join, isAbsolute } from 'node:path';
+import { constants } from 'node:fs';
+import { lstat, mkdir, open, rename, unlink } from 'node:fs/promises';
+import { basename, dirname, isAbsolute } from 'node:path';
 import type { UpdatePreferences, UpdateSessionOptions } from '../shared/updates';
+import { updateChildPath } from './update-path';
 
-export async function atomicUpdateWrite(path: string, data: string | Buffer): Promise<void> {
+async function atomicUpdateWrite(
+  folder: string,
+  name: string,
+  data: string | Buffer,
+): Promise<void> {
+  const path = updateChildPath(folder, name);
   await mkdir(dirname(path), { recursive: true });
-  const temporary = `${path}.${randomUUID()}.tmp`;
+  const temporary = updateChildPath(folder, `${name}.${randomUUID()}.tmp`);
   try {
     const file = await open(temporary, 'wx', 0o600);
     try {
@@ -20,9 +27,17 @@ export async function atomicUpdateWrite(path: string, data: string | Buffer): Pr
   }
 }
 
-async function readJson(path: string): Promise<unknown> {
+async function openUpdateFile(folder: string, name: string) {
+  const path = updateChildPath(folder, name);
+  const info = await lstat(path);
+  if (!info.isFile() || info.isSymbolicLink())
+    throw new Error('Update data must be a regular file, not a link.');
+  return open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+}
+
+async function readJson(folder: string, name: string): Promise<unknown> {
   try {
-    const file = await open(path, 'r');
+    const file = await openUpdateFile(folder, name);
     try {
       if ((await file.stat()).size > 1024 * 1024) throw new Error('Update settings are too large.');
       return JSON.parse(await file.readFile('utf8'));
@@ -40,6 +55,10 @@ export function createUpdatePreferenceStore(
   version: string,
   showFirstLaunchNotes = true,
 ) {
+  const folder = dirname(path);
+  const name = basename(path);
+  if (!['updates.json', 'tui-updates.json'].includes(name))
+    throw new Error('Invalid update preferences filename.');
   let writes = Promise.resolve();
   return {
     async load(): Promise<UpdatePreferences> {
@@ -49,7 +68,7 @@ export function createUpdatePreferenceStore(
         lastSeenVersion: showFirstLaunchNotes ? '' : version,
         pendingNotes: null,
       };
-      const value = await readJson(path);
+      const value = await readJson(folder, name);
       if (value === null) return defaults;
       const item = value as Partial<UpdatePreferences>;
       if (
@@ -68,7 +87,7 @@ export function createUpdatePreferenceStore(
     },
     save(value: UpdatePreferences) {
       const data = JSON.stringify(value);
-      const next = writes.catch(() => {}).then(() => atomicUpdateWrite(path, data));
+      const next = writes.catch(() => {}).then(() => atomicUpdateWrite(folder, name, data));
       writes = next;
       return next;
     },
@@ -81,10 +100,10 @@ export interface StoredUpdateSession extends UpdateSessionOptions {
 }
 
 export function createUpdateSessionStore(folder: string) {
-  const manifest = join(folder, 'session.json');
-  const fileFor = (id: string) => {
+  const manifest = updateChildPath(folder, 'session.json');
+  const nameFor = (id: string) => {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid update session.');
-    return join(folder, `${id}.gleech`);
+    return `${id}.gleech`;
   };
   return {
     async save(
@@ -93,18 +112,18 @@ export function createUpdateSessionStore(folder: string) {
       options: UpdateSessionOptions,
     ): Promise<string> {
       const id = randomUUID();
-      if (bytes) await atomicUpdateWrite(fileFor(id), bytes);
+      if (bytes) await atomicUpdateWrite(folder, nameFor(id), bytes);
       const metadata: StoredUpdateSession & { hasProject: boolean } = {
         id,
         documentPath,
         ...options,
         hasProject: Boolean(bytes),
       };
-      await atomicUpdateWrite(manifest, JSON.stringify(metadata));
+      await atomicUpdateWrite(folder, 'session.json', JSON.stringify(metadata));
       return id;
     },
     async read(): Promise<(StoredUpdateSession & { path: string | null }) | null> {
-      const value = await readJson(manifest);
+      const value = await readJson(folder, 'session.json');
       if (value === null) return null;
       const item = value as StoredUpdateSession & { hasProject: boolean };
       if (
@@ -120,14 +139,18 @@ export function createUpdateSessionStore(folder: string) {
         item.playhead < 0
       )
         throw new Error('The update recovery session is invalid.');
-      const path = fileFor(item.id);
+      const path = updateChildPath(folder, nameFor(item.id));
+      if (item.hasProject) {
+        const file = await openUpdateFile(folder, nameFor(item.id));
+        await file.close();
+      }
       return { ...item, path: item.hasProject ? path : null };
     },
     async acknowledge(id: string): Promise<void> {
       const item = await this.read();
       if (item?.id !== id) throw new Error('This update session is no longer current.');
       await unlink(manifest);
-      await unlink(fileFor(id)).catch((error) => {
+      await unlink(updateChildPath(folder, nameFor(id))).catch((error) => {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       });
     },
@@ -135,7 +158,10 @@ export function createUpdateSessionStore(folder: string) {
       const item = await this.read();
       if (item?.id !== id)
         throw new Error('Save the current session before installing the update.');
-      if (item.path) await readFile(item.path);
+      if (item.path) {
+        const file = await openUpdateFile(folder, nameFor(id));
+        await file.close();
+      }
     },
   };
 }
