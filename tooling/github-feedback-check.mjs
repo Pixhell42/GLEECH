@@ -6,7 +6,7 @@ import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
 import { fileAction } from './file-action.mjs';
 
-const exe = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
+const exe = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const cpu = process.argv.includes('--cpu');
 const configuredClient = process.argv.includes('--configured-client');
 const expectedClientId = configuredClient
@@ -38,6 +38,10 @@ async function launch() {
   });
   const page = await app.firstWindow();
   await page.getByRole('heading', { name: 'GLEECH.', exact: true }).waitFor();
+  if (process.argv.includes('--fixture-no-keyring'))
+    await app.evaluate(({ safeStorage }) => {
+      safeStorage.isEncryptionAvailable = () => false;
+    });
   await app.evaluate(({ shell, clipboard, BrowserWindow }, expectedClientId) => {
     globalThis.__feedbackLinks = [];
     globalThis.__feedbackClipboard = [];
@@ -83,6 +87,13 @@ async function launch() {
         url === 'https://api.github.com/repos/Pixhell42/GLEECH/issues' &&
         init?.method === 'POST'
       ) {
+        if (globalThis.__holdFeedbackPost) {
+          globalThis.__feedbackPostWaiting = true;
+          await new Promise((resolve) => {
+            globalThis.__releaseFeedbackPost = resolve;
+          });
+          globalThis.__holdFeedbackPost = false;
+        }
         globalThis.__feedbackPostAttempts++;
         if (globalThis.__feedbackPostAttempts === 1)
           return reply({ message: 'Fixture permission error' }, 403);
@@ -100,127 +111,194 @@ async function launch() {
   }, expectedClientId);
   return { app, page };
 }
-let instance = await launch();
-const errors = [];
-try {
-  let { app, page } = instance;
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.getByRole('button', { name: 'Try sample image', exact: true }).click();
-  await page.getByRole('button', { name: 'Add effect', exact: true }).click();
-  await page
-    .locator('.effect-picker')
-    .getByRole('button', { name: 'Bit crush', exact: true })
-    .click();
-  await page.locator('.toolbar').getByRole('button', { name: 'Feedback', exact: true }).click();
-  let dialog = page.getByRole('dialog');
-  const title = dialog.getByRole('textbox', { name: 'Report title', exact: true });
-  const description = dialog.getByRole('textbox', { name: 'Report description', exact: true });
-  await dialog.getByRole('checkbox', { name: 'Attach effect stack and seed', exact: true }).check();
-  await title.fill('Fixture preview bug');
-  await description.fill('The preview behaves unexpectedly.');
-  await dialog.locator('.feedback-extra summary').click();
-  await dialog
-    .getByRole('textbox', { name: 'Steps to reproduce', exact: true })
-    .fill('Open sample and change a setting.');
-  await dialog
-    .getByRole('textbox', { name: 'Expected behavior', exact: true })
-    .fill('Show the edited preview.');
-  assert.equal(
-    await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).isEnabled(),
-    false,
-  );
-  await dialog.getByRole('button', { name: 'Sign in with GitHub', exact: true }).click();
-  await dialog.getByText('ABCD-EFGH', { exact: true }).waitFor();
-  await dialog.getByRole('button', { name: 'Copy Code', exact: true }).click();
-  assert.deepEqual(await app.evaluate(() => globalThis.__feedbackClipboard), ['ABCD-EFGH']);
-  await captureTestWindow(app, resolve(output, `${mode}-sign-in.png`));
-  await dialog.getByText('FixtureTester', { exact: true }).waitFor({ timeout: 20000 });
-  assert.deepEqual(await page.evaluate(() => window.gleech.feedbackStatus()), {
-    ok: true,
-    value: { configured: true, login: 'FixtureTester' },
-  });
-  await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).click();
-  await dialog.getByRole('alert').filter({ hasText: 'cannot create issues' }).waitFor();
-  assert.equal(await title.inputValue(), 'Fixture preview bug');
-  assert.equal(await description.inputValue(), 'The preview behaves unexpectedly.');
-  await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).click();
-  await dialog.getByRole('status').filter({ hasText: 'submitted as #42' }).waitFor();
-  await captureTestWindow(app, resolve(output, `${mode}-submitted.png`));
-  await dialog.getByRole('button', { name: 'View on GitHub', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
-  await fileAction(page, 'Feature Request');
-  await dialog.getByRole('textbox', { name: 'Report title', exact: true }).fill('Fixture feature');
-  await dialog
-    .getByRole('textbox', { name: 'Report description', exact: true })
-    .fill('Add an interesting control.');
-  await dialog.locator('.feedback-extra summary').click();
-  await dialog
-    .getByRole('textbox', { name: 'Problem or use case', exact: true })
-    .fill('Help editing.');
-  await dialog
-    .getByRole('textbox', { name: 'Suggested behavior', exact: true })
-    .fill('Make it adjustable.');
-  await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).click();
-  await dialog.getByRole('status').filter({ hasText: 'submitted as #43' }).waitFor();
-  const bodies = await app.evaluate(() => globalThis.__feedbackIssueBodies);
-  assert.equal(bodies.length, 2);
-  assert.equal(bodies[0].title, '[Bug] Fixture preview bug');
-  assert.ok(bodies[0].body.includes('### Steps to reproduce\n\nOpen sample and change a setting.'));
-  assert.ok(bodies[0].body.includes('OS: win32'));
-  assert.ok(bodies[0].body.includes('### Effect stack and seed'));
-  assert.ok(bodies[0].body.includes('"type": "bit-crush"'));
-  assert.ok(!bodies[0].body.includes('data:image/'));
-  assert.ok(!bodies[1].body.includes('### Effect stack and seed'));
-  assert.ok(!JSON.stringify(bodies).includes('fixture-private-token'));
-  assert.equal(bodies[1].title, '[Feature] Fixture feature');
-  assert.ok(bodies[1].body.includes('### Suggested behavior\n\nMake it adjustable.'));
-  assert.deepEqual(await app.evaluate(() => globalThis.__feedbackLinks), [
-    'https://github.com/login/device',
-    'https://github.com/Pixhell42/GLEECH/issues/42',
-  ]);
-  for (const number of [0, -1, 1.5, 'https://other.example'])
+async function checkFeedback() {
+  let instance = await launch();
+  const errors = [];
+  try {
+    let { app, page } = instance;
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.getByRole('button', { name: 'Try sample image', exact: true }).click();
+    await page.getByRole('button', { name: 'Add effect', exact: true }).click();
+    await page
+      .locator('.effect-picker')
+      .getByRole('button', { name: 'Bit crush', exact: true })
+      .click();
+    await fileAction(page, 'Bug Report');
+    let dialog = page.getByRole('dialog');
+    const title = dialog.getByRole('textbox', { name: 'Report title', exact: true });
+    const description = dialog.getByRole('textbox', { name: 'Report description', exact: true });
+    await dialog
+      .getByRole('checkbox', { name: 'Attach effect stack and seed', exact: true })
+      .check();
+    await title.fill('Fixture preview bug');
+    await description.fill('The preview behaves unexpectedly.');
+    await dialog.locator('.feedback-extra summary').click();
+    await dialog
+      .getByRole('textbox', { name: 'Steps to reproduce', exact: true })
+      .fill('Open sample and change a setting.');
+    await dialog
+      .getByRole('textbox', { name: 'Expected behavior', exact: true })
+      .fill('Show the edited preview.');
     assert.equal(
-      (await page.evaluate((number) => window.gleech.openFeedbackIssue(number), number)).ok,
+      await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).isEnabled(),
       false,
     );
-  const authPath = resolve(profile, 'feedback-github.bin');
-  const encrypted = await readFile(authPath);
-  assert.ok(!encrypted.toString().includes('fixture-private-token'));
-  await closeTestApp(app);
-  instance = await launch();
-  ({ app, page } = instance);
-  page.on('pageerror', (error) => errors.push(error.message));
-  await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0].setContentSize(960, 640),
-  );
-  await fileAction(page, 'Bug Report');
-  dialog = page.getByRole('dialog');
-  await dialog.getByText('FixtureTester', { exact: true }).waitFor();
-  assert.deepEqual(await app.evaluate(() => globalThis.__feedbackCalls), []);
-  assert.ok(await dialog.evaluate((n) => n.scrollWidth <= n.clientWidth + 1));
-  await page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  );
-  await captureTestWindow(app, resolve(output, `${mode}-minimum-form.png`));
-  await dialog.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await dialog.getByText('Connect GitHub to submit from GLEECH.', { exact: true }).waitFor();
-  await assert.rejects(access(authPath));
-  assert.equal((await page.evaluate(() => window.gleech.openFeedbackSignIn())).ok, false);
-  assert.equal((await page.evaluate(() => window.gleech.copyFeedbackSignInCode())).ok, false);
-  await dialog.getByRole('button', { name: 'Sign in with GitHub', exact: true }).click();
-  await dialog.getByText('ABCD-EFGH', { exact: true }).waitFor();
-  await dialog.getByRole('button', { name: 'Cancel Sign-in', exact: true }).click();
-  assert.equal((await page.evaluate(() => window.gleech.pollFeedbackSignIn())).ok, false);
-  assert.deepEqual(errors, []);
-  const result = {
-    mode,
-    simulatedIssues: bodies.length,
-    encryptedCredentialPersistence: true,
-    permissionRetry: true,
-    errors,
-  };
-  await writeFile(resolve(output, `${mode}-result.json`), JSON.stringify(result, null, 2));
-  console.log(JSON.stringify(result));
-} finally {
-  await closeTestApp(instance.app);
+    await dialog.getByRole('button', { name: 'Sign in with GitHub', exact: true }).click();
+    await dialog.getByText('ABCD-EFGH', { exact: true }).waitFor();
+    await dialog.getByRole('button', { name: 'Copy Code', exact: true }).click();
+    assert.deepEqual(await app.evaluate(() => globalThis.__feedbackClipboard), ['ABCD-EFGH']);
+    await captureTestWindow(app, resolve(output, `${mode}-sign-in.png`));
+    const secureStorage = await app.evaluate(
+      ({ safeStorage }) =>
+        safeStorage.isEncryptionAvailable() &&
+        (process.platform !== 'linux' ||
+          ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(
+            safeStorage.getSelectedStorageBackend(),
+          )),
+    );
+    if (!secureStorage && process.argv.includes('--allow-unavailable-keyring')) {
+      await dialog
+        .getByRole('alert')
+        .filter({ hasText: /[Ee]ncryption is unavailable/ })
+        .waitFor({ timeout: 20000 });
+      assert.equal(await title.inputValue(), 'Fixture preview bug');
+      assert.equal(await description.inputValue(), 'The preview behaves unexpectedly.');
+      assert.equal(
+        await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).isEnabled(),
+        false,
+      );
+      await assert.rejects(access(resolve(profile, 'feedback-github.bin')));
+      assert.deepEqual(await app.evaluate(() => globalThis.__feedbackIssueBodies), []);
+      assert.deepEqual(errors, []);
+      const result = {
+        mode,
+        simulatedIssues: 0,
+        unavailableKeyringBlocked: true,
+        draftRetained: true,
+        errors,
+      };
+      await writeFile(resolve(output, `${mode}-result.json`), JSON.stringify(result, null, 2));
+      console.log(JSON.stringify(result));
+      return;
+    }
+    await dialog.getByText('FixtureTester', { exact: true }).waitFor({ timeout: 20000 });
+    assert.deepEqual(await page.evaluate(() => window.gleech.feedbackStatus()), {
+      ok: true,
+      value: { configured: true, login: 'FixtureTester' },
+    });
+    await app.evaluate(() => {
+      globalThis.__holdFeedbackPost = true;
+    });
+    await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).click();
+    await app.evaluate(async () => {
+      const until = Date.now() + 10000;
+      while (!globalThis.__feedbackPostWaiting && Date.now() < until)
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      if (!globalThis.__feedbackPostWaiting) throw new Error('Feedback fixture was not reached.');
+    });
+    await dialog.locator('button[aria-label="Close settings"]:disabled').waitFor();
+    assert.equal(
+      await dialog.getByRole('button', { name: 'Close settings', exact: true }).isEnabled(),
+      false,
+    );
+    assert.equal(
+      await dialog
+        .getByRole('navigation')
+        .getByRole('button', { name: 'Donate', exact: true })
+        .isEnabled(),
+      false,
+    );
+    await page.keyboard.press('Escape');
+    assert.equal(await dialog.isVisible(), true);
+    await app.evaluate(() => globalThis.__releaseFeedbackPost());
+    await dialog.getByRole('alert').filter({ hasText: 'cannot create issues' }).waitFor();
+    assert.equal(await title.inputValue(), 'Fixture preview bug');
+    assert.equal(await description.inputValue(), 'The preview behaves unexpectedly.');
+    await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).click();
+    await dialog.getByRole('status').filter({ hasText: 'submitted as #42' }).waitFor();
+    await captureTestWindow(app, resolve(output, `${mode}-submitted.png`));
+    await dialog.getByRole('button', { name: 'View on GitHub', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+    await fileAction(page, 'Feature Request');
+    await dialog
+      .getByRole('textbox', { name: 'Report title', exact: true })
+      .fill('Fixture feature');
+    await dialog
+      .getByRole('textbox', { name: 'Report description', exact: true })
+      .fill('Add an interesting control.');
+    if (!(await dialog.locator('.feedback-extra').evaluate((node) => node.open)))
+      await dialog.locator('.feedback-extra summary').click();
+    await dialog
+      .getByRole('textbox', { name: 'Problem or use case', exact: true })
+      .fill('Help editing.');
+    await dialog
+      .getByRole('textbox', { name: 'Suggested behavior', exact: true })
+      .fill('Make it adjustable.');
+    await dialog.getByRole('button', { name: 'Submit to GitHub', exact: true }).click();
+    await dialog.getByRole('status').filter({ hasText: 'submitted as #43' }).waitFor();
+    const bodies = await app.evaluate(() => globalThis.__feedbackIssueBodies);
+    assert.equal(bodies.length, 2);
+    assert.equal(bodies[0].title, '[Bug] Fixture preview bug');
+    assert.ok(
+      bodies[0].body.includes('### Steps to reproduce\n\nOpen sample and change a setting.'),
+    );
+    assert.ok(bodies[0].body.includes(`OS: ${process.platform}`));
+    assert.ok(bodies[0].body.includes('### Effect stack and seed'));
+    assert.ok(bodies[0].body.includes('"type": "bit-crush"'));
+    assert.ok(!bodies[0].body.includes('data:image/'));
+    assert.ok(!bodies[1].body.includes('### Effect stack and seed'));
+    assert.ok(!JSON.stringify(bodies).includes('fixture-private-token'));
+    assert.equal(bodies[1].title, '[Feature] Fixture feature');
+    assert.ok(bodies[1].body.includes('### Suggested behavior\n\nMake it adjustable.'));
+    assert.deepEqual(await app.evaluate(() => globalThis.__feedbackLinks), [
+      'https://github.com/login/device',
+      'https://github.com/Pixhell42/GLEECH/issues/42',
+    ]);
+    for (const number of [0, -1, 1.5, 'https://other.example'])
+      assert.equal(
+        (await page.evaluate((number) => window.gleech.openFeedbackIssue(number), number)).ok,
+        false,
+      );
+    const authPath = resolve(profile, 'feedback-github.bin');
+    const encrypted = await readFile(authPath);
+    assert.ok(!encrypted.toString().includes('fixture-private-token'));
+    await closeTestApp(app);
+    instance = await launch();
+    ({ app, page } = instance);
+    page.on('pageerror', (error) => errors.push(error.message));
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].setContentSize(960, 640),
+    );
+    await fileAction(page, 'Bug Report');
+    dialog = page.getByRole('dialog');
+    await dialog.getByText('FixtureTester', { exact: true }).waitFor();
+    assert.deepEqual(await app.evaluate(() => globalThis.__feedbackCalls), []);
+    assert.ok(await dialog.evaluate((n) => n.scrollWidth <= n.clientWidth + 1));
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+    await captureTestWindow(app, resolve(output, `${mode}-minimum-form.png`));
+    await dialog.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await dialog.getByText('Connect GitHub to submit from GLEECH.', { exact: true }).waitFor();
+    await assert.rejects(access(authPath));
+    assert.equal((await page.evaluate(() => window.gleech.openFeedbackSignIn())).ok, false);
+    assert.equal((await page.evaluate(() => window.gleech.copyFeedbackSignInCode())).ok, false);
+    await dialog.getByRole('button', { name: 'Sign in with GitHub', exact: true }).click();
+    await dialog.getByText('ABCD-EFGH', { exact: true }).waitFor();
+    await dialog.getByRole('button', { name: 'Cancel Sign-in', exact: true }).click();
+    assert.equal((await page.evaluate(() => window.gleech.pollFeedbackSignIn())).ok, false);
+    assert.deepEqual(errors, []);
+    const result = {
+      mode,
+      simulatedIssues: bodies.length,
+      encryptedCredentialPersistence: true,
+      permissionRetry: true,
+      errors,
+    };
+    await writeFile(resolve(output, `${mode}-result.json`), JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result));
+  } finally {
+    await closeTestApp(instance.app);
+  }
 }
+await checkFeedback();

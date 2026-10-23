@@ -2,6 +2,12 @@ afterPack: build/after-pack.mjs
 beforePack: build/ffmpeg-before-pack.mjs
 appId: com.gleech.desktop
 productName: GLEECH
+publish:
+  provider: github
+  owner: Pixhell42
+  repo: GLEECH
+  channel: latest-${arch}
+  releaseType: draft
 directories:
   output: release
 files:
@@ -99,6 +105,7 @@ linux:
         - x64
   artifactName: GLEECH-${version}-linux-${arch}.${ext}
 nsis:
+  deleteAppDataOnUninstall: false
   installerIcon: resources/branding/icon-beta.ico
   uninstallerIcon: resources/branding/icon-beta.ico
   oneClick: false

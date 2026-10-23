@@ -109,6 +109,20 @@ To test a delivered package, substitute its AppImage path for the executable.
 `--require-webgpu` rejects CPU fallback; hosted CPU checks do not certify a
 particular Omarchy compositor or GPU driver.
 
+## Settings and terminal support
+
+The Settings feature branch includes the same inline Donate/Feedback screens,
+responsive QR views, LFO waveform icons and version notes as Windows. Installed
+AppImages update at their original path so CLI/TUI launchers and MCP paths stay
+valid. See [application updates](AUTOMATIC-UPDATES.md) for installation and recovery.
+
+The packaged CLI/TUI shares the terminal Settings panel (`,` or F2), update
+checks, support/community links, browser feedback forms and bundled license
+documents. Saved LFO shapes continue to play and export through the shared
+timeline runner. Native Linux CI runs the packaged update, donation and feedback
+checks. These changes remain separate from the previously frozen release
+candidates until integrated and revalidated.
+
 ## Optional Vulkan / WebGPU launch
 
 The default Chromium launch may not expose a WebGPU adapter on Linux even when

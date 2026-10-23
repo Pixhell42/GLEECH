@@ -220,26 +220,27 @@ shows every exported pixel. Drag the preview to pan, or press `f` for focus
 mode (panels hidden) and pan with the arrow keys. `O` renders the full image and
 opens it in your system's image viewer.
 
-| Keys                      | Action                                                     |
-| ------------------------- | ---------------------------------------------------------- |
-| `↑↓` `j k`                | select layer / parameter                                   |
-| `tab` `⏎` `esc`           | move between stack and inspector                           |
-| `space`                   | toggle a layer                                             |
-| `⇧↑ ⇧↓` `J K`             | move a layer                                               |
-| `← →` (`⇧` for big steps) | adjust the selected parameter                              |
-| `⏎` on a parameter        | type an exact value                                        |
-| `⌫`                       | reset the parameter to its default                         |
-| `a` / `p`                 | add an effect / apply a preset                             |
-| `g` / `G`                 | roll a GLEECH / GLEECH options                             |
-| `r` `l` `D` `d`           | reseed, lock, duplicate, delete a layer                    |
-| `u` `U` (`^z` `^y`)       | undo / redo                                                |
-| `v` / `f`                 | compare with the original / focus preview                  |
-| `z` `Z` / `O`             | zoom, fit / open full res in your viewer                   |
-| `n` `[` `]`               | new, previous, next master seed                            |
-| `e` / `s` `S` / `o`       | export / save (as) `.gleech` / open                        |
-| `b` / `Shift+T`           | Cycle Auto/GPU/CPU / add a local or library shader.        |
-| `t`                       | Switch image / timeline mode; create a timeline if needed. |
-| `?` / `q`                 | all keys / quit                                            |
+| Keys                      | Action                                                      |
+| ------------------------- | ----------------------------------------------------------- |
+| `↑↓` `j k`                | select layer / parameter                                    |
+| `tab` `⏎` `esc`           | move between stack and inspector                            |
+| `space`                   | toggle a layer                                              |
+| `⇧↑ ⇧↓` `J K`             | move a layer                                                |
+| `← →` (`⇧` for big steps) | adjust the selected parameter                               |
+| `⏎` on a parameter        | type an exact value                                         |
+| `⌫`                       | reset the parameter to its default                          |
+| `a` / `p`                 | add an effect / apply a preset                              |
+| `g` / `G`                 | roll a GLEECH / GLEECH options                              |
+| `r` `l` `D` `d`           | reseed, lock, duplicate, delete a layer                     |
+| `u` `U` (`^z` `^y`)       | undo / redo                                                 |
+| `v` / `f`                 | compare with the original / focus preview                   |
+| `z` `Z` / `O`             | zoom, fit / open full res in your viewer                    |
+| `n` `[` `]`               | new, previous, next master seed                             |
+| `e` / `s` `S` / `o`       | export / save (as) `.gleech` / open                         |
+| `b` / `Shift+T`           | Cycle Auto/GPU/CPU / add a local or library shader.         |
+| `t`                       | Switch image / timeline mode; create a timeline if needed.  |
+| `?` / `q`                 | all keys / quit                                             |
+| `,` / `F2`                | Settings: updates, donations, feedback, community and About |
 
 The mouse works too: click layers and their on/off dots, click or drag sliders,
 click choices to cycle them and scroll lists. Slider gestures group into one
@@ -278,6 +279,29 @@ export and preserves prior output. `E` exports the current frame as an image,
 and `O` opens that frame at full resolution in your image viewer. Switch to
 image mode with `t` to preview or export the base image stack. `Shift+T` opens
 Add Shader in either mode.
+
+### Settings and updates
+
+Press `,` or `F2` in either image or timeline mode to open Settings. Use `1`–`5`
+or the up/down arrows to select Updates, Donate, Feedback, Community or About.
+Tab or the right arrow moves into the actions; Enter activates one. Page Up/Down
+scrolls longer content, and Escape returns to the project. Settings pauses
+timeline playback without changing the project or playhead.
+
+Terminal update notifications are on by default. The TUI shares the desktop's
+GitHub release selection rules, checks after startup and every six hours, and
+supports manual checks, per-version dismissal and What's New notes. Its toggle
+is independent of desktop updates and is stored in `tui-updates.json` alongside
+the desktop user data. `GLEECH_USER_DATA` isolates it for tests or a separate
+terminal profile. It does not change presets, shader libraries or recent files.
+
+Downloads and installation use the desktop updater or the release page. Save TUI
+work before installing. The TUI does not replace application binaries during a
+terminal session. Donate exposes the same payment destinations and support links;
+Feedback opens the bug/feature form in your browser for review and submission.
+Community opens Discord, and About includes the version, repository and bundled
+license documents. QR codes and waveform buttons remain desktop UI. Saved LFOs
+of all five shapes continue to play and export through the shared timeline runner.
 
 ## Limits
 

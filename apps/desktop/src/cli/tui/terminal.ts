@@ -49,6 +49,7 @@ const TILDE_KEYS: Record<string, string> = {
   '6': 'pagedown',
   '7': 'home',
   '8': 'end',
+  '12': 'f2',
   '15': 'f5',
 };
 
