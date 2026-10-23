@@ -6,6 +6,12 @@ Publication requires final maintainer approval after the gates below pass.
 
 ## What changes from 0.1.2
 
+The separate `codex/settings-and-auto-updates` branch adds compact LFO waveform
+icons, a Settings window and GitHub update downloads with session recovery and
+once-per-version patch notes. These features are not part of the previously frozen
+candidate binaries. See [automatic updates](AUTOMATIC-UPDATES.md) for platform
+behavior, release metadata and acceptance requirements before including the branch.
+
 - **Desktop timelines:** animate effect controls with keyframes, easing and
   Bezier curves, audio analysis and LFOs. Scrub external video, mix audio, set
   effect ranges and animated seeds, and export movies, GIFs, PNG sequences and

@@ -62,6 +62,8 @@ import {
   presetThumbnailBytes,
 } from './preset-file';
 import { decodeSettings, encodeSettings } from '@gleech/command-service';
+import { createUpdateSessionStore } from './update-storage';
+import type { UpdateSessionOptions } from '../shared/updates';
 
 interface Asset {
   source: ImageSource;
@@ -117,6 +119,7 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
   }
   const assets = new Map<string, Asset>();
   const documents = new Map<string, string>();
+  const updateSessions = createUpdateSessionStore(join(app.getPath('userData'), 'update-recovery'));
   const batchAssets = new Map<string, Map<number, string>>();
   const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
   const worker = new Worker(join(__dirname, 'image-worker.js'));
@@ -343,7 +346,7 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
       throw error;
     }
   });
-  async function openProjectPath(path: string) {
+  async function openProjectPath(path: string, remember = true) {
     const file = await open(path, 'r');
     let saved;
     try {
@@ -407,7 +410,11 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
     };
     assertProject(project);
     for (const { asset } of prepared.values()) assets.set(asset.source.id, asset);
-    const document = { id: randomUUID(), name: basename(path), ...(await rememberProject(path)) };
+    const document = {
+      id: randomUUID(),
+      name: basename(path),
+      ...(remember ? await rememberProject(path) : {}),
+    };
     documents.set(document.id, path);
     return {
       project,
@@ -436,6 +443,51 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
     }
     return encodeProject(value, encoded);
   }
+  handle('updates:prepare-session', async (value, documentId, input) => {
+    if (documentId !== null && (typeof documentId !== 'string' || !documents.has(documentId)))
+      throw new Error('Invalid project document.');
+    const options = input as UpdateSessionOptions | null;
+    if (
+      !options ||
+      typeof options.dirty !== 'boolean' ||
+      !['image', 'timeline'].includes(options.mode) ||
+      !Number.isFinite(options.playhead) ||
+      options.playhead < 0
+    )
+      throw new Error('Invalid update session.');
+    const bytes = value === null ? null : await projectBytes(value);
+    return updateSessions.save(
+      bytes,
+      documentId === null ? null : documents.get(documentId as string)!,
+      { dirty: options.dirty, mode: options.mode, playhead: options.playhead },
+    );
+  });
+  handle('updates:restore-session', async () => {
+    const session = await updateSessions.read();
+    if (!session) return null;
+    if (!session.path) {
+      await updateSessions.acknowledge(session.id);
+      return null;
+    }
+    const opened = await openProjectPath(session.path, false);
+    documents.delete(opened.document.id);
+    if (session.documentPath) {
+      documents.set(opened.document.id, session.documentPath);
+      opened.document.name = basename(session.documentPath);
+    }
+    return {
+      ...opened,
+      document: session.documentPath ? opened.document : null,
+      sessionId: session.id,
+      dirty: session.dirty,
+      mode: session.mode,
+      playhead: session.playhead,
+    };
+  });
+  handle('updates:finish-restore', async (id) => {
+    if (typeof id !== 'string') throw new Error('Invalid update session.');
+    await updateSessions.acknowledge(id);
+  });
   handle('mcp:read-file', async (dispatchId) => {
     if (typeof dispatchId !== 'string') throw new Error('Invalid MCP operation.');
     const request = mcpAccess.request(dispatchId);

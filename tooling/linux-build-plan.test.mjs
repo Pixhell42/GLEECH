@@ -90,7 +90,7 @@ test('Linux artifact upload requires native, advisory, code, actual AppImage and
   assert.ok(native < steps.findIndex((step) => step.run?.includes('pnpm install')));
 });
 
-test('Linux CI keeps tokens read-only, actions pinned and uploads only three deliverables', () => {
+test('Linux CI keeps tokens read-only, actions pinned and uploads only reviewed deliverables', () => {
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.equal(workflow.jobs.build.permissions, undefined);
   const steps = workflow.jobs.build.steps;
@@ -103,6 +103,8 @@ test('Linux CI keeps tokens read-only, actions pinned and uploads only three del
     '${{ steps.package.outputs.appimage }}',
     'apps/desktop/release/linux-build-x64.json',
     'apps/desktop/release/SHA256SUMS-linux-x64.txt',
+    'apps/desktop/release/latest-x64-linux.yml',
+    'apps/desktop/release/*.blockmap',
   ]);
 });
 

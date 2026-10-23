@@ -159,10 +159,10 @@ test('Mac workflow keeps permissions read-only and uploads only package delivera
   assert.equal(job.permissions, undefined);
   const upload = job.steps.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
   const paths = upload.with.path.trim().split('\n');
-  assert.equal(paths.length, 3);
+  assert.equal(paths.length, 5);
   for (const path of paths) {
     assert.ok(path.startsWith('apps/desktop/release/'));
-    assert.match(path, /(?:\.zip|\.json|\.txt)$/);
+    assert.match(path, /(?:\.zip|\.json|\.txt|\.yml|\.blockmap)$/);
     assert.ok(!path.includes('**'), 'Do not upload profiles, dependency trees or diagnostics.');
   }
   assert.equal(upload.with['if-no-files-found'], 'error');

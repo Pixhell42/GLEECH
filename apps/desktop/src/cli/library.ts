@@ -16,7 +16,7 @@ export interface CliPreset extends EffectPreset {
   readonly origin: 'built-in' | 'library' | 'file';
 }
 
-/** GLEECH's per-user data folder, read-only from the CLI. */
+/** Desktop library lookup; GLEECH_USER_DATA also isolates terminal preferences. */
 export function userDataCandidates(): string[] {
   const override = process.env['GLEECH_USER_DATA'];
   if (override) return [override];

@@ -5,6 +5,7 @@ import { installRangeFill } from './range-fill';
 import './styles.css';
 import './timeline.css';
 import './render.css';
+import './settings.css';
 import { applyUiColor, readUiColor } from './ui-color';
 
 const root = document.getElementById('root');

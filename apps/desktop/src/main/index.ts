@@ -9,11 +9,13 @@ import { createMcpAccess } from './mcp-access';
 import { bundledFfmpegCandidates, createFfmpegLocator } from './ffmpeg';
 import { registerRenderHandlers } from './render-service';
 import { registerMediaHandlers, registerMediaScheme } from './media-service';
+import { registerUpdates } from './updates';
 
 const smokeTest = process.argv.includes('--smoke-test');
 const smokeUserData = process.env['GLEECH_SMOKE_USER_DATA'];
 if (smokeTest && smokeUserData) app.setPath('userData', smokeUserData);
 if (!process.argv.includes('--gleech-cli-gpu')) registerMediaScheme();
+let desktopWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -35,6 +37,10 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+  desktopWindow = window;
+  window.once('closed', () => {
+    desktopWindow = null;
   });
 
   const mcpAccess = createMcpAccess();
@@ -59,6 +65,12 @@ function createWindow(): void {
   let allowClose = false;
   let closePending = false;
   let rendererReady = false;
+  window.once(
+    'closed',
+    registerUpdates(window, (allow) => {
+      allowClose = allow;
+    }),
+  );
   const documentReady = (event: Electron.IpcMainEvent) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame)
       return;
@@ -120,7 +132,14 @@ if (process.argv.includes('--gleech-cli-gpu')) {
     process.stderr.write(String(error) + '\n');
     app.exit(1);
   });
+} else if (!app.requestSingleInstanceLock()) {
+  app.quit();
 } else {
+  app.on('second-instance', () => {
+    if (desktopWindow?.isMinimized()) desktopWindow.restore();
+    desktopWindow?.show();
+    desktopWindow?.focus();
+  });
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.gleech.desktop');
     Menu.setApplicationMenu(null);
