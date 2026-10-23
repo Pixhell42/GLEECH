@@ -236,8 +236,13 @@ try {
   await backToControls.click();
 
   // Changing the track volume while playing keeps the play clock running.
+  const beforePlay = await page.locator('.timecode').textContent();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  const advanced = await page.evaluate(async () => {
+  await page.waitForFunction(
+    (before) => document.querySelector('.timecode').textContent !== before,
+    beforePlay,
+  );
+  const playback = await page.evaluate(async () => {
     const slider = document.querySelector('[aria-label="Audio track volume"]');
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     const frameNow = () => {
@@ -247,18 +252,46 @@ try {
         .map(Number);
       return (minutes * 60 + secs) * 30 + frames;
     };
-    const start = frameNow();
+    let previous = frameNow();
+    let advanced = 0;
+    let updates = 0;
+    let animationFrames = 0;
+    let request = requestAnimationFrame(function tick() {
+      animationFrames++;
+      request = requestAnimationFrame(tick);
+    });
     const began = performance.now();
-    for (let step = 0; performance.now() - began < 1000; step++) {
-      setValue.call(slider, String(0.4 + (step % 2) * 0.2));
-      slider.dispatchEvent(new Event('input', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 8));
+    try {
+      // Slow native compositors can deliver frames around 1 Hz. Keep changing
+      // volume until actual frames have been observed, rather than ending the
+      // sample just before the next compositor tick. A stopped/reset clock must
+      // still fail while these edits continue.
+      while (performance.now() - began < 1000 || animationFrames < 3) {
+        if (performance.now() - began > 15000)
+          throw new Error(`Playback compositor stalled after ${animationFrames} frames.`);
+        setValue.call(slider, String(0.4 + (updates++ % 2) * 0.2));
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 8));
+        const current = frameNow();
+        // Count progress across the 4 s loop instead of discarding full loops.
+        advanced += (current - previous + 120) % 120;
+        previous = current;
+      }
+      return {
+        advanced,
+        animationFrames,
+        updates,
+        elapsedMs: Math.round(performance.now() - began),
+        volume: Number(slider.value),
+      };
+    } finally {
+      cancelAnimationFrame(request);
     }
-    // The 4 s clip loops at 30 fps.
-    return (frameNow() - start + 120) % 120;
   });
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
-  assert.ok(advanced >= 15, `the playhead kept moving (${advanced} frames in 1 s)`);
+  console.log('Playback during volume edits:', JSON.stringify(playback));
+  assert.ok(playback.advanced >= 15, `the playhead kept moving: ${JSON.stringify(playback)}`);
+  assert.equal(await trackLevel.textContent(), `${Math.round(playback.volume * 100)}%`);
 
   // Play the clip, then render a loop from it. Playback renders every frame
   // without flashing the "Updating preview" status.

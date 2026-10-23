@@ -6,7 +6,7 @@ import { fileAction } from './file-action.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
 
-const exe = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
+const exe = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const cpu = process.argv.includes('--cpu');
 const mode = `${exe ? 'packaged-' : ''}${cpu ? 'cpu' : 'auto'}`;
 const output = resolve('test-results/support');
@@ -44,8 +44,42 @@ try {
     BrowserWindow.getAllWindows()[0].webContents.setBackgroundThrottling(false);
   });
   const toolbar = page.locator('.toolbar');
-  await toolbar.getByRole('button', { name: 'Support GLEECH', exact: true }).click();
+  await fileAction(page, 'Support GLEECH');
   const dialog = page.getByRole('dialog');
+  const checkQrFit = async () => {
+    const size = await dialog.getByRole('img').evaluate((image) => {
+      const frame = image.closest('.support-qr-viewport');
+      const content = image.closest('.app-settings-content');
+      const picture = image.getBoundingClientRect();
+      const bounds = frame.getBoundingClientRect();
+      return {
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        width: picture.width,
+        height: picture.height,
+        frameFits:
+          frame.scrollWidth <= frame.clientWidth + 1 &&
+          frame.scrollHeight <= frame.clientHeight + 1,
+        contentFits:
+          content.scrollWidth <= content.clientWidth + 1 &&
+          content.scrollHeight <= content.clientHeight + 1,
+        imageFits:
+          picture.left >= bounds.left &&
+          picture.top >= bounds.top &&
+          picture.right <= bounds.right &&
+          picture.bottom <= bounds.bottom,
+      };
+    });
+    assert.ok(size.width >= 128 && size.height >= 128, JSON.stringify(size));
+    assert.ok(
+      Math.abs(size.width / size.height - size.naturalWidth / size.naturalHeight) < 0.01,
+      'QR image keeps its original aspect ratio',
+    );
+    assert.ok(size.frameFits && size.contentFits && size.imageFits, JSON.stringify(size));
+    return size;
+  };
+  assert.equal(await page.locator('dialog:modal').count(), 1);
+  assert.equal(await dialog.getAttribute('aria-labelledby'), 'settings-title');
   await dialog.getByRole('heading', { name: 'Support GLEECH', exact: true }).waitFor();
   const socialLinks = [
     ['X · @pixhell', 'https://x.com/pixhell'],
@@ -74,18 +108,12 @@ try {
     ],
   ]) {
     await dialog.locator('.support-payments button').filter({ hasText: name }).click();
+    assert.equal(await page.locator('dialog:modal').count(), 1);
     const img = dialog.getByRole('img', { name: `${name} donation QR code` });
     await img.evaluate((n) => n.decode());
-    const size = await img.evaluate((n) => ({
-      naturalWidth: n.naturalWidth,
-      naturalHeight: n.naturalHeight,
-      width: n.getBoundingClientRect().width,
-      height: n.getBoundingClientRect().height,
-    }));
+    const size = await checkQrFit();
     assert.equal(size.naturalWidth, width);
     assert.equal(size.naturalHeight, height);
-    assert.ok(Math.abs(size.width - width * 0.4) < 0.1);
-    assert.ok(Math.abs(size.height - height * 0.4) < 0.1);
     qrDimensions.push({ name, ...size });
     assert.equal(await dialog.locator('.support-destination').textContent(), handle);
     const link = dialog.getByRole('link');
@@ -101,7 +129,7 @@ try {
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden' });
   for (const name of ['Bug Report', 'Feature Request']) {
-    await toolbar.getByRole('button', { name: 'Feedback', exact: true }).click();
+    await fileAction(page, name);
     await dialog.getByRole('tab', { name, exact: true }).click();
     await dialog.getByRole('heading', { name, exact: true }).waitFor();
     await dialog
@@ -112,44 +140,42 @@ try {
       false,
     );
     await dialog.getByRole('textbox', { name: 'Report title', exact: true }).fill(`Test ${name}`);
-    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    const navigation = dialog.getByRole('navigation', { name: 'Settings sections' });
+    await navigation.getByRole('button', { name: 'Donate', exact: true }).click();
+    await navigation.getByRole('button', { name: 'Feedback', exact: true }).click();
+    assert.equal(await page.locator('dialog:modal').count(), 1);
+    assert.equal(
+      await dialog.getByRole('textbox', { name: 'Report title', exact: true }).inputValue(),
+      `Test ${name}`,
+    );
+    await dialog.getByRole('button', { name: 'Close settings', exact: true }).click();
   }
   await toolbar.getByRole('button', { name: 'File menu', exact: true }).click();
   const menu = page.locator('.file-menu-items');
   assert.equal(await menu.locator(':scope > hr').count(), 4);
-  await menu.getByRole('button', { name: 'Community', exact: true }).click();
-  assert.deepEqual(
-    await menu
-      .getByRole('group', { name: 'Community', exact: true })
-      .locator('button')
-      .allTextContents(),
-    ['Support GLEECH', 'Discord Community', 'Bug Report', 'Feature Request'],
-  );
+  assert.equal(await menu.getByRole('button', { name: 'Settings', exact: true }).count(), 1);
+  assert.equal(await menu.getByRole('button', { name: 'Community', exact: true }).count(), 0);
   const bottomGroup = await menu.evaluate((n) =>
     [...n.children]
       .slice(-5, -2)
       .map((el) => (el.tagName === 'HR' ? 'separator' : el.textContent.trim())),
   );
-  assert.deepEqual(bottomGroup, [
-    'CommunitySupport GLEECHDiscord CommunityBug ReportFeature Request',
-    'separator',
-    'Exit GLEECH Alt+F4',
-  ]);
+  assert.deepEqual(bottomGroup, ['Settings', 'separator', 'Exit GLEECH Alt+F4']);
   await fileAction(page, 'Support GLEECH');
   await dialog.waitFor({ state: 'visible' });
-  await dialog.getByRole('button', { name: 'Close support panel', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Close settings', exact: true }).click();
   await fileAction(page, 'Bug Report');
   assert.equal(
     await dialog.getByRole('textbox', { name: 'Report title', exact: true }).inputValue(),
     'Test Bug Report',
   );
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Close settings', exact: true }).click();
   await fileAction(page, 'Feature Request');
   assert.equal(
     await dialog.getByRole('textbox', { name: 'Report title', exact: true }).inputValue(),
     'Test Feature Request',
   );
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Close settings', exact: true }).click();
   const opened = await app.evaluate(() => globalThis.__supportLinks);
   assert.deepEqual(opened, [
     ...socialLinks.map(([, url]) => url),
@@ -189,29 +215,25 @@ try {
     bounds.every((b) => b.left >= 0 && b.right <= 960 && b.top >= 0 && b.bottom <= 72),
     JSON.stringify(bounds),
   );
-  const gleech = bounds.find((b) => b.name === 'GLEECH');
-  const feedback = bounds.find((b) => b.name === 'Feedback');
-  assert.ok(gleech.right + 12 <= feedback.left, JSON.stringify({ gleech, feedback }));
-  await toolbar.getByRole('button', { name: 'Support GLEECH', exact: true }).click();
+  assert.ok(!bounds.some((b) => b.name === 'Feedback' || b.name === 'Support GLEECH'));
+  await fileAction(page, 'Support GLEECH');
   await dialog.getByRole('heading', { name: 'Support GLEECH', exact: true }).waitFor();
   await page.evaluate(
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   );
   await captureTestWindow(app, resolve(output, `${mode}-minimum-panel.png`));
   assert.ok(await dialog.evaluate((n) => n.scrollWidth <= n.clientWidth + 1));
-  await dialog.locator('.support-payments button').filter({ hasText: 'Bitcoin' }).click();
-  assert.ok(
-    Math.abs(
-      (await dialog.getByRole('img').evaluate((n) => n.getBoundingClientRect().width)) - 489.6,
-    ) < 0.1,
-  );
-  assert.ok(
-    await dialog
-      .locator('.support-qr-viewport')
-      .evaluate((n) => n.scrollWidth <= n.clientWidth && n.scrollHeight > n.clientHeight),
-  );
-  await page.keyboard.press('Escape');
-  await dialog.getByRole('heading', { name: 'Support GLEECH', exact: true }).waitFor();
+  for (const name of ['Cash App', 'Venmo', 'Bitcoin']) {
+    await dialog.locator('.support-payments button').filter({ hasText: name }).click();
+    await dialog.getByRole('img').evaluate((node) => node.decode());
+    qrDimensions.push({ name, minimumWindow: true, ...(await checkQrFit()) });
+    await captureTestWindow(
+      app,
+      resolve(output, `${mode}-minimum-${name.replaceAll(' ', '-')}-qr.png`),
+    );
+    await page.keyboard.press('Escape');
+    await dialog.getByRole('heading', { name: 'Support GLEECH', exact: true }).waitFor();
+  }
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden' });
   assert.deepEqual(errors, []);

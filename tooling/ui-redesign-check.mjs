@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
+import { fileAction } from './file-action.mjs';
 
 const output = resolve('test-results/ui-redesign');
 await mkdir(output, { recursive: true });
@@ -140,7 +141,7 @@ try {
     await settle();
     await captureTestWindow(app, resolve(output, `editor-${width}.png`));
   }
-  await page.getByRole('button', { name: 'Feedback', exact: true }).click();
+  await fileAction(page, 'Bug Report');
   const dialog = page.getByRole('dialog');
   await dialog
     .getByRole('textbox', { name: 'Report title', exact: true })
@@ -168,7 +169,8 @@ try {
       .isChecked(),
     true,
   );
-  assert.equal(await dialog.evaluate((n) => n.getBoundingClientRect().width), 360);
+  assert.equal(await dialog.evaluate((n) => n.getBoundingClientRect().width), 800);
+  assert.equal(await page.locator('dialog:modal').count(), 1);
   const attachmentBounds = await dialog
     .getByRole('checkbox', { name: 'Attach effect stack and seed', exact: true })
     .boundingBox();
@@ -179,7 +181,7 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(
     await page
-      .getByRole('button', { name: 'Feedback', exact: true })
+      .getByRole('button', { name: 'File menu', exact: true })
       .evaluate((n) => n === document.activeElement),
     true,
   );

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { unwrap } from '../../shared/image-api';
-import { FlagIcon, CloseIcon, BugIcon, IdeaIcon } from './Icons';
+import { BugIcon, IdeaIcon } from './Icons';
 import type { ProjectState } from '@gleech/project-model';
 import { feedbackStack } from '../../shared/feedback';
 import type {
@@ -16,20 +16,19 @@ const FEEDBACK_TABS: readonly { kind: FeedbackKind; label: string }[] = [
   { kind: 'feature', label: 'Feature Request' },
 ];
 
-export function FeedbackDialog({
+export function FeedbackPanel({
   draft,
   project,
   onChange,
   onKind,
-  onClose,
+  onBusyChange,
 }: {
   draft: FeedbackDraft;
   project: ProjectState;
   onChange(draft: FeedbackDraft): void;
   onKind(kind: FeedbackKind): void;
-  onClose(): void;
+  onBusyChange(busy: boolean): void;
 }) {
-  const modal = useRef<HTMLDialogElement>(null);
   const [connection, setConnection] = useState<FeedbackStatus | null>(null);
   const [signIn, setSignIn] = useState<FeedbackSignIn | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,10 +36,8 @@ export function FeedbackDialog({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const bug = draft.kind === 'bug';
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
   useEffect(() => {
-    const dialog = modal.current!;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialog.showModal();
     let active = true;
     void window.gleech
       .feedbackStatus()
@@ -52,8 +49,6 @@ export function FeedbackDialog({
       });
     return () => {
       active = false;
-      dialog.close();
-      if (opener?.isConnected) opener.focus();
       void window.gleech.cancelFeedbackSignIn();
     };
   }, []);
@@ -120,47 +115,9 @@ export function FeedbackDialog({
     onChange({ ...draft, [key]: value, requestId: crypto.randomUUID() });
   };
   return (
-    <dialog
-      ref={modal}
-      className="stage-dialog feedback-dialog"
-      aria-labelledby="feedback-title"
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onClose();
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        if (event.target !== event.currentTarget || busy) return;
-        const bounds = event.currentTarget.getBoundingClientRect();
-        if (
-          event.clientX < bounds.left ||
-          event.clientX > bounds.right ||
-          event.clientY < bounds.top ||
-          event.clientY > bounds.bottom
-        )
-          onClose();
-      }}
-    >
+    <div className="feedback-panel" role="region" aria-label="Feedback form">
       <div className="feedback-header">
-        <div className="feedback-heading-row">
-          <span className="feedback-eyebrow" aria-hidden="true">
-            <FlagIcon />
-            Feedback
-          </span>
-          <button
-            type="button"
-            className="feedback-close"
-            aria-label="Close"
-            title="Close feedback"
-            disabled={busy}
-            onClick={onClose}
-          >
-            <CloseIcon />
-          </button>
-        </div>
-        <h2 id="feedback-title" className="visually-hidden">
-          {bug ? 'Bug Report' : 'Feature Request'}
-        </h2>
+        <h4 className="visually-hidden">{bug ? 'Bug Report' : 'Feature Request'}</h4>
         <div className="feedback-tabs" role="tablist" aria-label="Feedback type">
           {FEEDBACK_TABS.map((tab) => (
             <button
@@ -213,7 +170,7 @@ export function FeedbackDialog({
               >
                 View on GitHub
               </button>
-              <button onClick={onClose}>Done</button>
+              <button onClick={() => setReceipt(null)}>Done</button>
             </div>
           </>
         ) : (
@@ -386,11 +343,8 @@ export function FeedbackDialog({
                 without image assets or painted strokes.
               </p>
             )}
-            <p className="quiet">App and Windows version details are included with your report.</p>
+            <p className="quiet">App and operating system details are included with your report.</p>
             <div className="stage-dialog-actions">
-              <button type="button" disabled={busy} onClick={onClose}>
-                Cancel
-              </button>
               <button
                 className="primary-button"
                 type="submit"
@@ -409,6 +363,6 @@ export function FeedbackDialog({
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
-    </dialog>
+    </div>
   );
 }

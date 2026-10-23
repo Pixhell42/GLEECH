@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   AUDIO_BANDS,
   LFO_DIVISIONS,
@@ -22,7 +22,7 @@ import {
 } from '@gleech/project-model';
 import { formatParameterValue } from './animation-format';
 import { SIGNAL_COLORS } from './animation-ui';
-import { ChevronIcon, PlusIcon, SineIcon, TrashIcon, WaveformIcon } from './Icons';
+import { ChevronIcon, PlusIcon, SineIcon, TrashIcon, WaveformIcon, LfoShapeIcon } from './Icons';
 
 function Toggle({
   label,
@@ -61,7 +61,7 @@ function Choice<T extends string>({
   label: string;
   value: T;
   /** `title` is the full name for tooltips and screen readers when `label` is short. */
-  options: readonly { value: T; label: string; title?: string }[];
+  options: readonly { value: T; label: string; title?: string; icon?: ReactNode }[];
   onChange(value: T): void;
   disabled?: boolean;
 }) {
@@ -74,11 +74,11 @@ function Choice<T extends string>({
           role="radio"
           aria-checked={option.value === value}
           aria-label={option.title ?? option.label}
-          title={option.title}
+          title={option.title ?? option.label}
           disabled={disabled}
           onClick={() => onChange(option.value)}
         >
-          {option.label}
+          {option.icon ?? option.label}
         </button>
       ))}
     </div>
@@ -505,12 +505,11 @@ export function ModulatorPanel({
             <Choice
               label="Shape"
               value={modulator.shape}
-              options={LFO_SHAPES.map((shape) =>
-                // "Random steps" is too wide for the card; the full name is the tooltip.
-                shape.value === 'random'
-                  ? { value: shape.value, label: 'Random', title: shape.label }
-                  : { value: shape.value, label: shape.label },
-              )}
+              options={LFO_SHAPES.map((shape) => ({
+                value: shape.value,
+                label: shape.label,
+                icon: <LfoShapeIcon shape={shape.value} />,
+              }))}
               disabled={disabled}
               onChange={(shape) => patch(modulator.id, { shape })}
             />

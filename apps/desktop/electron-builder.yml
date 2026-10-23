@@ -2,10 +2,17 @@ afterPack: build/after-pack.mjs
 beforePack: build/ffmpeg-before-pack.mjs
 appId: com.gleech.desktop
 productName: GLEECH
+publish:
+  provider: github
+  owner: Pixhell42
+  repo: GLEECH
+  channel: latest-${arch}
+  releaseType: draft
 directories:
   output: release
 files:
   - out/**
+  - '!out/ffmpeg{,/**}'
   - package.json
 asar: true
 asarUnpack:
@@ -42,7 +49,11 @@ extraResources:
 # Shared workspace packages are bundled by Vite into the renderer.
 npmRebuild: false
 win:
+  # Keep the app allowlist here too: platform filters form a separate matcher.
   files:
+    - out/**
+    - '!out/ffmpeg{,/**}'
+    - package.json
     - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/**'
     - '!**/onnxruntime-node/bin/napi-v6/win32/arm64/**'
@@ -62,6 +73,9 @@ mac:
     - from: out/mac-native-notices
       to: mac-native-notices
   files:
+    - out/**
+    - '!out/ffmpeg{,/**}'
+    - package.json
     - '!**/onnxruntime-node/bin/napi-v6/win32/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/**'
     - '!**/onnxruntime-node-macos-x64/bin/napi-v6/win32/**'
@@ -78,6 +92,9 @@ linux:
     - from: out/linux-native-notices
       to: linux-native-notices
   files:
+    - out/**
+    - '!out/ffmpeg{,/**}'
+    - package.json
     - '!**/onnxruntime-node/bin/napi-v6/win32/**'
     - '!**/onnxruntime-node/bin/napi-v6/darwin/**'
     - '!**/onnxruntime-node/bin/napi-v6/linux/arm64/**'
@@ -88,6 +105,7 @@ linux:
         - x64
   artifactName: GLEECH-${version}-linux-${arch}.${ext}
 nsis:
+  deleteAppDataOnUninstall: false
   installerIcon: resources/branding/icon-beta.ico
   uninstallerIcon: resources/branding/icon-beta.ico
   oneClick: false

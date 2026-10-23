@@ -91,6 +91,21 @@ Read `get_project_state` before changing layers, use returned instance IDs and
 revisions, and use `get_effect_parameters` instead of guessing parameter names.
 GLEECH and Resolve have separate MCP servers; the agent coordinates their files.
 
+## Settings and terminal support
+
+The Settings feature branch includes the same inline Donate/Feedback screens,
+responsive QR views, LFO waveform icons and version notes as Windows. On these
+unsigned Mac builds, updates download the matching Intel or Apple Silicon ZIP;
+Install & Update saves the working session, quits and reveals the ZIP in Finder
+for replacement of the app. See [application updates](AUTOMATIC-UPDATES.md).
+
+The packaged CLI/TUI shares the terminal Settings panel (`,` or F2), update
+checks, support/community links, browser feedback forms and bundled license
+documents. Saved LFO shapes continue to play and export through the shared
+timeline runner. Native CI runs the packaged update, donation and feedback
+checks on both Mac architectures. These changes remain separate from the
+previously frozen release candidates until integrated and revalidated.
+
 ## Verification
 
 ```sh

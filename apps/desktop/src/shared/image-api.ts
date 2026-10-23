@@ -82,6 +82,22 @@ export interface WindowState {
 }
 
 export interface DesktopBridge {
+  updateState(): Promise<Result<import('./updates').UpdateState>>;
+  checkForUpdates(): Promise<Result<import('./updates').UpdateState>>;
+  setAutomaticUpdates(enabled: boolean): Promise<Result<import('./updates').UpdateState>>;
+  dismissUpdate(): Promise<Result<import('./updates').UpdateState>>;
+  downloadUpdate(): Promise<Result<import('./updates').UpdateState>>;
+  installUpdate(sessionId: string): Promise<Result<void>>;
+  acknowledgeReleaseNotes(version: string): Promise<Result<import('./updates').UpdateState>>;
+  onUpdateStateChanged(handler: (state: import('./updates').UpdateState) => void): () => void;
+  prepareUpdateSession(
+    project: ProjectState | null,
+    documentId: string | null,
+    options: import('./updates').UpdateSessionOptions,
+  ): Promise<Result<string>>;
+  restoreUpdateSession(): Promise<Result<import('./updates').RestoredUpdateSession | null>>;
+  finishUpdateRestore(sessionId: string): Promise<Result<void>>;
+  openAppLicenses(kind: 'gleech' | 'notices' | 'licenses'): Promise<Result<void>>;
   // Timeline rendering (main/render-service.ts)
   renderStatus(refresh?: boolean): Promise<Result<import('./render').FfmpegStatus>>;
   locateFfmpeg(): Promise<Result<import('./render').FfmpegStatus | null>>;
