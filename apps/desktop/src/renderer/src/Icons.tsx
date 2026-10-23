@@ -1,4 +1,31 @@
 import type { ReactNode } from 'react';
+import type { LfoShape } from '@gleech/project-model';
+
+export function LfoShapeIcon({ shape }: { shape: LfoShape }) {
+  const paths: Record<LfoShape, string> = {
+    sine: 'M2 12C6-1 10-1 14 12S22 25 26 12',
+    triangle: 'M2 12 8 3 20 21 26 12',
+    square: 'M2 21V3H14V21H26V3',
+    saw: 'M2 21 14 3V21L26 3',
+    random: 'M2 16H7V5H12V19H17V10H22V3H26',
+  };
+  return (
+    <svg
+      className="lfo-shape-icon"
+      width="28"
+      height="24"
+      viewBox="0 0 28 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d={paths[shape]} />
+    </svg>
+  );
+}
 
 // One stroke icon set for the toolbar and panels: 24px grid, round caps, currentColor.
 function Icon({ size = 16, children }: { size?: number; children: ReactNode }) {

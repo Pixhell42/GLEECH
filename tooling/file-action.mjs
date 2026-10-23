@@ -2,6 +2,28 @@
 export async function fileAction(page, name, { waitForOperation = true } = {}) {
   const command = (await page.evaluate(() => window.gleech.platform)) === 'darwin' ? 'Cmd' : 'Ctrl';
   const displayedName = name.replaceAll('Ctrl+', `${command}+`);
+  const moved = {
+    'Support GLEECH': ['Donate'],
+    'Discord Community': ['Community', 'Join the Discord community'],
+    'Bug Report': ['Feedback', 'Bug Report'],
+    'Feature Request': ['Feedback', 'Feature Request'],
+  }[name];
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  if (moved) {
+    if (!(await settings.isVisible())) await fileAction(page, 'Settings');
+    await settings
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('button', { name: moved[0], exact: true })
+      .click();
+    if (name === 'Bug Report' || name === 'Feature Request')
+      await settings.getByRole('tab', { name: moved[1], exact: true }).click();
+    else if (moved[1]) await settings.getByRole('button', { name: moved[1], exact: true }).click();
+    if (name === 'Discord Community')
+      await settings.getByRole('button', { name: 'Close settings', exact: true }).click();
+    return;
+  }
+  if (await settings.isVisible())
+    await settings.getByRole('button', { name: 'Close settings', exact: true }).click();
   const toggle = page.getByRole('button', { name: 'File menu', exact: true });
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   const groups = {
@@ -20,7 +42,6 @@ export async function fileAction(page, name, { waitForOperation = true } = {}) {
       'Import Preset',
       'Add Shader',
     ],
-    Community: ['Support GLEECH', 'Discord Community', 'Bug Report', 'Feature Request'],
   };
   const group = Object.entries(groups).find(([, actions]) => actions.includes(name))?.[0];
   if (group)

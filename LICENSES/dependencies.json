@@ -1060,5 +1060,135 @@
     "files": [
       "LICENSES/type-fest/0.20.2/license"
     ]
+  },
+  {
+    "name": "electron-updater",
+    "version": "6.8.9",
+    "license": "MIT",
+    "homepage": "https://github.com/electron-userland/electron-builder",
+    "files": [
+      "LICENSES/electron-updater/6.8.9/LICENSE"
+    ]
+  },
+  {
+    "name": "fs-extra",
+    "version": "10.1.0",
+    "license": "MIT",
+    "homepage": "https://github.com/jprichardson/node-fs-extra",
+    "files": [
+      "LICENSES/fs-extra/10.1.0/LICENSE"
+    ]
+  },
+  {
+    "name": "graceful-fs",
+    "version": "4.2.11",
+    "license": "ISC",
+    "homepage": "https://github.com/isaacs/node-graceful-fs",
+    "files": [
+      "LICENSES/graceful-fs/4.2.11/LICENSE"
+    ]
+  },
+  {
+    "name": "jsonfile",
+    "version": "6.2.1",
+    "license": "MIT",
+    "homepage": "git@github.com:jprichardson/node-jsonfile.git",
+    "files": [
+      "LICENSES/jsonfile/6.2.1/LICENSE"
+    ]
+  },
+  {
+    "name": "universalify",
+    "version": "2.0.1",
+    "license": "MIT",
+    "homepage": "https://github.com/RyanZim/universalify#readme",
+    "files": [
+      "LICENSES/universalify/2.0.1/LICENSE"
+    ]
+  },
+  {
+    "name": "js-yaml",
+    "version": "4.3.2",
+    "license": "MIT",
+    "homepage": "",
+    "files": [
+      "LICENSES/js-yaml/4.3.2/LICENSE"
+    ]
+  },
+  {
+    "name": "argparse",
+    "version": "2.0.1",
+    "license": "Python-2.0",
+    "homepage": "",
+    "files": [
+      "LICENSES/argparse/2.0.1/LICENSE"
+    ]
+  },
+  {
+    "name": "lazy-val",
+    "version": "1.0.5",
+    "license": "MIT",
+    "homepage": "https://github.com/develar/lazy-val",
+    "files": [
+      "LICENSES/lazy-val/1.0.5/package.json",
+      "LICENSES/lazy-val/1.0.5/readme.md",
+      "LICENSES/lazy-val/1.0.5/UPSTREAM-NOTICE.md"
+    ],
+    "upstreamPackageOmitsLicense": true,
+    "sourceCommit": "b69ad4119f1b19bdab13c61ee2fcc88d46b89071"
+  },
+  {
+    "name": "lodash.escaperegexp",
+    "version": "4.1.2",
+    "license": "MIT",
+    "homepage": "https://lodash.com/",
+    "files": [
+      "LICENSES/lodash.escaperegexp/4.1.2/LICENSE"
+    ]
+  },
+  {
+    "name": "lodash.isequal",
+    "version": "4.5.0",
+    "license": "MIT",
+    "homepage": "https://lodash.com/",
+    "files": [
+      "LICENSES/lodash.isequal/4.5.0/LICENSE"
+    ]
+  },
+  {
+    "name": "semver",
+    "version": "7.7.4",
+    "license": "ISC",
+    "homepage": "git+https://github.com/npm/node-semver.git",
+    "files": [
+      "LICENSES/semver/7.7.4/LICENSE"
+    ]
+  },
+  {
+    "name": "tiny-typed-emitter",
+    "version": "2.1.0",
+    "license": "MIT",
+    "homepage": "",
+    "files": [
+      "LICENSES/tiny-typed-emitter/2.1.0/LICENSE"
+    ]
+  },
+  {
+    "name": "builder-util-runtime",
+    "version": "9.7.0",
+    "license": "MIT",
+    "homepage": "https://github.com/electron-userland/electron-builder",
+    "files": [
+      "LICENSES/builder-util-runtime/9.7.0/LICENSE"
+    ]
+  },
+  {
+    "name": "sax",
+    "version": "1.6.1",
+    "license": "BlueOak-1.0.0",
+    "homepage": "git+ssh://git@github.com/isaacs/sax-js.git",
+    "files": [
+      "LICENSES/sax/1.6.1/LICENSE.md"
+    ]
   }
 ]

@@ -119,13 +119,14 @@ import { PaintedMaskControls } from './PaintedMaskControls';
 import { SettingsContextMenu } from './SettingsContextMenu';
 import { GleechDialog } from './GleechDialog';
 import { VariationDialog } from './VariationDialog';
-import { SupportDialog } from './SupportDialog';
+import { AppSettingsDialog } from './AppSettingsDialog';
+import { UpdateUi } from './UpdateUi';
+import { useAppUpdates } from './use-app-updates';
+import type { RestoredUpdateSession } from '../../shared/updates';
 import { UiColorDialog } from './UiColorDialog';
 import { applyUiColor, readUiColor, saveUiColor } from './ui-color';
 import {
   DiceIcon,
-  FlagIcon,
-  HeartIcon,
   PlusIcon,
   RedoIcon,
   SparkleIcon,
@@ -135,7 +136,6 @@ import {
   TimelineModeIcon,
   DiamondIcon,
 } from './Icons';
-import { FeedbackDialog } from './FeedbackDialog';
 import type { FeedbackDraft, FeedbackKind } from '../../shared/feedback';
 
 const commands = createCommandService(createProject('Untitled', 8172));
@@ -236,6 +236,17 @@ function readDockHeight(): number {
   }
 }
 
+function createFeedbackDraft(kind: FeedbackKind): FeedbackDraft {
+  return {
+    requestId: crypto.randomUUID(),
+    kind,
+    title: '',
+    description: '',
+    context: '',
+    expected: '',
+  };
+}
+
 export function App() {
   const commandKey = window.gleech.platform === 'darwin' ? 'Cmd' : 'Ctrl';
   const { setWorkspace, style: panelStyle, handle: panelHandle } = usePanelWidths();
@@ -297,39 +308,19 @@ export function App() {
   const [fileMenu, setFileMenu] = useState(false);
   const [uiColor, setUiColor] = useState(readUiColor);
   const [uiColorDialog, setUiColorDialog] = useState(false);
-  const [supportDialog, setSupportDialog] = useState(false);
+  const [appSettingsDialog, setAppSettingsDialog] = useState(false);
+  const [updateProgressOpen, setUpdateProgressOpen] = useState(false);
+  const appUpdates = useAppUpdates();
+  const updateRestore = useRef<Promise<Result<RestoredUpdateSession | null>> | null>(null);
+  const updateRestoreAttempted = useRef(false);
   const [mcpDialog, setMcpDialog] = useState(false);
   const [mcpMode, setMcpMode] = useState<McpMode>('off');
   const [mcpOperation, setMcpOperation] = useState<string | null>(null);
-  const [feedbackKind, setFeedbackKind] = useState<FeedbackKind | null>(null);
-  const [feedbackDrafts, setFeedbackDrafts] = useState<
-    Partial<Record<FeedbackKind, FeedbackDraft>>
-  >({});
-  const showFeedback = (kind: FeedbackKind) => {
-    if (fileMenu) fileMenuRef.current?.querySelector('button')?.focus();
-    setFileMenu(false);
-    setFeedbackDrafts((previous) =>
-      previous[kind]
-        ? previous
-        : {
-            ...previous,
-            [kind]: {
-              requestId: crypto.randomUUID(),
-              kind,
-              title: '',
-              description: '',
-              context: '',
-              expected: '',
-            },
-          },
-    );
-    setFeedbackKind(kind);
-  };
-  const showSupport = () => {
-    if (fileMenu) fileMenuRef.current?.querySelector('button')?.focus();
-    setFileMenu(false);
-    setSupportDialog(true);
-  };
+  const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('bug');
+  const [feedbackDrafts, setFeedbackDrafts] = useState<Record<FeedbackKind, FeedbackDraft>>(() => ({
+    bug: createFeedbackDraft('bug'),
+    feature: createFeedbackDraft('feature'),
+  }));
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const [recentProjects, setRecentProjects] = useState<readonly RecentProject[]>([]);
   const [recentLoading, setRecentLoading] = useState(false);
@@ -530,11 +521,11 @@ export function App() {
     const current = commands.getState().effects.find((effect) => effect.instanceId === maskTarget);
     if (current) commands.setEffectMask(current.instanceId, mask);
   };
-  const finishMask = () => {
+  const finishMask = useCallback(() => {
     setMaskTarget(null);
     setMaskGeometryDraft(null);
     commands.endHistoryGroup();
-  };
+  }, []);
   const applyGleech = (complexity: GleechComplexity, mode: GleechMode) => {
     setGleechDialog(false);
     if (locked.current) return;
@@ -1810,7 +1801,7 @@ export function App() {
   );
 
   const openProject = useCallback(
-    async (recentId?: string) => {
+    async (recentId?: string, restored?: RestoredUpdateSession) => {
       if (locked.current || !viewport.current) return;
       locked.current = true;
       setBusy('project');
@@ -1820,11 +1811,13 @@ export function App() {
       let candidate;
       try {
         if (!(await confirmLeave())) return;
-        candidate = unwrap(
-          await (recentId
-            ? window.gleech.openRecentProject(recentId)
-            : window.gleech.openProject()),
-        );
+        candidate =
+          restored ??
+          unwrap(
+            await (recentId
+              ? window.gleech.openRecentProject(recentId)
+              : window.gleech.openProject()),
+          );
         if (!candidate) {
           setNotice('Open canceled');
           return;
@@ -1849,23 +1842,26 @@ export function App() {
         }
         for (const image of candidate.images) rememberImage(image);
         commands.loadProject(candidate.project);
-        setSavedState(commands.getState());
+        setSavedState(restored?.dirty ? null : commands.getState());
         setDocument(candidate.document);
         setSelectedId(null);
         setPlaying(false);
         // Image mode shows the clip frame that is the source image.
         const reopened = activeVideo(candidate.project);
         setPlayhead(
-          reopened && candidate.project.timeline
-            ? timeFrame(reopened.posterTime ?? 0, candidate.project.timeline.fps)
-            : 0,
+          restored
+            ? restored.playhead
+            : reopened && candidate.project.timeline
+              ? timeFrame(reopened.posterTime ?? 0, candidate.project.timeline.fps)
+              : 0,
         );
         setSelectedParam(null);
         setModulatorParam(null);
-        setMode('image');
+        setMode(restored?.mode ?? 'image');
         setNotice(
-          `Opened ${candidate.document.name}${candidate.document.recentWarning ? ` · ${candidate.document.recentWarning}` : ''}`,
+          `Opened ${candidate.document?.name ?? candidate.project.name}${candidate.document?.recentWarning ? ` · ${candidate.document.recentWarning}` : ''}`,
         );
+        return true;
       } catch (failure) {
         if (candidate && commands.getState().source?.id !== candidate.image.source.id)
           await Promise.all(
@@ -1873,6 +1869,7 @@ export function App() {
           );
         setError(failure instanceof Error ? failure.message : 'Could not open the project.');
         setNotice('Ready');
+        return false;
       } finally {
         locked.current = false;
         setBusy(null);
@@ -1880,6 +1877,63 @@ export function App() {
     },
     [confirmLeave, rememberImage],
   );
+
+  useEffect(() => {
+    if (updateRestoreAttempted.current) return;
+    let active = true;
+    updateRestore.current ??= window.gleech.restoreUpdateSession();
+    void updateRestore.current
+      .then(async (result) => {
+        if (!active || updateRestoreAttempted.current) return;
+        updateRestoreAttempted.current = true;
+        const restored = unwrap(result);
+        if (!restored) return;
+        if (commands.getState().source)
+          throw new Error(
+            'A previous update session is available, but a different project is already open. The recovery copy has been kept.',
+          );
+        if (await openProject(undefined, restored))
+          unwrap(await window.gleech.finishUpdateRestore(restored.sessionId));
+      })
+      .catch((failure) => {
+        if (active)
+          setError(
+            failure instanceof Error
+              ? failure.message
+              : 'Could not restore the project after updating.',
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [openProject]);
+
+  const installUpdate = useCallback(async () => {
+    if (
+      locked.current ||
+      renderQueue.snapshot().some((job) => ['queued', 'rendering', 'encoding'].includes(job.status))
+    )
+      throw new Error('Finish the current operation or render queue before installing the update.');
+    locked.current = true;
+    setBusy('project');
+    setPlaying(false);
+    try {
+      finishMask();
+      commands.endHistoryGroup();
+      const current = commands.getState();
+      const id = unwrap(
+        await window.gleech.prepareUpdateSession(
+          current.source ? current : null,
+          document?.id ?? null,
+          { dirty: Boolean(current.source && current !== savedState), mode, playhead },
+        ),
+      );
+      unwrap(await window.gleech.installUpdate(id));
+    } finally {
+      locked.current = false;
+      setBusy(null);
+    }
+  }, [document, savedState, mode, playhead, finishMask]);
 
   useEffect(() => {
     window.document.title = `${dirty ? '• ' : ''}${displayName} — GLEECH`;
@@ -3115,28 +3169,15 @@ export function App() {
                 >
                   UI Color <span className="ui-color-menu-swatch" aria-hidden="true" />
                 </button>
-                <MenuFlyout label="Community">
-                  <button onClick={showSupport}>Support GLEECH</button>
-                  <button
-                    onClick={() => {
-                      setFileMenu(false);
-                      void window.gleech
-                        .openSupportLink('discord')
-                        .then(unwrap)
-                        .catch((failure) =>
-                          setError(
-                            failure instanceof Error
-                              ? failure.message
-                              : 'Could not open Discord Community.',
-                          ),
-                        );
-                    }}
-                  >
-                    Discord Community
-                  </button>
-                  <button onClick={() => showFeedback('bug')}>Bug Report</button>
-                  <button onClick={() => showFeedback('feature')}>Feature Request</button>
-                </MenuFlyout>
+                <button
+                  onClick={() => {
+                    fileMenuRef.current?.querySelector('button')?.focus();
+                    setFileMenu(false);
+                    setAppSettingsDialog(true);
+                  }}
+                >
+                  Settings
+                </button>
                 <hr />
                 <button onClick={() => void exitGleech()}>
                   Exit GLEECH <span>Alt+F4</span>
@@ -3327,29 +3368,33 @@ export function App() {
             GLEECH
           </button>
         </div>
-        <span className="toolbar-divider" aria-hidden="true" />
-        <div className="support-toolbar-actions" aria-label="Support and feedback">
-          <button
-            className="toolbar-icon-button donate-button"
-            aria-label="Support GLEECH"
-            onClick={showSupport}
-            title="Support GLEECH and follow its creator"
-          >
-            <HeartIcon />
-          </button>
-          <button
-            className="toolbar-icon-button"
-            aria-label="Feedback"
-            aria-expanded={feedbackKind !== null}
-            aria-haspopup="dialog"
-            title="Report a bug or request a feature"
-            onClick={() => showFeedback('bug')}
-          >
-            <FlagIcon />
-          </button>
-        </div>
       </header>
-      {supportDialog && <SupportDialog onClose={() => setSupportDialog(false)} />}
+      {appSettingsDialog && (
+        <AppSettingsDialog
+          update={appUpdates.state}
+          updateError={appUpdates.error}
+          onUpdate={appUpdates.setState}
+          onInstall={() => {
+            setAppSettingsDialog(false);
+            setUpdateProgressOpen(true);
+          }}
+          project={project}
+          feedbackDraft={feedbackDrafts[feedbackKind]}
+          onFeedbackKind={setFeedbackKind}
+          onFeedbackChange={(draft) =>
+            setFeedbackDrafts((previous) => ({ ...previous, [draft.kind]: draft }))
+          }
+          onClose={() => setAppSettingsDialog(false)}
+        />
+      )}
+      <UpdateUi
+        state={appUpdates.state}
+        onState={appUpdates.setState}
+        onInstall={installUpdate}
+        progressOpen={updateProgressOpen}
+        onProgressOpen={setUpdateProgressOpen}
+        modalBlocked={appSettingsDialog || uiColorDialog || mcpDialog || busy !== null}
+      />
       {uiColorDialog && (
         <UiColorDialog
           color={uiColor}
@@ -3359,17 +3404,6 @@ export function App() {
             saveUiColor(next);
           }}
           onClose={() => setUiColorDialog(false)}
-        />
-      )}
-      {feedbackKind && feedbackDrafts[feedbackKind] && (
-        <FeedbackDialog
-          draft={feedbackDrafts[feedbackKind]!}
-          project={project}
-          onKind={showFeedback}
-          onChange={(draft) =>
-            setFeedbackDrafts((previous) => ({ ...previous, [draft.kind]: draft }))
-          }
-          onClose={() => setFeedbackKind(null)}
         />
       )}
       {!timelineMode && (

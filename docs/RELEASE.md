@@ -2,6 +2,12 @@
 
 ## Current checkpoint
 
+Version 0.2.0 is being prepared for Windows x64, macOS arm64/x64 and Linux x64,
+including the bundled CLI/TUI and FFmpeg. The
+[candidate notes and remaining gates](RELEASE-0.2.0.md) track this preparation.
+Publication is on hold pending verified coverage of the October 21 Node.js
+security fixes in a stable Electron runtime; see the runtime review below.
+
 Windows x64 app/NSIS installer builds and packaged GPU/CPU image/mask workflows,
 menus, version metadata, MCP profiles and bundled assets have passed. The user
 confirmed installation and uninstallation on 2026-10-14. The refreshed support
@@ -17,7 +23,8 @@ Passing development checks does not publish a release.
 
 ## Before publication
 
-- [ ] Review the clean source candidate, its file manifest and fresh one-commit history.
+- [ ] Review the clean source candidate and its file manifest against the intended
+      public branch. Retain the existing public history and platform-specific changes.
 - [ ] Run `pnpm install --frozen-lockfile`, `pnpm check`, build and packaged checks
       from the intended release tree. Verify generated assets and documentation links.
 - [ ] Require both the hosted full CI lane and the physical-GPU full lane to pass
@@ -47,8 +54,8 @@ Passing development checks does not publish a release.
       or fixes. Revalidate intentional dependency changes.
       The two packaging advisories remain unpatched; maintained checks enforce
       the reviewed configuration in [the build-tool review](BUILD_TOOL_REVIEW.md).
-- [ ] Choose the public repository/history transition and update any destination
-      URLs or GitHub App installation required by that choice.
+- [x] The public repository is `Pixhell42/GLEECH`; release links use that destination.
+      Preserve its public history and keep private reference material excluded.
 - [ ] Configure main/port/tag protections, Issues, private vulnerability reporting,
       PR/issue templates and public-contributor Actions approval/permissions.
 - [x] Pin third-party Actions to verified immutable commits before public launch;
@@ -125,9 +132,9 @@ advisories visible and reassess changes; scan results age and are not a security
 
 - Windows x64 beta, with separate experimental macOS Intel/Apple Silicon and Linux x64 alphas.
 - Development installers are unsigned; no automatic updater/public publishing job.
-- Timeline mode animates controls and renders video, GIFs and sequences. Movies,
-  loops and video import need ffmpeg (bundled builds pending; Locate ffmpeg… or
-  PATH). Clips and audio tracks are referenced by path, not embedded in projects.
+- Timeline mode animates controls and renders video, GIFs and sequences. FFmpeg
+  is bundled for all release targets; an explicit user selection or PATH can also
+  supply it. Clips and audio tracks are referenced by path, not embedded in projects.
 - Built-in shaders have CPU fallback; imported WGSL/ISF needs WebGPU/WebGL2.
 - Imported shader support is a bounded single-function/single-pass subset.
 - Global drawing/blank layers, new polygon/Bezier tools, Image Size and Canvas Size

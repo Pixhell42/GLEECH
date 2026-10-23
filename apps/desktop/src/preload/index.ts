@@ -2,6 +2,28 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { DesktopBridge } from '../shared/image-api';
 
 const bridge: DesktopBridge = {
+  updateState: () => ipcRenderer.invoke('updates:state'),
+  checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+  setAutomaticUpdates: (enabled) => ipcRenderer.invoke('updates:automatic', enabled),
+  dismissUpdate: () => ipcRenderer.invoke('updates:dismiss'),
+  downloadUpdate: () => ipcRenderer.invoke('updates:download'),
+  installUpdate: (id) => ipcRenderer.invoke('updates:install', id),
+  acknowledgeReleaseNotes: (version) => ipcRenderer.invoke('updates:acknowledge-notes', version),
+  onUpdateStateChanged: (handler) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: import('../shared/updates').UpdateState,
+    ) => handler(state);
+    ipcRenderer.on('updates:changed', listener);
+    return () => {
+      ipcRenderer.removeListener('updates:changed', listener);
+    };
+  },
+  prepareUpdateSession: (project, documentId, options) =>
+    ipcRenderer.invoke('updates:prepare-session', project, documentId, options),
+  restoreUpdateSession: () => ipcRenderer.invoke('updates:restore-session'),
+  finishUpdateRestore: (id) => ipcRenderer.invoke('updates:finish-restore', id),
+  openAppLicenses: (kind) => ipcRenderer.invoke('updates:licenses', kind),
   renderStatus: (refresh) => ipcRenderer.invoke('render:ffmpeg-status', refresh),
   locateFfmpeg: () => ipcRenderer.invoke('render:locate-ffmpeg'),
   chooseRenderOutput: (kind, name, extension) =>
