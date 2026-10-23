@@ -54,6 +54,11 @@ The app ID, product name and existing user-data directory remain unchanged. NSIS
 does not remove user data. Existing presets, shader imports, recents, FFmpeg
 configuration, export permissions, UI preferences and terminal setup stay in place.
 
+Update files are restricted to direct children of the locally configured data,
+installation and download directories. Recovery/settings reads and AppImage
+replacement reject symlinked files. Custom data folders and AppImage filenames,
+including paths with spaces and Unicode, remain supported.
+
 Immediately before installing, GLEECH stops playback and writes a separate,
 embedded `.gleech` recovery checkpoint in `userData/update-recovery`, including
 the working effect stack, images, snapshots, timeline, unsaved state and original
@@ -93,7 +98,9 @@ version, filename, size and SHA512, then independently check the GitHub SHA256;
 Mac downloads check the size and GitHub SHA256 before revealing the ZIP.
 
 Run `node tooling/update-package-check.mjs <resources> <release-directory>` against
-the actual artifacts before publication. Mac and Linux CI retain update metadata
+the actual artifacts inside the build workspace before publication. The verifier
+resolves symlinks and rejects paths outside the workspace or the selected artifact
+directory. Mac and Linux CI retain update metadata
 alongside their packages and exercise the settings/recovery UI with isolated data.
 
 ## Development checks

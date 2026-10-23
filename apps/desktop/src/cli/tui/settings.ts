@@ -7,6 +7,7 @@ import { BITCOIN_ADDRESS, SUPPORT_LINKS } from '../../shared/support';
 import type { UpdatePreferences, UpdateRelease } from '../../shared/updates';
 import { discoverUpdate } from '../../main/update-releases';
 import { createUpdatePreferenceStore } from '../../main/update-storage';
+import { updateChildPath } from '../../main/update-path';
 import { userDataCandidates } from '../library';
 import { resourcesDir } from '../runtime';
 
@@ -209,13 +210,13 @@ export function createTuiSettings(
       if (section === 'Community')
         return [link('Join the Discord community', SUPPORT_LINKS.discord)];
       const resources = options.resources ?? resourcesDir();
-      const packaged = existsSync(join(resources, 'LICENSE.GLEECH.txt'));
+      const packaged = existsSync(updateChildPath(resources, 'LICENSE.GLEECH.txt'));
       const root = packaged ? resources : resolve(resources, '../../..');
       return [
         link('View GitHub repository', SUPPORT_LINKS.repository),
-        link('GLEECH license', join(root, packaged ? 'LICENSE.GLEECH.txt' : 'LICENSE')),
-        link('Third-party notices', join(root, 'THIRD_PARTY_NOTICES.md')),
-        link('Bundled licenses', join(root, packaged ? 'licenses' : 'LICENSES')),
+        link('GLEECH license', updateChildPath(root, packaged ? 'LICENSE.GLEECH.txt' : 'LICENSE')),
+        link('Third-party notices', updateChildPath(root, 'THIRD_PARTY_NOTICES.md')),
+        link('Bundled licenses', updateChildPath(root, packaged ? 'licenses' : 'LICENSES')),
       ];
     },
     description(section: SettingsSection): string {

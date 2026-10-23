@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createUpdatePreferenceStore, createUpdateSessionStore } from './update-storage';
 import { downloadVerifiedUpdate } from './update-download';
 import { replaceAppImage } from './replace-appimage';
+import { updateChildPath } from './update-path';
 import type { UpdateRelease } from '../shared/updates';
 
 const folders: string[] = [];
@@ -22,6 +23,40 @@ afterEach(async () => {
 });
 
 describe('update data retention', () => {
+  it('rejects filenames that could leave the configured data folder or overwrite another library', async () => {
+    const root = await folder();
+    for (const name of ['../outside', '..\\outside', '/outside', '.', '..', '', 'nul\0.json'])
+      expect(() => updateChildPath(root, name)).toThrow();
+    expect(() => createUpdatePreferenceStore(join(root, 'presets.json'), '0.2.0')).toThrow();
+    expect(updateChildPath(root, 'tui-updates.json')).toBe(join(root, 'tui-updates.json'));
+  });
+  it.skipIf(process.platform === 'win32')(
+    'does not follow a symlinked settings file or recovery project',
+    async () => {
+      const root = await folder();
+      const outside = join(await folder(), 'private.json');
+      await writeFile(outside, 'untouched private file');
+      await symlink(outside, join(root, 'updates.json'));
+      await expect(
+        createUpdatePreferenceStore(join(root, 'updates.json'), '0.2.0').load(),
+      ).rejects.toThrow(/regular file/);
+      const id = '12345678-1234-1234-1234-123456789012';
+      await writeFile(
+        join(root, 'session.json'),
+        JSON.stringify({
+          id,
+          documentPath: null,
+          hasProject: true,
+          dirty: true,
+          mode: 'image',
+          playhead: 0,
+        }),
+      );
+      await symlink(outside, join(root, `${id}.gleech`));
+      await expect(createUpdateSessionStore(root).read()).rejects.toThrow(/regular file/);
+      expect(await readFile(outside, 'utf8')).toBe('untouched private file');
+    },
+  );
   it('defaults to enabled and only updates its own settings file', async () => {
     const root = await folder();
     await writeFile(join(root, 'presets.json'), 'presets');
@@ -83,6 +118,48 @@ describe('update data retention', () => {
 });
 
 describe('stable AppImage installation paths', () => {
+  it.skipIf(process.platform === 'win32')(
+    'preserves a custom filename through a configured directory symlink',
+    async () => {
+      const root = await folder();
+      const alias = join(await folder(), 'application folder');
+      await symlink(root, alias, 'dir');
+      const current = join(alias, 'My GLEECH ü #1.AppImage');
+      const update = join(root, 'download.AppImage');
+      await writeFile(current, 'old application');
+      await writeFile(update, 'verified new application');
+      replaceAppImage(current, update);
+      expect(await readFile(current, 'utf8')).toBe('verified new application');
+      expect(await readFile(join(root, 'My GLEECH ü #1.AppImage'), 'utf8')).toBe(
+        'verified new application',
+      );
+    },
+  );
+  it('rejects an aliased path to the running AppImage before changing it', async () => {
+    const root = await folder();
+    const current = join(root, 'GLEECH.AppImage');
+    await writeFile(current, 'old application');
+    expect(() => replaceAppImage(current, `${root}/./GLEECH.AppImage`)).toThrow();
+    expect(await readFile(current, 'utf8')).toBe('old application');
+  });
+  it.skipIf(process.platform === 'win32')(
+    'refuses symlinked original and downloaded AppImages',
+    async () => {
+      const root = await folder();
+      const current = join(root, 'GLEECH.AppImage');
+      const update = join(root, 'download.AppImage');
+      const outside = join(await folder(), 'other.AppImage');
+      await writeFile(outside, 'another application');
+      await writeFile(current, 'old application');
+      await symlink(outside, update);
+      expect(() => replaceAppImage(current, update)).toThrow(/regular file/);
+      expect(await readFile(current, 'utf8')).toBe('old application');
+      expect(await readFile(outside, 'utf8')).toBe('another application');
+      await symlink(outside, join(root, 'alias.AppImage'));
+      expect(() => replaceAppImage(join(root, 'alias.AppImage'), current)).toThrow(/symlink/);
+      expect(await readFile(outside, 'utf8')).toBe('another application');
+    },
+  );
   it('replaces the original versioned filename without moving the launcher target', async () => {
     const root = await folder();
     const current = join(root, 'GLEECH-0.2.0-linux-x86_64.AppImage');
