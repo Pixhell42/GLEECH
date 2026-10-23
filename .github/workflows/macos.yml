@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - apps/desktop/src/**
+      - packages/**
+      - tooling/support-check.mjs
+      - tooling/github-feedback-check.mjs
+      - tooling/updates-check.mjs
       - .github/workflows/macos.yml
       - apps/desktop/electron-builder.yml
-      - apps/desktop/src/**
       - packages/*/src/**
       - tooling/timeline-*.mjs
       - tooling/file-action.mjs
@@ -89,6 +93,7 @@ jobs:
         run: |
           gleech_executable="$GLEECH_MAC_APP/Contents/MacOS/GLEECH"
           node tooling/ffmpeg-package-check.mjs "$GLEECH_MAC_APP/Contents/Resources"
+          node tooling/update-package-check.mjs "$GLEECH_MAC_APP/Contents/Resources" apps/desktop/release
           node tooling/ffmpeg-check.mjs "$gleech_executable"
           node tooling/smoke.mjs "$gleech_executable"
           node tooling/image-check.mjs "$gleech_executable" --cpu
@@ -96,6 +101,9 @@ jobs:
           node tooling/mcp-clients-check.mjs "$gleech_executable"
           node tooling/cli-check.mjs "$gleech_executable" --cpu --require-ffmpeg
           node tooling/cli-launcher-check.mjs "$GLEECH_MAC_APP"
+          node tooling/updates-check.mjs "$gleech_executable"
+          node tooling/support-check.mjs "$gleech_executable" --cpu
+          node tooling/github-feedback-check.mjs "$gleech_executable" --cpu --allow-unavailable-keyring
       - name: Test packaged timeline and media
         env:
           GLEECH_MAC_APP: ${{ matrix.app }}
@@ -111,5 +119,7 @@ jobs:
             apps/desktop/release/GLEECH-*-mac-${{ matrix.arch }}.zip
             apps/desktop/release/mac-build-${{ matrix.arch }}.json
             apps/desktop/release/SHA256SUMS-mac-${{ matrix.arch }}.txt
+            apps/desktop/release/latest-${{ matrix.arch }}-mac.yml
+            apps/desktop/release/*.blockmap
           if-no-files-found: error
           retention-days: 14

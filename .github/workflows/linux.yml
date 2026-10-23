@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - apps/desktop/src/**
+      - packages/**
+      - tooling/support-check.mjs
+      - tooling/github-feedback-check.mjs
+      - tooling/updates-check.mjs
       - .github/workflows/linux.yml
       - apps/desktop/electron-builder.yml
-      - apps/desktop/src/**
       - packages/*/src/**
       - tooling/timeline-*.mjs
       - tooling/file-action.mjs
@@ -84,11 +88,15 @@ jobs:
         run: pnpm check
       - name: Test unpacked image rendering and MCP clients
         run: |
+          node tooling/update-package-check.mjs apps/desktop/release/linux-unpacked/resources apps/desktop/release
           xvfb-run -a node tooling/image-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
           xvfb-run -a node tooling/ffmpeg-check.mjs apps/desktop/release/linux-unpacked/gleech-bin
           xvfb-run -a node tooling/mcp-clients-check.mjs apps/desktop/release/linux-unpacked/gleech
           xvfb-run -a node tooling/cli-check.mjs apps/desktop/release/linux-unpacked/gleech-bin --cpu --require-ffmpeg
           node tooling/cli-launcher-check.mjs apps/desktop/release/linux-unpacked/gleech
+          xvfb-run -a node tooling/updates-check.mjs apps/desktop/release/linux-unpacked/gleech
+          xvfb-run -a node tooling/support-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
+          xvfb-run -a node tooling/github-feedback-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu --allow-unavailable-keyring
       - name: Test actual AppImage startup, MCP and remount
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
@@ -112,5 +120,7 @@ jobs:
             ${{ steps.package.outputs.appimage }}
             apps/desktop/release/linux-build-x64.json
             apps/desktop/release/SHA256SUMS-linux-x64.txt
+            apps/desktop/release/latest-x64-linux.yml
+            apps/desktop/release/*.blockmap
           if-no-files-found: error
           retention-days: 14

@@ -86,17 +86,15 @@ try {
   let menu = page.locator('.file-menu-items');
   await toggle.click();
   assert.ok(await menu.evaluate((node) => node.scrollHeight <= node.clientHeight));
-  await menu.getByRole('button', { name: 'Community', exact: true }).focus();
+  await menu.getByRole('button', { name: 'Library', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
-  await page.getByRole('button', { name: 'Discord Community', exact: true }).waitFor();
+  await menu.getByRole('button', { name: 'Filters and Presets', exact: true }).waitFor();
   await page.keyboard.press('ArrowDown');
-  assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Discord Community');
+  assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Open sample image');
   await page.keyboard.press('Escape');
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(
-    await menu
-      .getByRole('button', { name: 'Community', exact: true })
-      .getAttribute('aria-expanded'),
+    await menu.getByRole('button', { name: 'Library', exact: true }).getAttribute('aria-expanded'),
     'false',
   );
   await menu.getByRole('button', { name: 'Library', exact: true }).click();
@@ -200,8 +198,8 @@ try {
   assert.ok(await page.locator('.image-workspace').evaluate((node) => node.clientWidth >= 280));
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await toggle.click();
-  await menu.getByRole('button', { name: 'Community', exact: true }).click();
-  for (const panel of [menu, page.getByRole('group', { name: 'Community', exact: true })]) {
+  await menu.getByRole('button', { name: 'Library', exact: true }).click();
+  for (const panel of [menu, page.getByRole('group', { name: 'Library', exact: true })]) {
     assert.ok(
       await panel.evaluate((node) => {
         const rect = node.getBoundingClientRect();

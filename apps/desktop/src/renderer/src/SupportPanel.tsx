@@ -23,18 +23,13 @@ const PAYMENTS = [
   },
 ] as const;
 
-export function SupportDialog({ onClose }: { onClose(): void }) {
-  const modal = useRef<HTMLDialogElement>(null);
+export function SupportPanel() {
+  const panel = useRef<HTMLDivElement>(null);
   const [payment, setPayment] = useState<PaymentId | null>(null);
   const [feedback, setFeedback] = useState('');
   const selected = PAYMENTS.find((item) => item.id === payment);
   useEffect(() => {
-    const dialog = modal.current!;
-    dialog.showModal();
-    return () => dialog.close();
-  }, []);
-  useEffect(() => {
-    modal.current
+    panel.current
       ?.querySelector<HTMLButtonElement>(
         payment ? '.support-payment-actions button' : '.support-payments button',
       )
@@ -57,26 +52,20 @@ export function SupportDialog({ onClose }: { onClose(): void }) {
     }
   };
   return (
-    <dialog
-      ref={modal}
-      className={`stage-dialog support-dialog${selected ? ' support-qr-dialog' : ''}`}
-      aria-labelledby="support-title"
-      onCancel={(event) => {
-        event.preventDefault();
-        if (selected) {
+    <div
+      ref={panel}
+      className={`support-panel${selected ? ' support-payment-panel' : ''}`}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && selected) {
+          event.preventDefault();
+          event.stopPropagation();
           setPayment(null);
           setFeedback('');
-        } else onClose();
+        }
       }}
-      onKeyDown={(event) => event.stopPropagation()}
     >
       <div className="support-heading">
-        <h2 id="support-title">
-          {selected ? `${selected.name} · Support GLEECH` : 'Support GLEECH'}
-        </h2>
-        <button type="button" aria-label="Close support panel" onClick={onClose}>
-          ×
-        </button>
+        <h4>{selected ? `${selected.name} · Support GLEECH` : 'Support GLEECH'}</h4>
       </div>
       {selected ? (
         <>
@@ -115,7 +104,6 @@ export function SupportDialog({ onClose }: { onClose(): void }) {
               src={selected.qr}
               width={selected.width}
               height={selected.height}
-              style={{ width: selected.width * 0.4 }}
               alt={`${selected.name} donation QR code`}
             />
           </div>
@@ -206,32 +194,6 @@ export function SupportDialog({ onClose }: { onClose(): void }) {
       <p className="support-feedback" role="status" aria-live="polite">
         {feedback}
       </p>
-    </dialog>
-  );
-}
-
-export function SupportIcon({ kind }: { kind: 'bug' | 'feature' }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {kind === 'bug' ? (
-        <>
-          <path d="M9 7V6a3 3 0 0 1 6 0v1M8 8h8v7a4 4 0 0 1-8 0zM12 8v10M5 5l3 3M19 5l-3 3M3 12h5M16 12h5M5 20l3-4M19 20l-3-4" />
-        </>
-      ) : (
-        <>
-          <path d="M8 16c0-3-3-3.5-3-7a7 7 0 0 1 14 0c0 3.5-3 4-3 7M8 16h8M9 19h6M10 22h4M12 5v7M9 8h6" />
-        </>
-      )}
-    </svg>
+    </div>
   );
 }

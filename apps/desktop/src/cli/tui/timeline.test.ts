@@ -7,6 +7,9 @@ import {
   createEffect,
   createProject,
   createTimeline,
+  createLfo,
+  evaluateEffectsAt,
+  LFO_SHAPES,
   frameSeed,
   type ProjectState,
   type SolidEffect,
@@ -22,6 +25,7 @@ import { exportTimeline } from '../timeline';
 import { runTui } from './app';
 import { Terminal } from './terminal';
 import { TimelineTransport } from './timeline';
+import { createTuiSettings, type TuiSettings } from './settings';
 
 const pixels = Uint8Array.from([0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255]);
 const png = encodePng({ width: 2, height: 2, pixels: pixels.buffer });
@@ -120,6 +124,45 @@ describe('timeline transport', () => {
 });
 
 describe('shared runner previews', () => {
+  it.each(LFO_SHAPES)(
+    'renders saved $label LFO modulation through the shared runner',
+    async ({ value: shape }) => {
+      const state = project();
+      const solid = state.effects[0]!;
+      const doc = session({
+        ...state,
+        effects: [
+          {
+            ...solid,
+            animation: {
+              amount: {
+                keys: [],
+                modulators: [
+                  { ...createLfo('shape'), shape, sync: false, depth: 1, combine: 'add' },
+                ],
+              },
+            },
+          } as SolidEffect,
+        ],
+      });
+      const frames: TimelinePreviewFrame[] = [];
+      await previewTimeline(doc, doc.state, [0, 0.5, 1], {
+        onFrame(frame) {
+          frames.push(frame);
+        },
+      });
+      const { renderHeadless } = await import('../engine');
+      for (const frame of frames) {
+        const expected = await renderHeadless({
+          source: await doc.sourceImage(),
+          effects: evaluateEffectsAt(doc.state.effects, frame.time, { bpm: 120, seed: 17 }),
+          masterSeed: 17,
+        });
+        expect(frame.image.pixels).toEqual(expected.image.pixels);
+      }
+      expect(doc.dirty).toBe(false);
+    },
+  );
   it('matches exported animation pixels at original timeline times and keeps raw frames', async () => {
     const doc = session();
     const frames: TimelinePreviewFrame[] = [];
@@ -241,7 +284,12 @@ describe('shared runner previews', () => {
 });
 
 /** Decode the real screen's ANSI diff output, so assertions see the current UI. */
-function terminalHarness(doc: Session, columns = 120, rows = 30) {
+function terminalHarness(
+  doc: Session,
+  columns = 120,
+  rows = 30,
+  settings: TuiSettings | false = false,
+) {
   const input = new PassThrough();
   let x = 0,
     y = 0;
@@ -283,6 +331,7 @@ function terminalHarness(doc: Session, columns = 120, rows = 30) {
     doc,
     false,
     new Terminal(input as unknown as NodeJS.ReadStream, output as unknown as NodeJS.WriteStream),
+    { settings },
   );
   const text = () => cells.map((row) => row.join('')).join('\n');
   const key = (value: string) => {
@@ -319,6 +368,78 @@ const right = '\x1b[C',
   esc = '\x1b';
 
 describe('interactive TUI timeline', () => {
+  it('exposes Settings, update preferences and fixed support links without changing the timeline', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gleech-tui-settings-ui-'));
+    const opened: string[] = [];
+    const settings = createTuiSettings({
+      folder: root,
+      discover: async () => null,
+      open: async (url) => {
+        opened.push(url);
+      },
+    });
+    await settings.ready;
+    const doc = session();
+    const before = doc.state;
+    const tui = terminalHarness(doc, 120, 30, settings);
+    try {
+      await tui.see('TIMELINE');
+      tui.key(right);
+      await tui.see('0.500s  frame 2/3');
+      tui.key(',');
+      await tui.see('SETTINGS');
+      await tui.see('Automatic update notifications: On');
+      tui.key(right + enter);
+      await tui.see('Automatic update notifications: Off');
+      tui.key(down + enter);
+      await tui.see('You’re up to date.');
+      tui.key('2');
+      await tui.see('Cash App · $Pixhell');
+      tui.key(right + enter);
+      await vi.waitFor(() => expect(opened).toContain('https://cash.app/$Pixhell'));
+      tui.key('3' + right + enter);
+      await vi.waitFor(() =>
+        expect(opened).toContain('https://github.com/Pixhell42/GLEECH/issues/new?template=bug.yml'),
+      );
+      tui.key('4' + right + enter);
+      await vi.waitFor(() => expect(opened).toContain('https://discord.gg/b7Mq8fjvk'));
+      tui.key('5');
+      await tui.see('Third-party notices');
+      tui.key(esc);
+      await tui.see('0.500s  frame 2/3');
+      expect(doc.state).toBe(before);
+      expect(doc.dirty).toBe(false);
+      expect(doc.service.canUndo()).toBe(false);
+    } finally {
+      await tui.close();
+      expect(dirname(resolve(root))).toBe(resolve(tmpdir()));
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps Settings keyboard navigation usable in a 72 by 20 terminal', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gleech-tui-settings-small-'));
+    const settings = createTuiSettings({ folder: root, discover: async () => null });
+    await settings.ready;
+    const tui = terminalHarness(session(), 72, 20, settings);
+    try {
+      await tui.see('TIMELINE');
+      tui.key('\x1bOQ');
+      await tui.see('SETTINGS');
+      tui.key('2');
+      await tui.see('Cash App · $Pixhell');
+      tui.key('\x1b[6~');
+      await tui.see('Bitcoin address:');
+      tui.key('1' + right + down.repeat(4) + enter);
+      await tui.see('WHAT’S NEW');
+      tui.key(esc + esc);
+      await tui.see('TIMELINE');
+    } finally {
+      await tui.close();
+      expect(dirname(resolve(root))).toBe(resolve(tmpdir()));
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it('uses plain t for modes and Shift+T for Add Shader in either mode', async () => {
     const doc = session();
     const state = doc.state;

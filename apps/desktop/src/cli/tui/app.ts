@@ -65,6 +65,12 @@ import {
   type TerminalCaps,
 } from './graphics';
 import { Screen, type Rect } from './screen';
+import {
+  createTuiSettings,
+  SETTINGS_SECTIONS,
+  terminalSettingsText,
+  type TuiSettings,
+} from './settings';
 import { ZOOMS, clampView, viewportImage, type View } from './viewport';
 import { Terminal, type InputEvent, type KeyEvent, type MouseEvent } from './terminal';
 import {
@@ -151,6 +157,14 @@ interface HelpModal {
   kind: 'help';
   scroll: number;
 }
+interface SettingsModal {
+  kind: 'settings';
+  section: number;
+  row: number;
+  focus: 'navigation' | 'actions';
+  scroll: number;
+  notes: boolean;
+}
 interface ConfirmModal {
   kind: 'confirm';
   title: string;
@@ -170,6 +184,7 @@ type Modal =
   | PresetModal
   | GleechModal
   | HelpModal
+  | SettingsModal
   | ConfirmModal
   | BusyModal
   | TimelineExportModal;
@@ -192,6 +207,7 @@ export async function runTui(
   initial: Session,
   isSample: boolean,
   term = new Terminal(),
+  options: { settings?: TuiSettings | false } = {},
 ): Promise<number> {
   const level = detectColorLevel(process.stdout);
   const screen = new Screen(level || 3, C.window, C.text);
@@ -221,6 +237,9 @@ export async function runTui(
   let helpMaxScroll = 0;
   let spinner = 0;
   let quitting = false;
+  const settings = options.settings === false ? null : (options.settings ?? createTuiSettings());
+  let settingsMaxScroll = 0;
+  let settingsVisibleRows = 1;
   let busyTask: Promise<void> | null = null;
   let busyAbort: AbortController | null = null;
 
@@ -1131,6 +1150,7 @@ export async function runTui(
                 ['?', 'help'],
               ];
     let x = 1;
+    hints.unshift([',', 'settings']);
     for (const [k, label] of hints) {
       const need = cellWidth(k) + cellWidth(label) + 3;
       if (x + need > W - 1) break;
@@ -1668,6 +1688,122 @@ export async function runTui(
     }
   }
 
+  function openSettings(notes = false) {
+    if (!settings) return;
+    endGesture();
+    pausePlayback();
+    modal = { kind: 'settings', section: 0, row: 0, focus: 'navigation', scroll: 0, notes };
+    requestRender(0);
+  }
+
+  function settingsActions(m: SettingsModal) {
+    const actions = settings!.actions(SETTINGS_SECTIONS[m.section]!);
+    if (m.section === 0)
+      actions.push({
+        label: 'What’s new in this version',
+        async run() {
+          m.notes = true;
+          m.scroll = 0;
+        },
+      });
+    return actions;
+  }
+
+  function drawSettings(m: SettingsModal) {
+    const r = box(104, 28, 'SETTINGS');
+    const x = r.x + 20,
+      w = r.w - 22;
+    SETTINGS_SECTIONS.forEach((section, index) => {
+      const active = m.section === index && !m.notes;
+      const y = r.y + 2 + index * 2;
+      screen.text(
+        r.x + 2,
+        y,
+        `${index + 1} ${section}`,
+        { fg: active ? C.hot : C.muted, bg: C.elevated, bold: active && m.focus === 'navigation' },
+        16,
+      );
+      hits.push({
+        rect: { x: r.x + 1, y, w: 17, h: 1 },
+        press() {
+          m.section = index;
+          m.row = 0;
+          m.focus = 'navigation';
+          m.scroll = 0;
+          m.notes = false;
+        },
+      });
+    });
+    const section = SETTINGS_SECTIONS[m.section]!;
+    screen.text(
+      x,
+      r.y + 2,
+      m.notes ? `WHAT’S NEW · v${settings!.snapshot().version}` : section.toUpperCase(),
+      { fg: C.accent, bg: C.elevated, bold: true },
+      w,
+    );
+    const actions = m.notes ? [] : settingsActions(m);
+    const description = terminalSettingsText(
+      m.notes ? settings!.notes() : settings!.description(section),
+    );
+    const lines = [
+      ...actions.map((action) => action.label),
+      ...(actions.length ? [''] : []),
+      ...description.split('\n').flatMap((line) => (line ? wrapText(line, w) : [''])),
+    ];
+    settingsVisibleRows = Math.max(1, r.h - 7);
+    settingsMaxScroll = Math.max(0, lines.length - settingsVisibleRows);
+    m.scroll = Math.max(0, Math.min(settingsMaxScroll, m.scroll));
+    lines.slice(m.scroll, m.scroll + settingsVisibleRows).forEach((line, index) => {
+      const row = index + m.scroll;
+      const y = r.y + 4 + index;
+      const selected = row < actions.length && row === m.row && m.focus === 'actions';
+      if (selected) screen.fill({ x: x - 1, y, w: w + 1, h: 1 }, C.select);
+      screen.text(
+        x,
+        y,
+        terminalSettingsText(line),
+        {
+          fg: row < actions.length ? (selected ? C.hot : C.text) : C.muted,
+          bg: selected ? C.select : C.elevated,
+        },
+        w,
+      );
+      if (row < actions.length)
+        hits.push({
+          rect: { x, y, w, h: 1 },
+          press() {
+            m.row = row;
+            m.focus = 'actions';
+            void actions[row]!.run()
+              .then(schedule)
+              .catch((error: unknown) =>
+                flash(error instanceof Error ? error.message : String(error), C.red),
+              );
+          },
+        });
+    });
+    hits.push({
+      rect: { x, y: r.y + 4, w, h: settingsVisibleRows },
+      press() {},
+      wheel(direction) {
+        m.scroll += direction * 3;
+      },
+    });
+    // Action hit regions take precedence over the scroll region.
+    const scrollHit = hits.pop()!;
+    hits.splice(modalHitStart + 1, 0, scrollHit);
+    screen.text(
+      r.x + 2,
+      r.y + r.h - 2,
+      m.notes
+        ? '↑↓ / PgUp PgDn scroll · enter / esc back'
+        : '1–5 section · tab / ←→ focus · ↑↓ select · enter open · PgUp PgDn scroll · esc close',
+      { fg: C.faint, bg: C.elevated },
+      r.w - 4,
+    );
+  }
+
   function drawHelp(m: HelpModal) {
     const sections: [string, [string, string][]][] = [
       [
@@ -1729,6 +1865,7 @@ export async function runTui(
           ['⇧T', 'add local/library shader'],
           ['s S', 'save · save as'],
           ['o', 'open file'],
+          [', F2', 'settings / updates / support'],
           ['q', 'quit'],
         ],
       ],
@@ -1795,6 +1932,7 @@ export async function runTui(
       else if (modal.kind === 'confirm') drawConfirm(modal);
       else if (modal.kind === 'busy') drawBusy(modal);
       else if (modal.kind === 'timeline-export') drawTimelineExport(modal);
+      else if (modal.kind === 'settings') drawSettings(modal);
       else drawHelp(modal);
     }
     // A dialog's cells may equal the plain canvas cells beneath an inline
@@ -2235,6 +2373,57 @@ export async function runTui(
 
   async function onModalKey(m: Modal, event: KeyEvent | { kind: 'paste'; text: string }) {
     const k = event.kind === 'key' ? event : null;
+    if (m.kind === 'settings') {
+      if (!k || !settings) return;
+      if (m.notes) {
+        if (k.name === 'escape' || k.name === 'enter') {
+          m.notes = false;
+          m.scroll = 0;
+          await settings.acknowledgeNotes();
+        } else if (['up', 'down', 'pageup', 'pagedown'].includes(k.name))
+          m.scroll +=
+            k.name === 'up'
+              ? -1
+              : k.name === 'down'
+                ? 1
+                : k.name === 'pageup'
+                  ? -settingsVisibleRows
+                  : settingsVisibleRows;
+        return;
+      }
+      if (k.name === 'escape') {
+        modal = null;
+        return;
+      }
+      if (['1', '2', '3', '4', '5'].includes(k.name)) {
+        m.section = Number(k.name) - 1;
+        m.row = 0;
+        m.scroll = 0;
+        m.focus = 'navigation';
+        return;
+      }
+      if (k.name === 'tab') m.focus = m.focus === 'navigation' ? 'actions' : 'navigation';
+      else if (k.name === 'left') m.focus = 'navigation';
+      else if (k.name === 'right') m.focus = 'actions';
+      else if (k.name === 'pageup' || k.name === 'pagedown')
+        m.scroll += (k.name === 'pageup' ? -1 : 1) * settingsVisibleRows;
+      else if (k.name === 'up' || k.name === 'down') {
+        const direction = k.name === 'up' ? -1 : 1;
+        if (m.focus === 'navigation') {
+          m.section = (m.section + direction + SETTINGS_SECTIONS.length) % SETTINGS_SECTIONS.length;
+          m.row = 0;
+          m.scroll = 0;
+        } else {
+          const actions = settingsActions(m);
+          m.row = (m.row + direction + actions.length) % actions.length;
+          m.scroll = Math.max(0, m.row - settingsVisibleRows + 1);
+        }
+      } else if (k.name === 'enter' || k.name === 'space') {
+        if (m.focus === 'navigation') m.focus = 'actions';
+        else await settingsActions(m)[m.row]!.run();
+      }
+      return;
+    }
     if (m.kind === 'busy') {
       if (k?.name === 'escape') m.cancel?.();
       return;
@@ -2388,6 +2577,7 @@ export async function runTui(
       return flash('Redo', C.muted);
     }
     if (event.ctrl) return;
+    if (n === ',' || n === 'f2') return openSettings();
     if (n === 't' && !event.shift) {
       endGesture();
       pausePlayback();
@@ -2747,6 +2937,40 @@ export async function runTui(
       schedule();
     }
   }, 90);
+  let notifiedVersion: string | null = null;
+  const offSettings = settings?.subscribe(() => {
+    const state = settings.snapshot();
+    if (
+      state.phase === 'available' &&
+      state.automatic &&
+      state.release &&
+      state.dismissedVersion !== state.release.version &&
+      notifiedVersion !== state.release.version
+    ) {
+      notifiedVersion = state.release.version;
+      flash(
+        `GLEECH ${state.release.version} is available · , Settings · open Updates to dismiss`,
+        C.accent,
+        12000,
+      );
+    }
+    if (state.release?.version === state.dismissedVersion && toast?.text.startsWith('GLEECH '))
+      toast = null;
+    schedule();
+  });
+  void settings?.ready
+    .then(() => {
+      if (settings.snapshot().whatsNew && !modal) openSettings(true);
+      schedule();
+    })
+    .catch(schedule);
+  const checkUpdates = () => {
+    void settings?.check(false).catch(() => {});
+  };
+  const updateStartup = setTimeout(checkUpdates, 15000);
+  const updateInterval = setInterval(checkUpdates, 6 * 60 * 60 * 1000);
+  updateStartup.unref();
+  updateInterval.unref();
   if (isSample)
     flash(
       'Sample image loaded · a add effect · p presets · g roll a GLEECH · o open your image · ? keys',
@@ -2757,6 +2981,10 @@ export async function runTui(
   schedule();
   const code = await exitPromise;
   clearInterval(ticker);
+  clearTimeout(updateStartup);
+  clearInterval(updateInterval);
+  offSettings?.();
+  settings?.dispose();
   if (renderTimer) clearTimeout(renderTimer);
   endGesture();
   if (emitTimer) clearTimeout(emitTimer);
