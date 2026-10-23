@@ -29,10 +29,31 @@ async function atomicUpdateWrite(
 
 async function openUpdateFile(folder: string, name: string) {
   const path = updateChildPath(folder, name);
-  const info = await lstat(path);
-  if (!info.isFile() || info.isSymbolicLink())
-    throw new Error('Update data must be a regular file, not a link.');
-  return open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  const file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ELOOP')
+        throw new Error('Update data must be a regular file, not a link.');
+      throw error;
+    },
+  );
+  try {
+    // Validate the opened handle. A later rename cannot redirect its reads.
+    // The entry comparison also rejects links on platforms without O_NOFOLLOW.
+    const info = await file.stat({ bigint: true });
+    const entry = await lstat(path, { bigint: true });
+    if (
+      !info.isFile() ||
+      !entry.isFile() ||
+      entry.isSymbolicLink() ||
+      info.dev !== entry.dev ||
+      info.ino !== entry.ino
+    )
+      throw new Error('Update data must be a regular file, not a link or replaced entry.');
+    return file;
+  } catch (error) {
+    await file.close();
+    throw error;
+  }
 }
 
 async function readJson(folder: string, name: string): Promise<unknown> {

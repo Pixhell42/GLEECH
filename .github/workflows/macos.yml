@@ -9,6 +9,7 @@ on:
       - tooling/support-check.mjs
       - tooling/github-feedback-check.mjs
       - tooling/updates-check.mjs
+      - tooling/update-package-*.mjs
       - .github/workflows/macos.yml
       - apps/desktop/electron-builder.yml
       - apps/desktop/package.json
