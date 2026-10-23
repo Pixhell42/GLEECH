@@ -3,6 +3,7 @@ import { resolve, join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { verifyPrepared } from './prepare-ffmpeg.mjs';
+import { assertNoFfmpegStaging } from './ffmpeg-package-layout.mjs';
 
 const [resourceDirectory, ...extra] = process.argv.slice(2);
 assert.ok(
@@ -10,6 +11,7 @@ assert.ok(
   'Usage: ffmpeg-package-check.mjs <app-resources-directory>',
 );
 const directory = resolve(resourceDirectory, 'ffmpeg');
+assertNoFfmpegStaging(resolve(resourceDirectory));
 const target = `${process.platform}-${process.arch}`;
 await verifyPrepared(directory, target);
 const exe = join(directory, 'bin', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');

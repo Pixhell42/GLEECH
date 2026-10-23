@@ -1,0 +1,219 @@
+.app-settings-dialog {
+  width: min(800px, calc(100vw - 48px));
+  padding: 0;
+  overflow: hidden;
+}
+.app-settings-heading,
+.update-dialog > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border, #35383c);
+}
+.app-settings-heading h2,
+.update-dialog > header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.app-settings-layout {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  height: min(680px, calc(100vh - 150px));
+  min-height: 340px;
+}
+.app-settings-layout nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px 10px;
+  border-right: 1px solid var(--border, #35383c);
+  background: #ffffff03;
+}
+.app-settings-layout nav button {
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+}
+.app-settings-layout nav button[aria-current='page'] {
+  background: #ffffff10;
+  border-color: #ffffff13;
+  color: var(--accent, #f3ce73);
+}
+.app-settings-content {
+  padding: 24px;
+  overflow-y: auto;
+  line-height: 1.55;
+}
+.app-settings-content > h3 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+.app-settings-content button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.support-panel .support-payments button {
+  display: grid;
+  justify-content: stretch;
+  gap: 8px;
+  padding: 16px 10px;
+}
+.support-panel .support-heading h4 {
+  margin: 0;
+  font-size: 15px;
+}
+.app-settings-content:has(.support-payment-panel) {
+  display: flex;
+  flex-direction: column;
+}
+.app-settings-content:has(.support-payment-panel) > h3 {
+  flex-shrink: 0;
+}
+.support-payment-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.support-payment-panel > :not(.support-qr-viewport) {
+  flex-shrink: 0;
+}
+.support-payment-panel .support-qr-viewport {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+.support-payment-panel .support-qr-viewport img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.feedback-panel .feedback-tabs {
+  margin-bottom: 16px;
+}
+.feedback-panel form {
+  min-width: 0;
+}
+.feedback-panel .feedback-extra[open] {
+  display: grid;
+  gap: 10px;
+}
+.app-settings-content .app-settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 22px 0 12px;
+}
+.app-settings-toggle input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin-top: 5px;
+  accent-color: var(--accent, #f3ce73);
+}
+.app-settings-toggle span {
+  display: grid;
+  gap: 5px;
+}
+.app-settings-toggle small {
+  opacity: 0.72;
+  font-size: 12px;
+}
+.app-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.settings-notice {
+  padding: 12px 14px;
+  background: #ffffff07;
+  border-left: 2px solid var(--accent, #f3ce73);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.settings-about-mark {
+  display: grid;
+  gap: 6px;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.settings-about-mark span {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  opacity: 0.65;
+}
+.update-notification {
+  position: fixed;
+  bottom: 36px;
+  left: 18px;
+  z-index: 150;
+  width: 325px;
+  max-width: calc(100vw - 36px);
+  padding: 18px;
+  border: 1px solid #ffffff26;
+  border-radius: 9px;
+  background: #1e2227;
+  color: #eee;
+  box-shadow: 0 10px 40px #0008;
+  line-height: 1.4;
+}
+.update-notification > strong {
+  display: block;
+  padding-right: 20px;
+}
+.update-notification p {
+  font-size: 12px;
+  color: #b8bec6;
+}
+.update-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.update-dialog {
+  width: min(530px, calc(100vw - 48px));
+  padding: 0 22px 22px;
+  line-height: 1.55;
+}
+.update-dialog > header {
+  margin: 0 -22px 20px;
+}
+.update-dialog progress {
+  display: block;
+  width: 100%;
+  height: 12px;
+  margin-top: 20px;
+  accent-color: var(--accent, #f3ce73);
+}
+.update-progress-numbers {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.update-release-notes {
+  max-height: min(400px, 55vh);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 22px;
+  font-size: 13px;
+}
+.modulator-choice .lfo-shape-icon {
+  display: block;
+  flex-shrink: 0;
+  margin: 0 auto;
+}

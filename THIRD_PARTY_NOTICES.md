@@ -19,6 +19,12 @@ the app; the source archive must not be removed to reduce package size.
 
 ### JavaScript and native dependencies
 
+Application updates use electron-updater 6.8.9 (MIT) and its retained JavaScript
+dependencies. Original package notices are included in LICENSES. lazy-val 1.0.5
+declares MIT terms but omits a standalone license in both its npm package and
+matching source commit; its original metadata and the omission record are retained
+under LICENSES/lazy-val/1.0.5.
+
 The pinned production package inventory, SPDX declarations, upstream homepages
 and retained notice paths are in [LICENSES/dependencies.json](LICENSES/dependencies.json).
 Original license/notice texts are preserved in LICENSES and copied into the

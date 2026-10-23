@@ -15,6 +15,12 @@ any effect control with keyframes, curves, audio and LFO modulators, and renders
 video, GIFs and loops, image sequences and flip books (see
 [Timeline, video and GIF](docs/TIMELINE.md)). Movie and loop export use ffmpeg.
 
+The **0.2.0 release candidate** brings timelines to desktop, CLI and TUI on all
+three platforms, with bundled FFmpeg. The terminal tools use the shared timeline
+runner for saved animation, external video and audio, MP4, GIF and PNG sequences.
+See the [0.2.0 release notes and preparation status](docs/RELEASE-0.2.0.md) and
+[CLI/TUI guide](docs/CLI.md).
+
 The current library contains **109 built-in effects**, including **46 original
 shaders**, **29 starter presets**, **40 depth maps** and **40 vector maps**.
 Imported shaders are additional library entries. See the [effect inventory](docs/EFFECTS.md).
