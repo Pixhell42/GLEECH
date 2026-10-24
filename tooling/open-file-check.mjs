@@ -11,10 +11,14 @@ const output = resolve('test-results/open-file');
 await mkdir(output, { recursive: true });
 const work = await mkdtemp(join(output, 'work-'));
 const env = { ...process.env, GLEECH_SMOKE_USER_DATA: await mkdtemp(join(output, 'profile-')) };
+env.GLEECH_TEST_NATIVE_FRAMES = '1';
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.ELECTRON_RENDERER_URL;
 const targets = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
 assert.ok(targets.length <= 1, 'Supply at most one packaged executable.');
+const cpu = process.argv.includes('--cpu');
+for (const flag of process.argv.slice(2).filter((argument) => argument.startsWith('--')))
+  assert.equal(flag, '--cpu', `Unknown file-opening test option: ${flag}`);
 const knownExecutables = new Map(
   [
     'win-unpacked/GLEECH.exe',
@@ -34,7 +38,11 @@ const exe =
   );
 if (targets[0]) assert.ok(exe, 'Use a known packaged executable under apps/desktop/release.');
 const app = await electron.launch({
-  args: [...(exe ? [] : [resolve('apps/desktop')]), '--smoke-test'],
+  args: [
+    ...(exe ? [] : [resolve('apps/desktop')]),
+    '--smoke-test',
+    ...(cpu ? ['--disable-gpu', '--disable-software-rasterizer'] : []),
+  ],
   env,
   ...(exe ? { executablePath: resolve(exe) } : {}),
 });
@@ -89,6 +97,12 @@ try {
     await page.waitForFunction(() => !document.querySelector('.operation-banner'));
   };
   const image = resolve('apps/desktop/resources/presets/statue.png');
+  // A DOM-ready welcome screen may precede the first native compositor frame,
+  // especially on hosted Intel Macs. Capture only after fonts and paint settle.
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  });
   await captureTestWindow(app, join(output, 'empty-open.png'));
   await choose(image);
   await page.getByRole('button', { name: 'Open Image or Video or Project', exact: true }).click();
@@ -96,6 +110,7 @@ try {
     /statue/.test(document.querySelector('.project-name')?.textContent ?? ''),
   );
   await settle();
+  if (cpu) assert.equal(await page.locator('footer').getAttribute('data-render-backend'), 'cpu');
   const options = await app.evaluate(() => globalThis.__openFileOptions);
   assert.equal(options.title, 'Open File');
   for (const extension of [

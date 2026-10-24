@@ -99,7 +99,7 @@ jobs:
           node tooling/cli-launcher-check.mjs "$GLEECH_MAC_APP"
           node tooling/updates-check.mjs "$gleech_executable"
           node tooling/terminal-updates-check.mjs "$gleech_executable"
-          node tooling/open-file-check.mjs "$gleech_executable"
+          node tooling/open-file-check.mjs "$gleech_executable" --cpu
           node tooling/support-check.mjs "$gleech_executable" --cpu
           node tooling/github-feedback-check.mjs "$gleech_executable" --cpu --allow-unavailable-keyring
       - name: Upload verified alpha package
