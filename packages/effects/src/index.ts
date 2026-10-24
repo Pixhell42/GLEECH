@@ -109,8 +109,9 @@ import { createShapeTiles, polygonDistance } from './shape-tiles';
 import { createColorSampler } from './color-gradient';
 import { createToneTable } from './tonal';
 import { glowHighlights } from './glow';
-import { createNoiseField, noiseValue } from './noise';
+import { noiseGrainPixels } from './noise-grain';
 import { blurPixels } from './blur';
+import { rgbSplitPixels } from './rgb-split';
 import { paintedMaskSteps, canvasDrawingSteps } from './painted-mask';
 import type { PaintedMaskRasterizer } from './painted-mask-cache';
 import type { PreviewStackCache } from './preview-stack-cache';
@@ -2424,94 +2425,9 @@ function* renderSteps(
       const dx = Math.round((image.width * effect.params.horizontal) / 100);
       const dy = Math.round((image.height * effect.params.vertical) / 100);
       if (!imageFinish && dx === 0 && dy === 0) continue;
-      const amount = effect.params.amount;
-      const edgeHandling = effect.params.edgeHandling ?? 'extend';
-      for (let y = 0; y < image.height; y++) {
-        const redRow = edgeIndex(y - dy, image.height, edgeHandling) * image.width;
-        const blueRow = edgeIndex(y + dy, image.height, edgeHandling) * image.width;
-        for (let x = 0; x < image.width; x++) {
-          const index = (y * image.width + x) * 4;
-          const red = (redRow + edgeIndex(x - dx, image.width, edgeHandling)) * 4;
-          const blue = (blueRow + edgeIndex(x + dx, image.width, edgeHandling)) * 4;
-          output[index] = Math.round(pixels[index]! * (1 - amount) + pixels[red]! * amount);
-          output[index + 1] = pixels[index + 1]!;
-          output[index + 2] = Math.round(
-            pixels[index + 2]! * (1 - amount) + pixels[blue + 2]! * amount,
-          );
-          output[index + 3] = pixels[index + 3]!;
-        }
-        yield;
-      }
+      yield* rgbSplitPixels(pixels, output, image.width, image.height, effect.params, edgeIndex);
     } else if (effect.type === 'noise-grain') {
-      const p = effect.params;
-      const seed = deriveEffectSeed(options.masterSeed ?? 0, effect.patternId ?? effect.instanceId);
-      const random = (x: number, y: number, lane: number) =>
-        cellRandom(seed, x, y, lane, effect.seedOffset);
-      const field = createNoiseField(p, random);
-      const procedural = ['perlin', 'simplex', 'voronoi', 'value'].includes(p.style);
-      const size =
-        (Math.min(reference.width, reference.height) *
-          (p.style === 'scan' ? (p.scanSpacing ?? 1) : procedural ? p.scale : p.size)) /
-        100;
-      const ramp = createColorSampler(p, 'noiseColor', p.noiseColor, reference, true);
-      const color = new Float64Array(4);
-      const values = new Float64Array(3);
-      const valueAt = (nx: number, ny: number, lane: number) => {
-        const value = field(nx, ny, p.coloring === 'color' ? lane * 211 : 0);
-        return p.style === 'film'
-          ? value * (1 - p.clumping) +
-              noiseValue('value', nx / 4, ny / 4, random, lane + 601) * p.clumping
-          : value;
-      };
-      for (let y = 0; y < image.height; y++) {
-        const ny = ((y + 0.5) * reference.height) / image.height / size;
-        for (let x = 0; x < image.width; x++) {
-          const i = (y * image.width + x) * 4;
-          const nx = ((x + 0.5) * reference.width) / image.width / size;
-          const scanWidth = (p.scanWidth ?? 0.15) / (p.scanSpacing ?? 1);
-          const inRow = ny - Math.floor(ny) < scanWidth;
-          const inColumn = nx - Math.floor(nx) < scanWidth;
-          const active =
-            p.style === 'scan'
-              ? p.scanDirection === 'vertical'
-                ? inColumn
-                : p.scanDirection === 'both'
-                  ? inRow || inColumn
-                  : inRow
-              : !['speckle', 'salt-pepper'].includes(p.style) ||
-                random(Math.floor(nx), Math.floor(ny), 903) < p.density;
-          const luminance =
-            (pixels[i]! * 0.2126 + pixels[i + 1]! * 0.7152 + pixels[i + 2]! * 0.0722) / 255;
-          const response =
-            p.style === 'film' ? 1 - p.tonalResponse * (1 - 4 * luminance * (1 - luminance)) : 1;
-          values[0] = valueAt(nx, ny, 0);
-          values[1] = p.coloring === 'color' ? valueAt(nx, ny, 1) : values[0]!;
-          values[2] = p.coloring === 'color' ? valueAt(nx, ny, 2) : values[0]!;
-          const selected =
-            p.coloring === 'ramp'
-              ? ramp((x + 0.5) / image.width, (y + 0.5) / image.height, values[0]!)
-              : null;
-          for (let c = 0; c < 3; c++)
-            color[c] =
-              !active || p.intensity === 0
-                ? pixels[i + c]!
-                : p.coloring === 'ramp'
-                  ? pixels[i + c]! * (1 - p.intensity) + selected![c]! * p.intensity
-                  : p.style === 'salt-pepper'
-                    ? pixels[i + c]! * (1 - p.intensity) + values[c]! * 255 * p.intensity
-                    : Math.max(
-                        0,
-                        Math.min(
-                          255,
-                          pixels[i + c]! + (values[c]! - 0.5) * 510 * p.intensity * response,
-                        ),
-                      );
-          color[3] = pixels[i + 3]!;
-          blend(output, pixels, i, color, p.amount);
-          if (x % 64 === 63) yield;
-        }
-        yield;
-      }
+      yield* noiseGrainPixels(image, pixels, output, effect, reference, random, blend);
     } else if (effect.type === 'blur') {
       const field = effect.params.style === 'depth' ? yield* fieldFor(effect) : undefined;
       const seed = deriveEffectSeed(options.masterSeed ?? 0, effect.patternId ?? effect.instanceId);

@@ -295,9 +295,33 @@ is independent of desktop updates and is stored in `tui-updates.json` alongside
 the desktop user data. `GLEECH_USER_DATA` isolates it for tests or a separate
 terminal profile. It does not change presets, shader libraries or recent files.
 
-Downloads and installation use the desktop updater or the release page. Save TUI
-work before installing. The TUI does not replace application binaries during a
-terminal session. Donate exposes the same payment destinations and support links;
+Interactive CLI commands also show available-update notices on stderr. Checks are
+cached for six hours, with a short timeout and offline retry backoff. Pipes, JSON,
+CI, help and version output remain quiet. CLI notices honor the terminal Settings
+toggle and dismissed version. Set `GLEECH_NO_UPDATE_NOTIFIER=1` to suppress notices
+for individual commands or a shell profile. Explicit checks work with notices off.
+
+Run `gleech update` to check, download, verify and install the release, including
+its CLI and TUI. It asks for confirmation first; `--yes` approves installation
+in scripts. `gleech update --check` only checks, and `--check --json` returns a
+machine-readable result. `gleech update --help` documents these options.
+
+In the TUI, choose **Settings → Updates → Install & Update…**. Confirm the update,
+then save, discard or cancel if there are unsaved changes. Download progress is
+shown in the TUI; Escape cancels. Failures leave the current session available.
+After verification, the TUI restores the terminal and exits before installation.
+Run `gleech` again when installation finishes; reopen your saved project as usual.
+
+Save and close other GLEECH sessions before updating. Installation is blocked
+while the desktop app or another updater is open. Both terminal interfaces use
+the desktop's release selection, integrity checks and installer engine. Windows
+requires the installed NSIS build. Linux replaces the original AppImage at its
+existing path, preserving terminal launchers. macOS reveals the verified ZIP in
+Finder for app replacement at the existing location. Development and unpacked
+test builds cannot overwrite an installed release. Presets, shaders, recent files,
+configured paths and terminal preferences remain in the existing user data folder.
+
+Donate exposes the same payment destinations and support links;
 Feedback opens the bug/feature form in your browser for review and submission.
 Community opens Discord, and About includes the version, repository and bundled
 license documents. QR codes and waveform buttons remain desktop UI. Saved LFOs
