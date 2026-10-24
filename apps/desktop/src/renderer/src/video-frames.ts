@@ -16,6 +16,8 @@ export interface VideoFramePixels {
   readonly height: number;
   /** RGBA8, straight alpha. The caller owns this buffer. */
   readonly pixels: ArrayBuffer;
+  /** Actual presentation time for a live preview; exact seeks omit this. */
+  readonly time?: number;
 }
 
 /** How a source decodes: Chromium's player, WebCodecs ImageDecoder (GIF) or ffmpeg in main. */
@@ -249,6 +251,8 @@ interface CaptureSlot {
   readonly context: CanvasRenderingContext2D;
   /** Source frame index, or -1 when empty or captured at an old size. */
   index: number;
+  time: number;
+  pixels?: VideoFramePixels;
 }
 
 /**
@@ -260,7 +264,7 @@ class PlaybackCapture {
   private readonly slots: CaptureSlot[] = [];
   private write = 0;
   private callback: number | null = null;
-  private waiters: (() => void)[] = [];
+  private waiters = new Set<() => void>();
   private width = 0;
   private height = 0;
   /** Index of the most recent capture, -1 after a resize or resync. */
@@ -295,15 +299,30 @@ class PlaybackCapture {
   }
 
   invalidate(): void {
-    for (const slot of this.slots) slot.index = -1;
+    for (const slot of this.slots) {
+      slot.index = -1;
+      delete slot.pixels;
+    }
     this.latest = -1;
   }
 
   /** The canvas holding frame `index`, else a neighbor within one frame (earlier first). */
-  find(index: number): HTMLCanvasElement | null {
+  find(index: number): CaptureSlot | null {
     for (const wanted of [index, index - 1, index + 1])
-      for (const slot of this.slots) if (slot.index === wanted) return slot.context.canvas;
+      for (const slot of this.slots) if (slot.index === wanted && wanted >= 0) return slot;
     return null;
+  }
+
+  /** A live preview can drop missed frames instead of seeking back for each one. */
+  nearest(index: number): CaptureSlot | null {
+    let nearest: CaptureSlot | null = null;
+    for (const slot of this.slots)
+      if (
+        slot.index >= 0 &&
+        (!nearest || Math.abs(slot.index - index) < Math.abs(nearest.index - index))
+      )
+        nearest = slot;
+    return nearest;
   }
 
   waitForCapture(milliseconds: number): Promise<void> {
@@ -311,15 +330,17 @@ class PlaybackCapture {
       const timer = setTimeout(done, milliseconds);
       function done() {
         clearTimeout(timer);
+        waiters.delete(done);
         resolve();
       }
-      this.waiters.push(done);
+      const waiters = this.waiters;
+      waiters.add(done);
     });
   }
 
   private notify(): void {
     const waiters = this.waiters;
-    this.waiters = [];
+    this.waiters = new Set();
     for (const wake of waiters) wake();
   }
 
@@ -338,13 +359,15 @@ class PlaybackCapture {
     if (!slot) {
       const context = document.createElement('canvas').getContext('2d');
       if (!context) return;
-      slot = { context, index: -1 };
+      slot = { context, index: -1, time: 0 };
       this.slots[this.write] = slot;
     }
     sizeCanvas(slot.context.canvas, this.width, this.height);
     // Inside the callback the element draws exactly the frame `metadata` describes.
     slot.context.drawImage(this.video, 0, 0, this.width, this.height);
     slot.index = this.indexOf(mediaTime);
+    slot.time = mediaTime;
+    delete slot.pixels;
     this.latest = slot.index;
     this.write = (this.write + 1) % PLAYBACK_SLOTS;
     this.notify();
@@ -417,6 +440,8 @@ export class VideoFrameSource {
   private capture: PlaybackCapture | null = null;
   private playing = false;
   private playbackRate = 1;
+  private playbackClock: { target: number; at: number } | null = null;
+  private pendingPreviewSeek = false;
   /** Size of the last request, so playback captures at the size the caller wants. */
   private lastMaxDimension = 0;
   private disposed = false;
@@ -460,6 +485,8 @@ export class VideoFrameSource {
     if (this.disposed || this.path !== 'player' || !FRAME_CALLBACKS) return;
     this.playing = true;
     this.playbackRate = rate;
+    this.playbackClock = { target: this.seekTime(fromSeconds), at: performance.now() };
+    this.pendingPreviewSeek = false;
     const player = (this.player ??= new SeekingPlayer(this.url));
     player.whenReady().then(
       () => {
@@ -489,6 +516,8 @@ export class VideoFrameSource {
   stopPlayback(): void {
     if (!this.playing) return;
     this.playing = false;
+    this.playbackClock = null;
+    this.pendingPreviewSeek = false;
     this.capture?.stop();
     this.player?.element.pause();
   }
@@ -525,8 +554,39 @@ export class VideoFrameSource {
     return copyFrame(await abortable(frame, signal));
   }
 
+  /**
+   * Wall-clock preview: use the closest presented frame, with its real timestamp,
+   * rather than stalling playback to seek a frame the decoder already dropped.
+   * Still frames and exports continue using frameAt's exact request path.
+   */
+  async previewAt(
+    t: number,
+    maxDimension: number,
+    signal?: AbortSignal,
+  ): Promise<VideoFramePixels> {
+    this.assertLive();
+    if (!this.playing || this.path !== 'player') return this.frameAt(t, maxDimension, signal);
+    this.lastMaxDimension = maxDimension;
+    await abortable(this.player!.whenReady(), signal);
+    this.assertLive();
+    if (!this.playing) return this.frameAt(t, maxDimension, signal);
+    const size = fitFrameSize(this.info.width, this.info.height, maxDimension);
+    const frame = await abortable(this.playbackFrame(t, size, signal, true), signal);
+    if (signal?.aborted) throw abortError();
+    this.assertLive();
+    if (frame) return frame;
+    // A slow startup gets retried by the next playhead request. It must not
+    // enter the paused seek queue and repeatedly reset the running decoder.
+    throw new Error('The playing video has not presented a frame yet.');
+  }
+
   /** JPEG data URLs for the filmstrip, `height` px tall, one per time. */
-  thumbnails(times: readonly number[], height: number, signal?: AbortSignal): Promise<string[]> {
+  thumbnails(
+    times: readonly number[],
+    height: number,
+    signal?: AbortSignal,
+    onProgress?: (completed: number) => void,
+  ): Promise<string[]> {
     this.assertLive();
     const thumbHeight = Math.max(8, Math.min(1024, Math.round(height)));
     const thumbWidth = Math.max(1, Math.round((thumbHeight * this.info.width) / this.info.height));
@@ -540,12 +600,14 @@ export class VideoFrameSource {
         if (!url) {
           const context = (this.thumbnailContext ??= canvas2d());
           await this.drawThumbnail(t, context, thumbWidth, thumbHeight);
+          if (signal?.aborted) throw abortError();
           url = context.canvas.toDataURL('image/jpeg', 0.72);
           if (this.thumbnailUrls.size >= THUMBNAIL_CACHE)
             this.thumbnailUrls.delete(this.thumbnailUrls.keys().next().value!);
           this.thumbnailUrls.set(key, url);
         }
         urls.push(url);
+        onProgress?.(urls.length);
       }
       return urls;
     });
@@ -576,6 +638,7 @@ export class VideoFrameSource {
     t: number,
     size: { width: number; height: number },
     signal: AbortSignal | undefined,
+    realtime = false,
   ): Promise<VideoFramePixels | null> {
     const capture = this.capture;
     const video = this.player?.element;
@@ -583,8 +646,18 @@ export class VideoFrameSource {
     capture.resize(size.width, size.height);
     const index = this.frameIndex(t);
     const target = this.seekTime(t);
-    if (!video.seeking && Math.abs(video.currentTime - target) > PLAYBACK_RESYNC_SECONDS) {
+    const now = performance.now();
+    const clock = this.playbackClock;
+    const expected = clock ? clock.target + ((now - clock.at) / 1000) * this.playbackRate : target;
+    if (realtime) this.playbackClock = { target, at: now };
+    // Slow decoding is handled by dropping preview frames and nudging the
+    // player. Only a playhead discontinuity (scrub/loop) seeks during preview.
+    const drift = realtime ? target - expected : video.currentTime - target;
+    if (realtime && Math.abs(drift) > PLAYBACK_RESYNC_SECONDS) this.pendingPreviewSeek = true;
+    const resync = realtime ? this.pendingPreviewSeek : Math.abs(drift) > PLAYBACK_RESYNC_SECONDS;
+    if (!video.seeking && resync) {
       capture.invalidate();
+      this.pendingPreviewSeek = false;
       this.resync(video, target);
     } else if (!video.seeking) {
       // Starting playback costs a seek, so the element can trail the playhead by
@@ -595,12 +668,18 @@ export class VideoFrameSource {
       const playbackRate = this.playbackRate * nudge;
       if (video.playbackRate !== playbackRate) video.playbackRate = playbackRate;
     }
+    if (realtime && this.pendingPreviewSeek) return null;
     const deadline = performance.now() + PLAYBACK_WAIT_MS;
     for (;;) {
-      const canvas = capture.find(index);
-      if (canvas) return this.readBack(canvas, size);
+      if (!capture.active || signal?.aborted || this.disposed) return null;
+      const slot =
+        capture.find(index) ?? (realtime && !video.seeking ? capture.nearest(index) : null);
+      if (slot) {
+        slot.pixels ??= { ...this.readBack(slot.context.canvas, size), time: slot.time };
+        return copyFrame(slot.pixels);
+      }
       // Already past this frame (it left the ring): let the seek path fetch it.
-      if (capture.latest > index + 1 && !video.seeking) return null;
+      if (!realtime && capture.latest > index + 1 && !video.seeking) return null;
       const remaining = deadline - performance.now();
       if (remaining <= 0 || !capture.active || signal?.aborted || this.disposed) return null;
       await capture.waitForCapture(remaining);
@@ -756,5 +835,5 @@ function isSecurityError(error: unknown): boolean {
 
 /** Callers get their own buffer so they can transfer or modify it freely. */
 function copyFrame(frame: VideoFramePixels): VideoFramePixels {
-  return { width: frame.width, height: frame.height, pixels: frame.pixels.slice(0) };
+  return { ...frame, pixels: frame.pixels.slice(0) };
 }

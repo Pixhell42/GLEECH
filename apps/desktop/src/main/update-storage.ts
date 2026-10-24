@@ -115,6 +115,44 @@ export function createUpdatePreferenceStore(
   };
 }
 
+export interface TerminalUpdateCache {
+  currentVersion: string;
+  availableVersion: string | null;
+  checkedAt: number;
+  retryAt?: number;
+}
+
+/** This cache stores version text only; it can never select an install URL or file. */
+export function createTerminalUpdateCache(folder: string) {
+  return {
+    async load(): Promise<TerminalUpdateCache | null> {
+      const value = await readJson(folder, 'cli-update-cache.json');
+      if (!value || typeof value !== 'object') return null;
+      const item = value as Partial<TerminalUpdateCache>;
+      if (
+        typeof item.currentVersion !== 'string' ||
+        !/^\d+\.\d+\.\d+$/.test(item.currentVersion) ||
+        !(
+          item.availableVersion === null ||
+          (typeof item.availableVersion === 'string' &&
+            /^\d+\.\d+\.\d+$/.test(item.availableVersion))
+        ) ||
+        typeof item.checkedAt !== 'number' ||
+        !Number.isSafeInteger(item.checkedAt) ||
+        !(
+          item.retryAt === undefined ||
+          (typeof item.retryAt === 'number' && Number.isSafeInteger(item.retryAt))
+        )
+      )
+        return null;
+      return item as TerminalUpdateCache;
+    },
+    async save(value: TerminalUpdateCache) {
+      await atomicUpdateWrite(folder, 'cli-update-cache.json', JSON.stringify(value));
+    },
+  };
+}
+
 export interface StoredUpdateSession extends UpdateSessionOptions {
   id: string;
   documentPath: string | null;

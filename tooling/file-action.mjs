@@ -1,5 +1,7 @@
 // Native menu clicks blur active text fields, just like the former toolbar actions.
 export async function fileAction(page, name, { waitForOperation = true } = {}) {
+  if (['Open image Ctrl+Shift+O', 'Open project Ctrl+O', 'Open video…'].includes(name))
+    name = 'Open File… Ctrl+O';
   const moved = {
     'Support GLEECH': ['Donate'],
     'Discord Community': ['Community', 'Join the Discord community'],

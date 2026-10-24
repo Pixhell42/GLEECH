@@ -10,17 +10,61 @@ class WorkerDouble {
   onmessage: ((event: { data: EffectReply }) => void) | null = null;
   onerror: unknown;
   messages: EffectRequest[] = [];
+  terminated = false;
   constructor() {
     WorkerDouble.current = this;
   }
   postMessage(message: EffectRequest) {
     this.messages.push(message);
   }
-  terminate() {}
+  terminate() {
+    this.terminated = true;
+  }
 }
 const image = { width: 1, height: 1, pixels: new Uint8Array([10, 20, 30, 255]).buffer };
 const context = { masterSeed: 1, reference: image, purpose: 'export' as const };
 afterEach(() => vi.unstubAllGlobals());
+
+it('recovers a stalled preview worker and resends the source to its replacement', async () => {
+  vi.stubGlobal('Worker', WorkerDouble);
+  const processor = new EffectProcessor();
+  try {
+    const first = processor.render(image, [], { ...context, purpose: 'preview' });
+    const rejected = expect(first).rejects.toThrow(RenderCancelledError);
+    await vi.waitFor(() => expect(WorkerDouble.current.messages).toHaveLength(1));
+    const old = WorkerDouble.current;
+    processor.cancelPreview();
+    expect(processor.restartPreviews()).toBe(true);
+    await rejected;
+    expect(old.terminated).toBe(true);
+    const replacement = WorkerDouble.current;
+    const next = processor.render(image, [], { ...context, purpose: 'preview' });
+    await vi.waitFor(() => expect(replacement.messages).toHaveLength(1));
+    const request = replacement.messages[0]!;
+    expect(request).toHaveProperty('image', image);
+    old.onmessage!({ data: { kind: 'success', id: request.id, image } });
+    replacement.onmessage!({ data: { kind: 'success', id: request.id, image } });
+    await expect(next).resolves.toEqual(image);
+  } finally {
+    processor.dispose();
+  }
+});
+
+it('does not restart a worker that has an export in progress', async () => {
+  vi.stubGlobal('Worker', WorkerDouble);
+  const processor = new EffectProcessor();
+  try {
+    const pending = processor.render(image, [], context);
+    await vi.waitFor(() => expect(WorkerDouble.current.messages).toHaveLength(1));
+    expect(processor.restartPreviews()).toBe(false);
+    expect(WorkerDouble.current.terminated).toBe(false);
+    const request = WorkerDouble.current.messages[0]!;
+    WorkerDouble.current.onmessage!({ data: { kind: 'success', id: request.id, image } });
+    await expect(pending).resolves.toEqual(image);
+  } finally {
+    processor.dispose();
+  }
+});
 
 it('cancels active exports, ignores late replies and resends source pixels for the next render', async () => {
   vi.stubGlobal('Worker', WorkerDouble);
