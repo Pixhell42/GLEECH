@@ -73,8 +73,9 @@ import { renderQueue } from './render-queue';
 import { TIMELINE_MCP_ACTIONS, runTimelineMcp } from './mcp-timeline';
 import { rememberMedia, useTimelineMedia, useVideoFrame } from './timeline/use-media';
 import { VideoFrameSource } from './video-frames';
+import { videoPlaybackDimension } from './playback-preview';
 import { analyzeMediaAudio } from './timeline-audio';
-import type { FilmstripFrame } from './timeline/TimelineDock';
+import { useFilmstrip } from './timeline/use-filmstrip';
 import type { VideoProbe, AudioProbe, OpenedMedia } from '../../shared/render';
 import type { PixelImage, RenderInfo } from '@gleech/renderer-core';
 import { APP_IS_BETA, APP_VERSION_LABEL } from '../../shared/branding';
@@ -476,7 +477,16 @@ export function App() {
   const [inspectorTab, setInspectorTab] = useState<'controls' | 'details'>('controls');
   const [mode, setMode] = useState<'image' | 'timeline'>('image');
   const [playhead, setPlayhead] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [playRequested, setPlaying] = useState(false);
+  const [playbackQuality, setPlaybackQuality] = useState<{
+    sourceId: string;
+    maximum: number;
+  } | null>(null);
+  const onPlaybackBudget = useCallback((sourceId: string, maximum: number) => {
+    setPlaybackQuality((old) =>
+      old?.sourceId === sourceId && old.maximum === maximum ? old : { sourceId, maximum },
+    );
+  }, []);
   const [playbackAudio, setPlaybackAudio] = useState(readPlaybackAudio);
   const changePlaybackAudio = (change: Partial<{ volume: number; muted: boolean }>) =>
     setPlaybackAudio((previous) => {
@@ -582,60 +592,51 @@ export function App() {
     }),
     [timeline?.bpm, timeline?.audio?.analysis, project.masterSeed],
   );
-  const frameEffects = useMemo(
-    () => evaluateEffectsAt(previewEffects, frameT, modulation),
-    [previewEffects, frameT, modulation],
-  );
-  const frameMasterSeed = timeline
-    ? frameSeed(project.masterSeed, timeline.seed, frame)
-    : project.masterSeed;
   const media = useTimelineMedia(timeline, setError);
   const clip = activeVideo(project);
+  const filmstrip = useFilmstrip(
+    clip ? media.video : null,
+    clip && timeline ? Math.min(timeline.duration, clip.duration) : 0,
+    fps,
+  );
+  const playing = playRequested && !filmstrip.loading;
+  const videoDraft = clip
+    ? videoPlaybackDimension(
+        clip.width,
+        clip.height,
+        previewEffects.some((effect) => effect.enabled),
+      )
+    : 0;
+  const decodeDraft =
+    playbackQuality && playbackQuality.sourceId === project.source?.id
+      ? Math.min(videoDraft, playbackQuality.maximum)
+      : videoDraft;
   const videoFrame = useVideoFrame(
     clip ? media.video : null,
     frame,
     frameT,
-    clip
-      ? playing
-        ? Math.ceil(Math.max(clip.width, clip.height) / 2)
-        : Math.max(clip.width, clip.height)
-      : 0,
+    clip ? (playing ? decodeDraft : Math.max(clip.width, clip.height)) : 0,
     playing,
+    fps,
   );
+  // Animate the frame actually decoded, rather than repeatedly rendering an old
+  // video picture with effects/seeds from a newer playhead tick.
+  const previewFrame =
+    clip && playing && videoFrame ? Math.min(totalFrames - 1, videoFrame.frame) : frame;
+  const previewT = frameTime(previewFrame, fps);
+  const frameEffects = useMemo(
+    () => evaluateEffectsAt(previewEffects, previewT, modulation),
+    [previewEffects, previewT, modulation],
+  );
+  const frameMasterSeed = timeline
+    ? frameSeed(project.masterSeed, timeline.seed, previewFrame)
+    : project.masterSeed;
   const clipFrames = useRef<VideoFrameSource | null>(null);
   const clipMediaId = useRef<string | null>(null);
   useEffect(() => {
     clipFrames.current = clip ? (media.video?.frames ?? null) : null;
     clipMediaId.current = clip ? (media.video?.mediaId ?? null) : null;
   }, [clip, media.video]);
-  const [filmstrip, setFilmstrip] = useState<{
-    mediaId: string;
-    frames: readonly FilmstripFrame[];
-  } | null>(null);
-  useEffect(() => {
-    const source = media.video;
-    if (!source || !clip || !timeline) return;
-    let active = true;
-    const span = Math.min(timeline.duration, clip.duration);
-    const count = 48;
-    const times = Array.from({ length: count }, (_, index) => (index / count) * span);
-    void source.frames
-      .thumbnails(times, 48)
-      .then((urls) => {
-        if (active)
-          setFilmstrip({
-            mediaId: source.mediaId,
-            frames: urls.map((url, index) => ({
-              frame: timeFrame(times[index]!, timeline.fps),
-              url,
-            })),
-          });
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [media.video, clip, timeline]);
   // What you hear: the track level (saved, also used by renders) times the
   // playback level (listening only).
   const trackLevel = timeline?.audio ? audioTrackLevel(timeline.audio) : 1;
@@ -676,7 +677,9 @@ export function App() {
     [previewEffects, project.masterSeed, fps, timeline, project.source?.id, modulation.bpm],
   );
   const frameKey =
-    timeline && (!clip || videoFrame?.frame === frame) ? `${recipeToken}:${frame}` : null;
+    timeline && (!clip || videoFrame?.frame === frame || (playing && videoFrame))
+      ? `${recipeToken}:${previewFrame}`
+      : null;
   const cachedFrames = frameCache.token === recipeToken ? frameCache.frames : NO_FRAMES;
   // Frames shown by the viewport arrive many times a second; batch the state updates.
   const shownFrames = useRef<{
@@ -917,7 +920,7 @@ export function App() {
    * the project, and keeps the effect stack and keys. Its first frame becomes the
    * source image.
    */
-  const addVideo = async () => {
+  const addVideo = async (selectionId?: string) => {
     if (locked.current || !viewport.current) return;
     locked.current = true;
     setBusy('project');
@@ -927,7 +930,7 @@ export function App() {
     setNotice('Opening video…');
     try {
       if (!(await confirmLeave())) return;
-      const opened = unwrap(await window.gleech.openVideo());
+      const opened = unwrap(await window.gleech.openVideo(selectionId));
       if (!opened) {
         setNotice('Ready');
         return;
@@ -1344,6 +1347,7 @@ export function App() {
       const step = event.shiftKey ? 10 : 1;
       if (event.key === ' ') {
         event.preventDefault();
+        if (filmstrip.loading) return;
         setPlaying((value) => !value);
       } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !onRange) {
         event.preventDefault();
@@ -1704,10 +1708,6 @@ export function App() {
     [confirmLeave, rememberImage],
   );
 
-  const openImage = useCallback(() => {
-    setFileMenu(false);
-    void importImage(() => window.gleech.openImage());
-  }, [importImage]);
   const openSampleImage = useCallback(() => {
     setFileMenu(false);
     void importImage(() => window.gleech.openSampleImage());
@@ -1801,7 +1801,7 @@ export function App() {
   );
 
   const openProject = useCallback(
-    async (recentId?: string, restored?: RestoredUpdateSession) => {
+    async (recentId?: string, restored?: RestoredUpdateSession, selectionId?: string) => {
       if (locked.current || !viewport.current) return;
       locked.current = true;
       setBusy('project');
@@ -1816,7 +1816,7 @@ export function App() {
           unwrap(
             await (recentId
               ? window.gleech.openRecentProject(recentId)
-              : window.gleech.openProject()),
+              : window.gleech.openProject(selectionId)),
           );
         if (!candidate) {
           setNotice('Open canceled');
@@ -1877,6 +1877,34 @@ export function App() {
     },
     [confirmLeave, rememberImage],
   );
+
+  const choosingFile = useRef(false);
+  const openFile = async (file?: File) => {
+    if (locked.current || choosingFile.current) return;
+    choosingFile.current = true;
+    setFileMenu(false);
+    setBusy('import');
+    setError(null);
+    setNotice('Opening file…');
+    try {
+      const selected = unwrap(
+        await (file ? window.gleech.selectDroppedFile(file) : window.gleech.chooseFile()),
+      );
+      if (!selected) {
+        setNotice('Open canceled');
+        return;
+      }
+      if (selected.kind === 'image') await importImage(() => window.gleech.openImage(selected.id));
+      else if (selected.kind === 'video') await addVideo(selected.id);
+      else await openProject(undefined, undefined, selected.id);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not open the file.');
+      setNotice('Ready');
+    } finally {
+      choosingFile.current = false;
+      setBusy(null);
+    }
+  };
 
   useEffect(() => {
     if (updateRestoreAttempted.current) return;
@@ -2895,8 +2923,7 @@ export function App() {
       }
       if (event.key.toLowerCase() === 'o') {
         event.preventDefault();
-        if (event.shiftKey) openImage();
-        else void openProject();
+        void openFile();
       }
       if (event.key.toLowerCase() === 'v') {
         event.preventDefault();
@@ -2917,7 +2944,7 @@ export function App() {
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [openImage, openProject, saveProject, pasteImage, copyImage, saveImage, restoreHistory]);
+  });
 
   return (
     <div
@@ -3048,17 +3075,8 @@ export function App() {
               }}
             >
               <MenuFlyoutProvider>
-                <button onClick={openImage}>
-                  Open image <span>{commandKey}+Shift+O</span>
-                </button>
-                <button
-                  onClick={() => void addVideo()}
-                  title="Open a video clip in Timeline mode. Its first frame becomes the source image."
-                >
-                  Open video…
-                </button>
-                <button onClick={() => void openProject()}>
-                  Open project <span>{commandKey}+O</span>
+                <button onClick={() => void openFile()}>
+                  Open File… <span>{commandKey}+O</span>
                 </button>
                 <RecentProjectsMenu
                   projects={recentProjects}
@@ -3595,13 +3613,16 @@ export function App() {
           frameKey={frameKey}
           sourceFrame={clip ? (videoFrame?.image ?? null) : null}
           playback={playing && timelineMode}
+          playbackMaximum={videoDraft}
+          playbackFps={fps}
+          onPlaybackBudget={onPlaybackBudget}
           onFrameShown={onFrameShown}
           onFrameEvicted={onFrameEvicted}
           busy={busy !== null}
-          onOpen={openImage}
+          onOpen={() => void openFile()}
           onOpenSample={openSampleImage}
           onDrop={(file) => {
-            void importImage(() => window.gleech.importFile(file));
+            void openFile(file);
           }}
           onError={setError}
           onInfo={setInfo}
@@ -4064,15 +4085,13 @@ export function App() {
             disabled={busy !== null}
             modulation={modulation}
             stillThumbnail={project.source ? (thumbnails.get(project.source.id) ?? null) : null}
-            filmstrip={
-              filmstrip && media.video && filmstrip.mediaId === media.video.mediaId
-                ? filmstrip.frames
-                : []
-            }
+            filmstrip={filmstrip}
             laneView={laneView}
             onLaneView={setLaneView}
             onSeek={seek}
-            onTogglePlay={() => setPlaying(!playing)}
+            onTogglePlay={() => {
+              if (!filmstrip.loading) setPlaying(!playing);
+            }}
             onTimeline={(change) => {
               try {
                 commands.updateTimeline(change);

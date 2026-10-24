@@ -10,6 +10,7 @@ import { createUpdatePreferenceStore } from '../../main/update-storage';
 import { updateChildPath } from '../../main/update-path';
 import { userDataCandidates } from '../library';
 import { resourcesDir } from '../runtime';
+import { terminalUpdateText } from '../../shared/terminal-updates';
 
 export const SETTINGS_SECTIONS = ['Updates', 'Donate', 'Feedback', 'Community', 'About'] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -30,8 +31,7 @@ export interface TuiSettingsState {
 
 /** Release notes and errors must remain terminal text, never terminal commands. */
 export function terminalSettingsText(value: string): string {
-  // eslint-disable-next-line no-control-regex -- strip untrusted ANSI/OSC control characters
-  return value.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '').replaceAll('\t', ' ');
+  return terminalUpdateText(value);
 }
 
 /** Open a fixed destination as one argument, without passing it through a shell. */
@@ -230,7 +230,7 @@ export function createTuiSettings(
               : state.checkedAt
                 ? 'You’re up to date.'
                 : 'Check for a newer release.',
-          'Terminal notifications are on by default. Downloads and installation use the desktop updater or the release page. Save terminal work before installing.',
+          'Terminal notifications are on by default. Install & Update uses the verified desktop installer and exits the TUI before installation. Save your project when prompted and close other GLEECH sessions. macOS opens the downloaded ZIP in Finder.',
           ...(state.error ? [state.error] : []),
         ].join('\n\n');
       if (section === 'Donate')

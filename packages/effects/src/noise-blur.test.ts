@@ -13,6 +13,7 @@ import {
 import { renderEffects, renderEffectsAsync, cellRandom, RenderCancelledError } from './index';
 import { noiseValue, createNoiseField } from './noise';
 import { fieldRadius, separableBlur } from './blur';
+import { createHash } from 'node:crypto';
 
 const noise = (params: Partial<NoiseGrainEffect['params']> = {}) => {
   const e = createEffect('noise-grain', 'noise') as NoiseGrainEffect;
@@ -43,6 +44,36 @@ const render = (e: EffectInstance, image = fixture()) =>
   new Uint8Array(renderEffects(image, [e], { masterSeed: 123 }).pixels);
 const random = (x: number, y: number, lane: number) => cellRandom(17, x, y, lane, 4);
 describe('Noise / Grain', () => {
+  it.each([
+    ['film', '1ee8f56d9537db787859bd896d07133d865cc3fb65d24e00f474aad59ff5849d'],
+    ['perlin', '4f02bc67192f02bf122a8ad5739de0027384509ad1a8a0236b9427822acc8e3b'],
+    ['speckle', 'd99b929f3712d354ad39ce09f8f29dd28643d4c12034cf83bda088d341494818'],
+  ] as const)(
+    'retains the pre-optimization %s output including fractional opacity and transparency',
+    (style, digest) => {
+      const image = {
+        width: 17,
+        height: 11,
+        pixels: Uint8Array.from({ length: 17 * 11 * 4 }, (_, i) => i % 251).buffer,
+      };
+      const base = createEffect('noise-grain', 'compat') as NoiseGrainEffect;
+      const effect: NoiseGrainEffect = {
+        ...base,
+        params: {
+          ...base.params,
+          style,
+          coloring: style === 'speckle' ? 'ramp' : 'color',
+          amount: 0.63,
+          intensity: 0.72,
+        },
+      };
+      const result = renderEffects(image, [effect], {
+        masterSeed: 8172,
+        reference: { width: 2560, height: 1440 },
+      });
+      expect(createHash('sha256').update(new Uint8Array(result.pixels)).digest('hex')).toBe(digest);
+    },
+  );
   it('uses true black/white impulses with an adjustable probability and balance', () => {
     const image = fixture(97, 73);
     for (const balance of [0, 0.5, 1]) {

@@ -119,6 +119,7 @@ export function useVideoFrame(
   t: number,
   maxDimension: number,
   playing = false,
+  fps = 30,
 ): { frame: number; image: PixelImage } | null {
   const [shown, setShown] = useState<{
     mediaId: string;
@@ -126,20 +127,20 @@ export function useVideoFrame(
     max: number;
     image: PixelImage;
   } | null>(null);
-  const wanted = useRef({ frame, t, maxDimension, video });
+  const wanted = useRef({ frame, t, maxDimension, video, playing, fps });
   const pumping = useRef(false);
   // Effects run in order: record the request, start playback, then pump, so the
   // first frame after Play already comes from the running player.
   useEffect(() => {
-    wanted.current = { frame, t, maxDimension, video };
-  }, [frame, t, maxDimension, video]);
+    wanted.current = { frame, t, maxDimension, video, playing, fps };
+  }, [frame, t, maxDimension, video, playing, fps]);
   useEffect(() => {
     if (!video || !playing) return;
     video.frames.startPlayback(wanted.current.t);
     return () => video.frames.stopPlayback();
   }, [video, playing]);
   useEffect(() => {
-    wanted.current = { frame, t, maxDimension, video };
+    wanted.current = { frame, t, maxDimension, video, playing, fps };
     if (!video || pumping.current) return;
     pumping.current = true;
     void (async () => {
@@ -147,29 +148,48 @@ export function useVideoFrame(
         for (;;) {
           const target = wanted.current;
           // The clip can change while a frame decodes; always fetch from the newest one.
-          if (!target.video) break;
-          const image = await target.video.frames.frameAt(target.t, target.maxDimension);
-          setShown({
-            mediaId: target.video.mediaId,
-            frame: target.frame,
-            max: target.maxDimension,
-            image,
-          });
+          const source = target.video;
+          if (!source) break;
+          try {
+            const image = await (target.playing
+              ? source.frames.previewAt(target.t, target.maxDimension)
+              : source.frames.frameAt(target.t, target.maxDimension));
+            const shownFrame =
+              target.playing && image.time !== undefined
+                ? Math.max(0, Math.round(image.time * target.fps))
+                : target.frame;
+            if (wanted.current.video === source && wanted.current.playing === target.playing)
+              setShown((previous) =>
+                previous?.mediaId === source.mediaId &&
+                previous.frame === shownFrame &&
+                previous.max === target.maxDimension
+                  ? previous
+                  : {
+                      mediaId: source.mediaId,
+                      frame: shownFrame,
+                      max: target.maxDimension,
+                      image,
+                    },
+              );
+          } catch {
+            // Keep the last good picture on a slow startup. Even a failed old
+            // request must hand off to a pending pause, seek or replacement clip.
+          }
           const next = wanted.current;
           if (
             next.video === target.video &&
             next.frame === target.frame &&
-            next.maxDimension === target.maxDimension
+            next.maxDimension === target.maxDimension &&
+            next.playing === target.playing &&
+            next.fps === target.fps
           )
             break;
         }
-      } catch {
-        // A disposed or failed source falls back to the poster image.
       } finally {
         pumping.current = false;
       }
     })();
-  }, [video, frame, t, maxDimension]);
+  }, [video, frame, t, maxDimension, playing, fps]);
   return shown && video && shown.mediaId === video.mediaId
     ? { frame: shown.frame, image: shown.image }
     : null;

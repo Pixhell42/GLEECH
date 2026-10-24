@@ -1,4 +1,6 @@
 import { installCli } from './install';
+import { runUpdateCommand, UPDATE_HELP } from './update-command';
+import { notifyCliUpdate, shouldNotifyCli } from './updates';
 import { UsageError } from './errors';
 import { exportTimeline, TIMELINE_OPTIONS, validateTimelineOptions } from './timeline';
 import { closeGpu, configureRendering, gpuCapabilities, renderingSettings } from './gpu';
@@ -1080,6 +1082,10 @@ const HELP: Record<
 };
 
 export function help(command?: string): number {
+  if (command === 'update') {
+    write(UPDATE_HELP);
+    return 0;
+  }
   write('  Shaders: --shader <name|local .gleech-shader/.wgsl/.isf> (repeatable)');
   write('  Renderer: --renderer auto|gpu|cpu · --skip-unsupported-shaders (explicit CPU bypass)');
   if (command && HELP[command]) {
@@ -1113,6 +1119,7 @@ export function help(command?: string): number {
     ['presets [search]', 'built-in and library presets'],
     ['inspect <file>', 'layer stack of a project or preset'],
     ['info', 'runtime, codec and terminal capabilities'],
+    ['update', 'check, download and install a GLEECH update'],
     ['install-cli', 'install the terminal command on your user PATH'],
     ['uninstall-cli', 'remove the terminal command and its PATH setup'],
   ];
@@ -1167,6 +1174,7 @@ async function setupCli(args: string[], install: boolean): Promise<number> {
 }
 
 const COMMANDS: Record<string, (args: string[]) => Promise<number>> = {
+  update: runUpdateCommand,
   'install-cli': (args) => setupCli(args, true),
   'uninstall-cli': (args) => setupCli(args, false),
   render,
@@ -1183,7 +1191,20 @@ const COMMANDS: Record<string, (args: string[]) => Promise<number>> = {
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
-  if (!command || command === 'tui' || command === 'sample' || existsSync(command))
+  const notification = shouldNotifyCli(argv, {
+    stdout: !!process.stdout.isTTY,
+    stderr: !!process.stderr.isTTY,
+    env: process.env,
+  })
+    ? notifyCliUpdate()
+    : null;
+  if (
+    !command ||
+    command === 'update' ||
+    command === 'tui' ||
+    command === 'sample' ||
+    !Object.hasOwn(COMMANDS, command)
+  )
     restoreWindowsConsoleInput();
   try {
     if (!command) {
@@ -1208,5 +1229,6 @@ export async function runCli(argv: string[]): Promise<number> {
     return error instanceof UsageError ? 2 : 1;
   } finally {
     await closeGpu();
+    await notification;
   }
 }
