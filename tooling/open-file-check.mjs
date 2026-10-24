@@ -13,7 +13,26 @@ const work = await mkdtemp(join(output, 'work-'));
 const env = { ...process.env, GLEECH_SMOKE_USER_DATA: await mkdtemp(join(output, 'profile-')) };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.ELECTRON_RENDERER_URL;
-const exe = process.argv.slice(2).find((argument) => argument.endsWith('.exe'));
+const targets = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
+assert.ok(targets.length <= 1, 'Supply at most one packaged executable.');
+const knownExecutables = new Map(
+  [
+    'win-unpacked/GLEECH.exe',
+    'mac-arm64/GLEECH.app/Contents/MacOS/GLEECH',
+    'mac/GLEECH.app/Contents/MacOS/GLEECH',
+    'linux-unpacked/gleech',
+    'linux-unpacked/gleech-bin',
+  ].map((path) => {
+    const executable = resolve('apps/desktop/release', path);
+    return [executable, executable];
+  }),
+);
+const exe =
+  targets[0] &&
+  knownExecutables.get(
+    resolve(targets[0], ...(targets[0].endsWith('.app') ? ['Contents/MacOS/GLEECH'] : [])),
+  );
+if (targets[0]) assert.ok(exe, 'Use a known packaged executable under apps/desktop/release.');
 const app = await electron.launch({
   args: [...(exe ? [] : [resolve('apps/desktop')]), '--smoke-test'],
   env,
@@ -21,6 +40,8 @@ const app = await electron.launch({
 });
 try {
   const page = await app.firstWindow();
+  const command = process.platform === 'darwin' ? 'Cmd' : 'Ctrl';
+  const primary = process.platform === 'darwin' ? 'Meta' : 'Control';
   page.setDefaultTimeout(60000);
   await page.getByRole('heading', { name: 'GLEECH.', exact: true }).waitFor();
   const errors = [];
@@ -97,7 +118,7 @@ try {
   assert.equal(
     await page
       .locator('.file-menu-items')
-      .getByRole('button', { name: 'Open File… Ctrl+O', exact: true })
+      .getByRole('button', { name: `Open File… ${command}+O`, exact: true })
       .count(),
     1,
   );
@@ -156,14 +177,14 @@ try {
     .waitFor();
   assert.match(await page.locator('.project-name').textContent(), /statue/);
   await choose(saved);
-  await page.keyboard.press('Control+o');
+  await page.keyboard.press(`${primary}+o`);
   await page.waitForFunction(() =>
     /image ü #/.test(document.querySelector('.project-name')?.textContent ?? ''),
   );
   await captureTestWindow(app, join(output, 'unified-open.png'));
   assert.deepEqual(errors, []);
   console.log(
-    'Unified picker, image/video/project drops, unsupported-file recovery and Ctrl+O passed.',
+    `Unified picker, image/video/project drops, unsupported-file recovery and ${command}+O passed.`,
   );
 } finally {
   await closeTestApp(app);

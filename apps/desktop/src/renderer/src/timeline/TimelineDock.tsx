@@ -218,17 +218,17 @@ export function TimelineDock(props: TimelineDockProps) {
   const setView = (next: LaneView | null) =>
     setZoom(next ? clampView(next, frames, laneWidth) : null);
 
-  // Ctrl + wheel zooms around the pointer; Shift + wheel pans.
+  // Control/Command + wheel zooms around the pointer; Shift + wheel pans.
   useEffect(() => {
     const element = tracksRef.current;
     if (!element) return;
     const wheel = (event: WheelEvent) => {
-      if (!event.ctrlKey && !event.shiftKey) return;
+      if (!event.ctrlKey && !event.metaKey && !event.shiftKey) return;
       event.preventDefault();
       const bounds = element.getBoundingClientRect();
       const x = event.clientX - bounds.left - TRACK_HEADER_WIDTH;
       const current = clampView(zoom ?? fitView(frames, laneWidth), frames, laneWidth);
-      if (event.ctrlKey) {
+      if (event.ctrlKey || event.metaKey) {
         const next = Math.min(
           MAX_PX_PER_FRAME,
           current.pxPerFrame * Math.exp(-(event.deltaY || event.deltaX) * 0.002),
@@ -393,13 +393,16 @@ export function TimelineDock(props: TimelineDockProps) {
       onKeyDown={(event) => {
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)
           return;
+        // Leave application commands (especially Cmd+Z on Mac) to the history
+        // handler. Selection zoom, fit and deletion use unmodified keys.
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
         if ((event.key === 'Delete' || event.key === 'Backspace') && keySelection) {
           event.preventDefault();
           removeSelectedKeys();
         } else if (event.key === '\\') {
           event.preventDefault();
           setView(null);
-        } else if (event.key.toLowerCase() === 'z' && !event.ctrlKey && keySelection) {
+        } else if (event.key.toLowerCase() === 'z' && keySelection) {
           event.preventDefault();
           const low = Math.min(...keySelection.frames);
           const high = Math.max(...keySelection.frames);
@@ -985,7 +988,8 @@ export function TimelineDock(props: TimelineDockProps) {
       )}
       <div className="timeline-scrollbar">
         <span className="timeline-hint">
-          Ctrl + scroll to zoom · Shift + scroll to pan · \ fit · Z zoom to selection
+          {window.gleech.platform === 'darwin' ? 'Cmd' : 'Ctrl'} + scroll to zoom · Shift + scroll
+          to pan · \ fit · Z zoom to selection
         </span>
         <HorizontalScroll view={view} frames={frames} laneWidth={laneWidth} onView={setView} />
       </div>
