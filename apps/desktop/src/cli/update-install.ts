@@ -15,6 +15,9 @@ export interface PreparedTerminalUpdate {
 
 export function terminalUpdaterLaunch() {
   if (process.platform === 'linux' && process.env.APPIMAGE && isAbsolute(process.env.APPIMAGE))
+    // APPIMAGE is the local AppImage runtime's original install path, not release
+    // metadata, project content or an MCP request. Execute it directly with one
+    // fixed argument and no shell so the updater owns its mount after CLI exit.
     return { executable: process.env.APPIMAGE, args: ['--gleech-terminal-update'] };
   const launch = gpuLaunch();
   return {

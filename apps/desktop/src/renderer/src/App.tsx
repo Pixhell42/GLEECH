@@ -1891,7 +1891,7 @@ export function App() {
         await (file ? window.gleech.selectDroppedFile(file) : window.gleech.chooseFile()),
       );
       if (!selected) {
-        setNotice('Ready');
+        setNotice('Open canceled');
         return;
       }
       if (selected.kind === 'image') await importImage(() => window.gleech.openImage(selected.id));
