@@ -10,7 +10,11 @@ export class EffectProcessor {
   private sequence = 0;
   private requests = new Map<
     number,
-    { resolve(image: PixelImage): void; reject(error: Error): void }
+    {
+      resolve(image: PixelImage): void;
+      reject(error: Error): void;
+      purpose: EffectContext['purpose'];
+    }
   >();
   private stopped = false;
   private previewId: number | null = null;
@@ -21,7 +25,12 @@ export class EffectProcessor {
   cancelledPreviews = 0;
 
   constructor() {
-    this.worker.onmessage = (event: MessageEvent<EffectReply>) => {
+    this.listen(this.worker);
+  }
+
+  private listen(worker: Worker): void {
+    worker.onmessage = (event: MessageEvent<EffectReply>) => {
+      if (worker !== this.worker || this.stopped) return;
       const reply = event.data;
       if (reply.kind === 'jpeg-request') {
         // Serialize codec work; superseded previews are discarded before IPC so
@@ -64,10 +73,31 @@ export class EffectProcessor {
         request?.reject(new RenderCancelledError());
       } else request?.resolve(reply.image);
     };
-    this.worker.onerror = (event) => {
+    worker.onerror = (event) => {
       event.preventDefault();
+      if (worker !== this.worker || this.stopped) return;
       this.dispose();
     };
+  }
+
+  /** Recover an unresponsive preview without interrupting an export. */
+  restartPreviews(): boolean {
+    if (
+      this.stopped ||
+      !this.requests.size ||
+      [...this.requests.values()].some((request) => request.purpose === 'export')
+    )
+      return false;
+    this.worker.terminate();
+    for (const request of this.requests.values()) request.reject(new RenderCancelledError());
+    this.requests.clear();
+    this.cancelled.clear();
+    this.previewId = null;
+    this.source = null;
+    this.layers.clear();
+    this.worker = new Worker(new URL('./effect-worker.ts', import.meta.url), { type: 'module' });
+    this.listen(this.worker);
+    return true;
   }
 
   cancelPreview(): void {
@@ -100,7 +130,7 @@ export class EffectProcessor {
     if (context.purpose === 'preview') this.cancelPreview();
     return new Promise((resolve, reject) => {
       const id = ++this.sequence;
-      this.requests.set(id, { resolve, reject });
+      this.requests.set(id, { resolve, reject, purpose: context.purpose });
       if (context.purpose === 'preview') this.previewId = id;
       void (async () => {
         try {

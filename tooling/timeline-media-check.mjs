@@ -3,7 +3,7 @@
 // and render a loop from the clip. Needs the ffmpeg GLEECH finds at runtime.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
@@ -67,6 +67,35 @@ try {
     });
   };
 
+  // Hold actual seek completions briefly so the loading UI can be observed
+  // reliably on fast machines, without blocking the page's event loop.
+  await page.evaluate(() => {
+    const probe = (window.__filmstripProbe = { delay: 200, fail: false });
+    const add = HTMLMediaElement.prototype.addEventListener;
+    const remove = HTMLMediaElement.prototype.removeEventListener;
+    const listeners = new WeakMap();
+    HTMLMediaElement.prototype.addEventListener = function (type, listener, options) {
+      if (type !== 'seeked' || typeof listener !== 'function')
+        return add.call(this, type, listener, options);
+      const wrapped = (event) => {
+        if (probe.delay) setTimeout(() => listener.call(this, event), probe.delay);
+        else listener.call(this, event);
+      };
+      listeners.set(listener, wrapped);
+      return add.call(this, type, wrapped, options);
+    };
+    HTMLMediaElement.prototype.removeEventListener = function (type, listener, options) {
+      const wrapped = type === 'seeked' && listeners.get(listener);
+      return remove.call(this, type, wrapped || listener, options);
+    };
+    const encode = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function (...args) {
+      if (probe.fail && this.height === 48 && args[0] === 'image/jpeg')
+        throw new Error('Fixture: filmstrip encoding failed');
+      return encode.apply(this, args);
+    };
+  });
+
   // Open video from the File menu over an open image: after the unsaved-work
   // prompt the clip replaces the image, names the project and opens Timeline mode.
   const projectName = () => page.locator('.project-name').textContent();
@@ -84,7 +113,34 @@ try {
   assert.match(await page.locator('.source-row .track-meta').textContent(), /Video/);
   assert.equal(await page.locator('.timecode').textContent(), '00:00:00');
   assert.match(await page.locator('.duration-button').textContent(), /00:04:00/);
+  const play = page.getByRole('button', { name: 'Play', exact: true });
+  const loadingFilmstrip = page.getByRole('progressbar', { name: 'Loading video filmstrip' });
+  await loadingFilmstrip.waitFor();
+  assert.equal(await play.isDisabled(), true, 'Play waits for filmstrip generation');
+  assert.equal(await page.locator('.source-row.loading-filmstrip').count(), 1);
+  await page.locator('.ruler-header').click();
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(300);
+  assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).count(), 0);
+  assert.equal(await page.locator('.timecode').textContent(), '00:00:00');
+  // An unrelated timeline edit does not restart thumbnail generation.
+  const beforeProgress = Number(await loadingFilmstrip.getAttribute('aria-valuenow'));
+  await page.getByRole('slider', { name: 'Audio track volume', exact: true }).fill('0.8');
+  assert.ok(Number(await loadingFilmstrip.getAttribute('aria-valuenow')) >= beforeProgress);
+  await captureTestWindow(app, join(output, 'filmstrip-loading.png'));
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setContentSize(960, 640),
+  );
+  await captureTestWindow(app, join(output, 'filmstrip-loading-minimum.png'));
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setContentSize(1440, 960),
+  );
   await page.waitForFunction(() => document.querySelectorAll('.filmstrip img').length > 0);
+  assert.equal(await play.isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).count(), 0);
+  await page.evaluate(() => {
+    window.__filmstripProbe.delay = 0;
+  });
   await settle();
 
   // The clip's own sound becomes the audio track, and the player gets a small
@@ -422,6 +478,35 @@ try {
   assert.match(await page.locator('.source-row .track-meta').textContent(), /Still/);
   assert.match(await projectName(), /statue/);
   assert.equal(await page.locator('.audio-row').count(), 1);
+
+  // Failure releases the playback gate. Switching away from another pending
+  // filmstrip must not let stale work overwrite the replacement clip's state.
+  const failedClip = join(work, 'failed-filmstrip.mp4');
+  const pendingClip = join(work, 'pending-filmstrip.mp4');
+  await copyFile(clip, failedClip);
+  await copyFile(clip, pendingClip);
+  await page.evaluate(() => {
+    window.__filmstripProbe.fail = true;
+  });
+  await choose(failedClip);
+  await fileAction(page, 'Open video…');
+  await page.getByText('Filmstrip unavailable · Playback ready', { exact: true }).waitFor();
+  assert.equal(await play.isEnabled(), true, 'thumbnail failure does not lock playback');
+  await page.evaluate(() => {
+    window.__filmstripProbe.fail = false;
+    window.__filmstripProbe.delay = 200;
+  });
+  await choose(pendingClip);
+  await fileAction(page, 'Open video…');
+  await loadingFilmstrip.waitFor();
+  await page.evaluate(() => {
+    window.__filmstripProbe.delay = 0;
+  });
+  await choose(clip);
+  await fileAction(page, 'Open video…');
+  await page.waitForFunction(() => document.querySelectorAll('.filmstrip img').length > 0);
+  assert.equal(await play.isEnabled(), true, 'replacement clip has a finished filmstrip');
+  assert.equal(await page.locator('.filmstrip.unavailable').count(), 0);
 
   assert.deepEqual(errors, []);
   console.log('Timeline media check passed');

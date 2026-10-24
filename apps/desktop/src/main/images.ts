@@ -64,6 +64,7 @@ import {
 import { decodeSettings, encodeSettings } from '@gleech/command-service';
 import { createUpdateSessionStore } from './update-storage';
 import type { UpdateSessionOptions } from '../shared/updates';
+import type { OpenFileAccess } from './open-file-access';
 
 interface Asset {
   source: ImageSource;
@@ -71,7 +72,11 @@ interface Asset {
   subject?: Promise<SubjectMask>;
 }
 
-export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAccess): () => void {
+export function registerImageHandlers(
+  window: BrowserWindow,
+  mcpAccess: McpAccess,
+  selectedFiles: OpenFileAccess,
+): () => void {
   const feedback = createFeedbackService({
     clientId: process.argv.includes('--smoke-test')
       ? (process.env.GLEECH_SMOKE_GITHUB_CLIENT_ID ?? feedbackConfig.clientId)
@@ -227,7 +232,8 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
       },
     );
   }
-  handle('image:open', async () => {
+  handle('image:open', async (selectionId) => {
+    if (selectionId !== undefined) return importPath(selectedFiles.take(selectionId, 'image'));
     const selection = await dialog.showOpenDialog(window, {
       title: 'Open image',
       properties: ['openFile'],
@@ -322,7 +328,9 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
       assets.delete(imported.source.id);
     }
   });
-  handle('project:open', async () => {
+  handle('project:open', async (selectionId) => {
+    if (selectionId !== undefined)
+      return openProjectPath(selectedFiles.take(selectionId, 'project'));
     const selection = await dialog.showOpenDialog(window, {
       title: 'Open project',
       properties: ['openFile'],
@@ -339,10 +347,9 @@ export function registerImageHandlers(window: BrowserWindow, mcpAccess: McpAcces
       return await openProjectPath(recent.path);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-        throw new Error(
-          'This recent project was moved or deleted. Use Open project to locate it.',
-          { cause: error },
-        );
+        throw new Error('This recent project was moved or deleted. Use Open File to locate it.', {
+          cause: error,
+        });
       throw error;
     }
   });

@@ -112,6 +112,21 @@ The follow-up production audit reports zero advisories. The full audit reports
 only the existing packaging-tool findings: high-severity `http-cache-semantics`
 and moderate-severity `sprintf-js`, neither with a published patched version.
 
+## MCP dependency security updates — 2026-10-24
+
+The production audit began reporting newly indexed advisories in transitive MCP
+SDK dependencies. The lockfile now selects `body-parser` 2.4.0 and `fast-uri`
+3.1.9 within the existing compatible dependency ranges; `body-parser` also brings
+`qs` 6.16.1. No MCP SDK or application version was changed.
+
+- [body-parser security advisory](https://github.com/advisories/GHSA-27r3-jxmh-p828):
+  compressed request bodies with trailing bytes could terminate the process.
+- [fast-uri 3.1.9 security release](https://github.com/fastify/fast-uri/releases/tag/v3.1.9):
+  fixes four URI parsing and normalization advisories.
+
+The follow-up `pnpm audit --prod` reports zero known vulnerabilities. This does
+not change the outstanding Electron embedded-runtime review above.
+
 ## Dependency audit baseline — 2026-10-14
 
 The production `pnpm audit --prod` scan reported zero known advisories.
@@ -131,7 +146,8 @@ advisories visible and reassess changes; scan results age and are not a security
 ## Known limitations
 
 - Windows x64 beta, with separate experimental macOS Intel/Apple Silicon and Linux x64 alphas.
-- Development installers are unsigned; no automatic updater/public publishing job.
+- Development installers are unsigned. Automatic updates require supported
+  installed release builds; public release publishing remains manual.
 - Timeline mode animates controls and renders video, GIFs and sequences. FFmpeg
   is bundled for all release targets; an explicit user selection or PATH can also
   supply it. Clips and audio tracks are referenced by path, not embedded in projects.

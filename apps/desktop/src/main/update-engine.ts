@@ -28,6 +28,7 @@ class StablePathAppImageUpdater extends AppImageUpdater {
 export function createUpdateEngine(
   folder: string,
   onInstallError: (error: Error) => void,
+  options: { relaunch?: boolean } = {},
 ): UpdateEngine {
   let downloaded: { path: string; release: UpdateRelease } | null = null;
   let abort: AbortController | null = null;
@@ -129,7 +130,7 @@ export function createUpdateEngine(
         app.quit();
       } else {
         if (!autoUpdater) throw new Error('This platform requires a manual update.');
-        autoUpdater.quitAndInstall(true, true);
+        autoUpdater.quitAndInstall(true, options.relaunch !== false);
         if (installError) throw installError;
       }
     },

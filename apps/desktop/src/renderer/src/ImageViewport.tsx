@@ -17,6 +17,7 @@ import {
 } from '@gleech/renderer-core';
 import {
   effectsNeedSubject,
+  isShaderEffect,
   type ImageSource,
   type EffectInstance,
   type SubjectMask,
@@ -25,13 +26,11 @@ import {
 import { RenderCancelledError } from '@gleech/effects';
 import type { ImportedImage } from '../../shared/image-api';
 import { EffectProcessor } from './EffectProcessor';
+import { playbackDimension, PlaybackPreviewBudget } from './playback-preview';
 import { MaskPaintSurface, type MaskPainting } from './MaskPaintSurface';
 
-/** Rendered half-resolution frames kept for instant timeline playback. */
+/** Rendered playback drafts kept for instant timeline playback. */
 const FRAME_CACHE_BYTES = 512 * 1024 * 1024;
-function playbackDimension(width: number, height: number): number {
-  return Math.max(360, Math.min(1280, Math.ceil(Math.max(width, height) / 2)));
-}
 
 export interface ViewportHandle {
   /** Forget cached timeline frames (the recipe changed). */
@@ -68,8 +67,11 @@ interface Props {
   feedback: { text: string; id: number } | null;
   /** Identifies the current timeline frame and recipe, for the frame cache. */
   frameKey?: string | null;
-  /** Playing: render half-resolution drafts only and cache them. */
+  /** Playing: render bounded drafts only and cache them. */
   playback?: boolean;
+  playbackMaximum?: number;
+  playbackFps?: number;
+  onPlaybackBudget?(sourceId: string, maximum: number): void;
   /** A decoded video frame that replaces the source image for this frame. */
   sourceFrame?: PixelImage | null;
   /** A cached playback frame was shown (`cached`) or rendered into the cache. */
@@ -116,6 +118,9 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
     feedback,
     frameKey = null,
     playback = false,
+    playbackMaximum = 0,
+    playbackFps = 30,
+    onPlaybackBudget,
     sourceFrame = null,
     onFrameShown,
     onFrameEvicted,
@@ -124,6 +129,19 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
 ) {
   const frameKeyRef = useRef(frameKey);
   const playbackRef = useRef(playback);
+  const playbackBudget = useRef(new PlaybackPreviewBudget());
+  const playbackOptions = useRef({
+    maximum: playbackMaximum,
+    fps: playbackFps,
+    onBudget: onPlaybackBudget,
+  });
+  useEffect(() => {
+    playbackOptions.current = {
+      maximum: playbackMaximum,
+      fps: playbackFps,
+      onBudget: onPlaybackBudget,
+    };
+  }, [playbackMaximum, playbackFps, onPlaybackBudget]);
   const sourceFrameRef = useRef(sourceFrame);
   const frameShown = useRef(onFrameShown);
   const frameEvicted = useRef(onFrameEvicted);
@@ -135,7 +153,9 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
   }, [onFrameShown, onFrameEvicted]);
   const cacheFrame = (key: string, pixels: PixelImage) => {
     const cache = frameCache.current;
-    if (cache.has(key)) return;
+    const old = cache.get(key);
+    if (old) frameCacheBytes.current -= old.pixels.byteLength;
+    cache.delete(key);
     cache.set(key, pixels);
     frameCacheBytes.current += pixels.pixels.byteLength;
     while (frameCacheBytes.current > FRAME_CACHE_BYTES && cache.size > 1) {
@@ -249,15 +269,34 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
         // Mask painting changes the recipe without changing the frame, so skip the cache.
         const key = original || painting.current ? null : frameKeyRef.current;
         const playing = playbackRef.current && !original;
+        const hasEffects = effects.some((effect) => effect.enabled && effect.params.amount > 0);
+        const options = playbackOptions.current;
+        const maximum =
+          options.maximum || playbackDimension(image.source.width, image.source.height);
+        playbackBudget.current.configure(
+          image.source.id,
+          Math.min(1280, maximum),
+          playing && hasEffects,
+          options.fps,
+        );
+        if (playing && !hasEffects) options.onBudget?.(image.source.id, maximum);
         let cachedDraft = false;
         if (key) {
           const hit = frameCache.current.get(key);
-          if (hit) {
+          if (
+            hit &&
+            (!playing || Math.max(hit.width, hit.height) >= playbackBudget.current.maximum)
+          ) {
             cachedDraft = true;
             // Refresh LRU order, show instantly, then refine only when paused.
             frameCache.current.delete(key);
             frameCache.current.set(key, hit);
+            const cacheStarted = performance.now();
             await renderer.show(hit);
+            if (playing) {
+              playbackBudget.current.record(performance.now() - cacheStarted);
+              options.onBudget?.(image.source.id, playbackBudget.current.maximum);
+            }
             frameShown.current?.(key, true);
             if (layer.current) layer.current.dataset.frameKey = key;
             if (version !== revision.current) continue;
@@ -278,7 +317,7 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
           !cachedDraft &&
           (playing || needsInteractivePreview(raw, effects) || painting.current !== null);
         let cached = false;
-        if (!original && effects.some((effect) => effect.enabled && effect.params.amount > 0)) {
+        if (!original && hasEffects) {
           const cache = editedCache.current;
           if (cache?.raw === raw && cache.effects === effects && cache.seed === masterSeed) {
             pixels = cache.pixels;
@@ -309,7 +348,7 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
               }
               previewPhase.current = progressive ? 'draft' : 'detail';
               draftImage.current = raw;
-              pixels = await processor.current!.render(raw, effects, {
+              const job = processor.current!.render(raw, effects, {
                 masterSeed,
                 reference: image.source,
                 purpose: 'preview',
@@ -317,7 +356,7 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                 ...(progressive
                   ? {
                       previewMaxDimension: playing
-                        ? playbackDimension(raw.width, raw.height)
+                        ? playbackBudget.current.maximum
                         : previewBudget.current.maximum,
                     }
                   : {}),
@@ -325,6 +364,33 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                   ? { activeMaskId: painting.current.effectId }
                   : {}),
               });
+              // Slow cooperative work is retried at a smaller draft. A worker
+              // that stops answering is replaced without interrupting exports.
+              const cancelSlow = playing
+                ? setTimeout(() => {
+                    if (!playbackRef.current) return;
+                    playbackBudget.current.record(500);
+                    options.onBudget?.(image.source.id, playbackBudget.current.maximum);
+                    processor.current?.cancelPreview();
+                  }, 500)
+                : null;
+              // Cold GPU compilation can legitimately outlast a CPU preview.
+              const recoveryDelay = effects.some(
+                (effect) => effect.enabled && isShaderEffect(effect),
+              )
+                ? 15000
+                : 2000;
+              const recoverStall = playing
+                ? setTimeout(() => {
+                    if (playbackRef.current) processor.current?.restartPreviews();
+                  }, recoveryDelay)
+                : null;
+              try {
+                pixels = await job;
+              } finally {
+                if (cancelSlow !== null) clearTimeout(cancelSlow);
+                if (recoverStall !== null) clearTimeout(recoverStall);
+              }
               if (
                 progressive &&
                 current.current === image &&
@@ -338,7 +404,10 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                   cacheFrame(key, pixels);
                   frameShown.current?.(key, false);
                 }
-                previewBudget.current.record(performance.now() - started);
+                if (playing) {
+                  playbackBudget.current.record(performance.now() - started);
+                  options.onBudget?.(image.source.id, playbackBudget.current.maximum);
+                } else previewBudget.current.record(performance.now() - started);
                 if (layer.current) {
                   layer.current.dataset.previewQuality = 'interactive';
                   layer.current.dataset.previewWidth = String(pixels.width);
@@ -469,6 +538,8 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
     heldOriginal,
     frameKey,
     playback,
+    playbackMaximum,
+    playbackFps,
     sourceFrame,
     onError,
     renderCurrent,
@@ -824,10 +895,10 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
               ＋
             </div>
             <h2>It's not broken. It's just a GLEECH.</h2>
-            <p>Drop an image here, open a file, or paste from your clipboard.</p>
+            <p>Drop an image, video, or GLEECH project here, or open a file.</p>
             <div className="empty-image-actions">
               <button className="primary-button" onClick={onOpen} disabled={busy}>
-                Choose image
+                Open Image or Video or Project
               </button>
               <button
                 onClick={onOpenSample}
@@ -837,10 +908,12 @@ export const ImageViewport = forwardRef<ViewportHandle, Props>(function ImageVie
                 Try sample image
               </button>
             </div>
-            <span className="empty-hint">PNG · JPEG · WebP</span>
+            <span className="empty-hint">
+              PNG · JPEG · WebP · MP4 · MOV · M4V · WebM · MKV · AVI · GIF · GLEECH
+            </span>
           </div>
         )}
-        {dropActive && <div className="drop-overlay">Drop to open image</div>}
+        {dropActive && <div className="drop-overlay">Drop to open file</div>}
         {source && (originalView || heldOriginal) && (
           <div className="comparison-badge">Original</div>
         )}

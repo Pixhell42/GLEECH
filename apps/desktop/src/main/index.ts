@@ -10,11 +10,14 @@ import { bundledFfmpegCandidates, createFfmpegLocator } from './ffmpeg';
 import { registerRenderHandlers } from './render-service';
 import { registerMediaHandlers, registerMediaScheme } from './media-service';
 import { registerUpdates } from './updates';
+import { registerOpenFileHandlers } from './open-file';
+import { startTerminalUpdater } from './terminal-updater';
 
 const smokeTest = process.argv.includes('--smoke-test');
 const smokeUserData = process.env['GLEECH_SMOKE_USER_DATA'];
 if (smokeTest && smokeUserData) app.setPath('userData', smokeUserData);
-if (!process.argv.includes('--gleech-cli-gpu')) registerMediaScheme();
+const terminalUpdate = process.argv.includes('--gleech-terminal-update');
+if (!terminalUpdate && !process.argv.includes('--gleech-cli-gpu')) registerMediaScheme();
 let desktopWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
@@ -44,7 +47,8 @@ function createWindow(): void {
   });
 
   const mcpAccess = createMcpAccess();
-  const disposeImages = registerImageHandlers(window, mcpAccess);
+  const selectedFiles = registerOpenFileHandlers(window);
+  const disposeImages = registerImageHandlers(window, mcpAccess, selectedFiles);
   window.once('closed', disposeImages);
   window.once('closed', registerWindowControls(window));
   window.once('closed', registerMcp(window, mcpAccess));
@@ -61,7 +65,7 @@ function createWindow(): void {
         .map((folder) => folder.path),
     ),
   );
-  window.once('closed', registerMediaHandlers(window, ffmpeg));
+  window.once('closed', registerMediaHandlers(window, ffmpeg, selectedFiles));
   let allowClose = false;
   let closePending = false;
   let rendererReady = false;
@@ -127,7 +131,13 @@ function createWindow(): void {
   }
 }
 
-if (process.argv.includes('--gleech-cli-gpu')) {
+if (terminalUpdate) {
+  void startTerminalUpdater().catch((error) => {
+    if (process.connected) process.send?.({ type: 'error', error: String(error) }, () => {});
+    process.stderr.write(String(error) + '\n');
+    setTimeout(() => app.exit(1), 50);
+  });
+} else if (process.argv.includes('--gleech-cli-gpu')) {
   void startCliGpu().catch((error) => {
     process.stderr.write(String(error) + '\n');
     app.exit(1);
