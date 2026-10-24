@@ -122,6 +122,7 @@ try {
         const onmessage = self.onmessage;
         const postMessage = self.postMessage.bind(self);
         self.onmessage = (event) => {
+          if (event.origin !== '' && event.origin !== self.location.origin) return;
           if (event.data.kind === 'render') starts.set(event.data.id, performance.now());
           return onmessage(event);
         };
@@ -145,6 +146,7 @@ try {
         const handler = self.onmessage;
         let dropped = false;
         self.onmessage = (event) => {
+          if (event.origin !== '' && event.origin !== self.location.origin) return;
           if (!dropped && event.data.kind === 'render' && event.data.purpose === 'preview') {
             dropped = true;
             return;

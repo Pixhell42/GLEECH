@@ -7,6 +7,17 @@ import { createTerminalUpdateCache, createUpdatePreferenceStore } from '../main/
 import { userDataCandidates } from './library';
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
+const NOTICE_COMMANDS = new Set([
+  'render',
+  'gleech',
+  'vary',
+  'effects',
+  'effect',
+  'presets',
+  'shaders',
+  'inspect',
+  'info',
+]);
 
 export function terminalUpdateFolder() {
   const candidates = userDataCandidates();
@@ -30,17 +41,7 @@ export function shouldNotifyCli(
     !argv.includes('--json') &&
     !argv.some((arg) => ['--help', '-h'].includes(arg)) &&
     !!argv[0] &&
-    ![
-      'tui',
-      'sample',
-      'update',
-      'help',
-      '--version',
-      '-v',
-      'install-cli',
-      'uninstall-cli',
-    ].includes(argv[0]) &&
-    !existsSync(argv[0])
+    NOTICE_COMMANDS.has(argv[0])
   );
 }
 

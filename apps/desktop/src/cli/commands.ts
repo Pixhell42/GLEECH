@@ -1203,7 +1203,7 @@ export async function runCli(argv: string[]): Promise<number> {
     command === 'update' ||
     command === 'tui' ||
     command === 'sample' ||
-    existsSync(command)
+    !Object.hasOwn(COMMANDS, command)
   )
     restoreWindowsConsoleInput();
   try {

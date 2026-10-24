@@ -20,10 +20,13 @@ const allowed = [
   'linux-unpacked/gleech',
   'linux-unpacked/gleech-bin',
 ].map((path) => resolve(root, 'apps/desktop/release', path));
+const allowedExecutables = new Map(allowed.map((path) => [path, path]));
 const executable = supplied
-  ? resolve(supplied, ...(supplied.endsWith('.app') ? ['Contents/MacOS/GLEECH'] : []))
+  ? allowedExecutables.get(
+      resolve(supplied, ...(supplied.endsWith('.app') ? ['Contents/MacOS/GLEECH'] : [])),
+    )
   : createRequire(import.meta.url)('electron');
-if (supplied) assert.ok(allowed.includes(executable), 'Use a known packaged executable.');
+assert.ok(executable, 'Use a known packaged executable.');
 const entry = supplied
   ? resolve(
       dirname(executable),
@@ -73,9 +76,13 @@ const releases = [
   },
 ];
 const fixture = join(output, 'releases.cjs');
+await writeFile(join(output, 'releases.json'), JSON.stringify(releases));
 await writeFile(
   fixture,
-  `globalThis.fetch = async () => new Response(JSON.stringify(${JSON.stringify(releases)}), { status: 200 });\n`,
+  `const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+globalThis.fetch = async () => new Response(readFileSync(join(__dirname, 'releases.json'), 'utf8'), { status: 200 });
+`,
 );
 const cliEnv = {
   ...env,

@@ -43,6 +43,8 @@ describe('CLI update notices', () => {
       ['update'],
       ['tui'],
       ['sample'],
+      ['photo.png'],
+      ['unknown-command'],
       [],
     ])
       expect(shouldNotifyCli(args, tty)).toBe(false);

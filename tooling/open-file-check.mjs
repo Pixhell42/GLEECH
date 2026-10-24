@@ -15,9 +15,24 @@ delete env.ELECTRON_RUN_AS_NODE;
 delete env.ELECTRON_RENDERER_URL;
 const targets = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
 assert.ok(targets.length <= 1, 'Supply at most one packaged executable.');
+const knownExecutables = new Map(
+  [
+    'win-unpacked/GLEECH.exe',
+    'mac-arm64/GLEECH.app/Contents/MacOS/GLEECH',
+    'mac/GLEECH.app/Contents/MacOS/GLEECH',
+    'linux-unpacked/gleech',
+    'linux-unpacked/gleech-bin',
+  ].map((path) => {
+    const executable = resolve('apps/desktop/release', path);
+    return [executable, executable];
+  }),
+);
 const exe =
   targets[0] &&
-  resolve(targets[0], ...(targets[0].endsWith('.app') ? ['Contents/MacOS/GLEECH'] : []));
+  knownExecutables.get(
+    resolve(targets[0], ...(targets[0].endsWith('.app') ? ['Contents/MacOS/GLEECH'] : [])),
+  );
+if (targets[0]) assert.ok(exe, 'Use a known packaged executable under apps/desktop/release.');
 const app = await electron.launch({
   args: [...(exe ? [] : [resolve('apps/desktop')]), '--smoke-test'],
   env,
