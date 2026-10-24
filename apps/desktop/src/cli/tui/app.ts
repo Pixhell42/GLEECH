@@ -39,6 +39,7 @@ import {
   type ParamEntry,
 } from '../params';
 import { Session } from '../session';
+import { prepareTerminalUpdate } from '../update-install';
 import { exportTimeline } from '../timeline';
 import { cliTimelinePlan } from '../timeline-plan';
 import { previewTimeline, type TimelinePreviewFrame } from '../timeline-preview';
@@ -207,7 +208,7 @@ export async function runTui(
   initial: Session,
   isSample: boolean,
   term = new Terminal(),
-  options: { settings?: TuiSettings | false } = {},
+  options: { settings?: TuiSettings | false; prepareUpdate?: typeof prepareTerminalUpdate } = {},
 ): Promise<number> {
   const level = detectColorLevel(process.stdout);
   const screen = new Screen(level || 3, C.window, C.text);
@@ -237,6 +238,7 @@ export async function runTui(
   let helpMaxScroll = 0;
   let spinner = 0;
   let quitting = false;
+  let updateExitMessage: string | null = null;
   const settings = options.settings === false ? null : (options.settings ?? createTuiSettings());
   let settingsMaxScroll = 0;
   let settingsVisibleRows = 1;
@@ -1706,7 +1708,65 @@ export async function runTui(
           m.scroll = 0;
         },
       });
+    if (m.section === 0) actions.push({ label: 'Install & Update…', run: beginTerminalUpdate });
     return actions;
+  }
+
+  async function beginTerminalUpdate() {
+    await settings!.check();
+    const state = settings!.snapshot();
+    if (!state.release) {
+      flash(state.error ?? 'GLEECH is up to date.', state.error ? C.red : C.accent, 5000);
+      return;
+    }
+    const version = state.release.version;
+    modal = {
+      kind: 'confirm',
+      title: 'UPDATE GLEECH',
+      message: `Download and install GLEECH ${version}? Close other GLEECH sessions first. This TUI exits before installation. macOS opens the ZIP in Finder.`,
+      options: [
+        {
+          key: 'u',
+          label: 'update',
+          run: () =>
+            guardUnsaved(() => {
+              void installTerminalUpdate(version);
+            }, 'installing the update'),
+        },
+        { key: 'esc', label: 'cancel', run: () => void (modal = null) },
+      ],
+    };
+    schedule();
+  }
+
+  async function installTerminalUpdate(version: string) {
+    let prepared: Awaited<ReturnType<typeof prepareTerminalUpdate>> | undefined;
+    try {
+      await runBusy('UPDATE GLEECH', async (_cancelled, signal, report) => {
+        report('Downloading and verifying…');
+        prepared = await (options.prepareUpdate ?? prepareTerminalUpdate)(
+          version,
+          signal,
+          (progress) => {
+            report(`Downloading ${Math.floor(progress.percent)}% · Escape cancels`);
+          },
+        );
+        signal.throwIfAborted();
+        await prepared.installOnExit();
+        updateExitMessage =
+          prepared.mode === 'finder'
+            ? 'Update verified. The ZIP opens in Finder after GLEECH exits. Replace the app at its existing location, then run gleech again.'
+            : 'Update verified. Installation starts after GLEECH exits. Run gleech again when installation finishes.';
+        finish();
+      });
+    } catch (error) {
+      prepared?.cancel();
+      flash(
+        terminalSettingsText(error instanceof Error ? error.message : String(error)),
+        C.red,
+        7000,
+      );
+    }
   }
 
   function drawSettings(m: SettingsModal) {
@@ -3003,5 +3063,6 @@ export async function runTui(
   const saved = session.path && !session.dirty ? ` · ${session.path}` : '';
   const paint = createPaint(process.stdout);
   process.stdout.write(`${paint.accent('▍')}${paint.bold('GLEECH')}${paint.muted(saved)}\n`);
+  if (updateExitMessage) process.stdout.write(`${updateExitMessage}\n`);
   return code;
 }
