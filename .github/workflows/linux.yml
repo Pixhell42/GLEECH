@@ -9,6 +9,7 @@ on:
       - tooling/support-check.mjs
       - tooling/github-feedback-check.mjs
       - tooling/updates-check.mjs
+      - tooling/terminal-updates-check.mjs
       - tooling/update-package-*.mjs
       - .github/workflows/linux.yml
       - apps/desktop/electron-builder.yml
@@ -90,6 +91,8 @@ jobs:
           xvfb-run -a node tooling/cli-check.mjs apps/desktop/release/linux-unpacked/gleech-bin --cpu --require-ffmpeg
           node tooling/cli-launcher-check.mjs apps/desktop/release/linux-unpacked/gleech
           xvfb-run -a node tooling/updates-check.mjs apps/desktop/release/linux-unpacked/gleech
+          xvfb-run -a node tooling/terminal-updates-check.mjs apps/desktop/release/linux-unpacked/gleech-bin
+          xvfb-run -a node tooling/open-file-check.mjs apps/desktop/release/linux-unpacked/gleech-bin --cpu
           xvfb-run -a node tooling/support-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
           xvfb-run -a node tooling/github-feedback-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu --allow-unavailable-keyring
       - name: Test actual AppImage startup, MCP and remount

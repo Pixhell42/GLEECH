@@ -26,6 +26,7 @@ import { runTui } from './app';
 import { Terminal } from './terminal';
 import { TimelineTransport } from './timeline';
 import { createTuiSettings, type TuiSettings } from './settings';
+import type { prepareTerminalUpdate } from '../update-install';
 
 const pixels = Uint8Array.from([0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255]);
 const png = encodePng({ width: 2, height: 2, pixels: pixels.buffer });
@@ -289,6 +290,7 @@ function terminalHarness(
   columns = 120,
   rows = 30,
   settings: TuiSettings | false = false,
+  prepareUpdate?: typeof prepareTerminalUpdate,
 ) {
   const input = new PassThrough();
   let x = 0,
@@ -331,7 +333,7 @@ function terminalHarness(
     doc,
     false,
     new Terminal(input as unknown as NodeJS.ReadStream, output as unknown as NodeJS.WriteStream),
-    { settings },
+    { settings, ...(prepareUpdate ? { prepareUpdate } : {}) },
   );
   const text = () => cells.map((row) => row.join('')).join('\n');
   const key = (value: string) => {
@@ -350,10 +352,10 @@ function terminalHarness(
     text,
     see,
     running,
-    async close() {
+    async close(expectedCode = 130) {
       // A process signal also verifies cleanup while dialogs/playback are active.
       process.emit('SIGINT');
-      expect(await running).toBe(130);
+      expect(await running).toBe(expectedCode);
       expect(process.listenerCount('SIGINT')).toBe(listeners);
       expect(input.listenerCount('data')).toBe(0);
       expect(output.listenerCount('resize')).toBe(0);
@@ -368,6 +370,109 @@ const right = '\x1b[C',
   esc = '\x1b';
 
 describe('interactive TUI timeline', () => {
+  it('saves a dirty project before handing a verified update off, and allows cancellation first', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gleech-tui-update-save-'));
+    const settings = createTuiSettings({
+      folder: root,
+      discover: async () => ({
+        version: '0.2.1',
+        notes: '',
+        tag: 'v0.2.1',
+        url: '',
+        downloadUrl: '',
+        bytes: 1,
+        sha256: 'a'.repeat(64),
+        asset: '',
+      }),
+    });
+    await settings.ready;
+    const doc = session(project(), join(root, 'working.gleech'));
+    doc.service.updateEffect('paint', { enabled: false });
+    const installOnExit = vi.fn(async () => {
+      expect(doc.dirty).toBe(false);
+    });
+    const prepare = vi.fn<typeof prepareTerminalUpdate>(async () => ({
+      version: '0.2.1',
+      mode: 'native',
+      installOnExit,
+      cancel: vi.fn(),
+    }));
+    const tui = terminalHarness(doc, 120, 30, settings, prepare);
+    let finished = false;
+    try {
+      await tui.see('TIMELINE');
+      tui.key(',' + right + down.repeat(5) + enter);
+      await tui.see('UPDATE GLEECH');
+      tui.key('u');
+      await tui.see('UNSAVED CHANGES');
+      tui.key(esc);
+      await tui.see('TIMELINE');
+      expect(prepare).not.toHaveBeenCalled();
+      expect(doc.dirty).toBe(true);
+      tui.key(',' + right + down.repeat(5) + enter);
+      await tui.see('UPDATE GLEECH');
+      tui.key('u');
+      await tui.see('UNSAVED CHANGES');
+      tui.key('s');
+      expect(await tui.running).toBe(0);
+      finished = true;
+      expect(installOnExit).toHaveBeenCalledOnce();
+      expect((await Session.open(join(root, 'working.gleech'))).state.effects[0]?.enabled).toBe(
+        false,
+      );
+    } finally {
+      await tui.close(finished ? 0 : 130);
+      expect(dirname(resolve(root))).toBe(resolve(tmpdir()));
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('cancels an update download with Escape and keeps the current timeline usable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gleech-tui-update-cancel-'));
+    const settings = createTuiSettings({
+      folder: root,
+      discover: async () => ({
+        version: '0.2.1',
+        notes: '',
+        tag: 'v0.2.1',
+        url: '',
+        downloadUrl: '',
+        bytes: 1,
+        sha256: 'a'.repeat(64),
+        asset: '',
+      }),
+    });
+    await settings.ready;
+    const doc = session();
+    const state = doc.state;
+    const prepare: typeof prepareTerminalUpdate = async (_version, signal, progress) => {
+      progress({ percent: 50, total: 100, transferred: 50, bytesPerSecond: 5 });
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(new Error('Update cancelled.')), {
+          once: true,
+        }),
+      );
+    };
+    const tui = terminalHarness(doc, 120, 30, settings, prepare);
+    try {
+      await tui.see('TIMELINE');
+      tui.key(',' + right + down.repeat(5) + enter);
+      await tui.see('UPDATE GLEECH');
+      tui.key('u');
+      await tui.see('Downloading 50%');
+      tui.key(esc);
+      await tui.see('Update cancelled.');
+      expect(doc.state).toBe(state);
+      expect(doc.dirty).toBe(false);
+      tui.key(right);
+      await tui.see('0.500s  frame 2/3');
+    } finally {
+      await tui.close();
+      expect(dirname(resolve(root))).toBe(resolve(tmpdir()));
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('exposes Settings, update preferences and fixed support links without changing the timeline', async () => {
     const root = await mkdtemp(join(tmpdir(), 'gleech-tui-settings-ui-'));
     const opened: string[] = [];

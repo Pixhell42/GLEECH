@@ -32,9 +32,11 @@ import {
 } from './media-probe';
 import { serveFile } from './media-range';
 import { FrameReader, describeFfmpegError } from './video-reader';
+import type { OpenFileAccess } from './open-file-access';
+import { VIDEO_FILE_EXTENSIONS as VIDEO_EXTENSIONS } from '../shared/open-file';
 
 export const MEDIA_SCHEME = 'gleech-media';
-export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', 'gif'] as const;
+export { VIDEO_EXTENSIONS };
 export const AUDIO_EXTENSIONS = ['wav', 'mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus'] as const;
 /** Clip durations the project model accepts. */
 const MAX_MEDIA_SECONDS = 4 * 3600;
@@ -102,7 +104,11 @@ function readerOptions(value: unknown): FrameReaderOptions {
 }
 
 /** Registers media:* IPC handlers and the gleech-media protocol. Returns a disposer. */
-export function registerMediaHandlers(window: BrowserWindow, ffmpeg: FfmpegLocator): () => void {
+export function registerMediaHandlers(
+  window: BrowserWindow,
+  ffmpeg: FfmpegLocator,
+  selectedFiles: OpenFileAccess,
+): () => void {
   const media = new Map<string, MediaEntry>();
   const readers = new Map<string, FrameReader>();
   const processes = new Set<FfmpegProcess>();
@@ -307,8 +313,9 @@ export function registerMediaHandlers(window: BrowserWindow, ffmpeg: FfmpegLocat
     return selection.canceled ? null : (selection.filePaths[0] ?? null);
   }
 
-  handle('media:open-video', async () => {
-    const path = await choose('video');
+  handle('media:open-video', async (selection) => {
+    const path =
+      selection === undefined ? await choose('video') : selectedFiles.take(selection, 'video');
     return path ? ((await register(path, 'video')) as OpenedMedia<VideoProbe>) : null;
   });
   handle('media:open-audio', async () => {

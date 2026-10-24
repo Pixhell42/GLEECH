@@ -217,7 +217,16 @@ const crtCode = Buffer.from(
   .replaceAll("'./color-gradient'", `'${resolvedGradientUrl}'`);
 const crtUrl = `data:text/javascript;base64,${Buffer.from(crtCode).toString('base64')}`;
 const noiseUrl = await moduleUrl('packages/effects/src/noise.ts');
+const grainCode = Buffer.from(
+  (await moduleUrl('packages/effects/src/noise-grain.ts')).split(',')[1],
+  'base64',
+)
+  .toString()
+  .replaceAll("'./noise'", `'${noiseUrl}'`)
+  .replaceAll("'./color-gradient'", `'${resolvedGradientUrl}'`);
+const grainUrl = `data:text/javascript;base64,${Buffer.from(grainCode).toString('base64')}`;
 const blurUrl = await moduleUrl('packages/effects/src/blur.ts');
+const rgbSplitUrl = await moduleUrl('packages/effects/src/rgb-split.ts');
 const paintedMaskCode = Buffer.from(
   (await moduleUrl('packages/effects/src/painted-mask.ts')).split(',')[1],
   'base64',
@@ -246,6 +255,7 @@ const depthCode = Buffer.from(depthUrl.split(',')[1], 'base64')
   .toString()
   .replaceAll('@gleech/project-model', modelUrl)
   .replaceAll("'./noise'", `'${noiseUrl}'`)
+  .replaceAll("'./noise-grain'", `'${grainUrl}'`)
   .replaceAll("'./shape-tiles'", `'${resolvedTilesUrl}'`);
 const resolvedDepthUrl = `data:text/javascript;base64,${Buffer.from(depthCode).toString('base64')}`;
 const referenceFiltersCode = Buffer.from(
@@ -317,7 +327,9 @@ const effectCode = Buffer.from(effectUrl.split(',')[1], 'base64')
   .replaceAll("'./tonal'", `'${resolvedTonalUrl}'`)
   .replaceAll("'./glow'", `'${glowUrl}'`)
   .replaceAll("'./noise'", `'${noiseUrl}'`)
+  .replaceAll("'./noise-grain'", `'${grainUrl}'`)
   .replaceAll("'./blur'", `'${blurUrl}'`)
+  .replaceAll("'./rgb-split'", `'${rgbSplitUrl}'`)
   .replaceAll("'./painted-mask'", `'${paintedMaskUrl}'`)
   .replaceAll("'./painted-mask-cache'", `'${maskCacheUrl}'`)
   .replaceAll("'./preview-stack-cache'", `'${stackCacheUrl}'`)

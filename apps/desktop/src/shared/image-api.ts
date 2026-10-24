@@ -82,6 +82,8 @@ export interface WindowState {
 }
 
 export interface DesktopBridge {
+  chooseFile(): Promise<Result<import('./open-file').SelectedFile | null>>;
+  selectDroppedFile(file: File): Promise<Result<import('./open-file').SelectedFile>>;
   updateState(): Promise<Result<import('./updates').UpdateState>>;
   checkForUpdates(): Promise<Result<import('./updates').UpdateState>>;
   setAutomaticUpdates(enabled: boolean): Promise<Result<import('./updates').UpdateState>>;
@@ -119,9 +121,9 @@ export interface DesktopBridge {
   cancelRender(jobId: string): Promise<Result<void>>;
   revealRender(path: string): Promise<Result<void>>;
   // Timeline media (main/media-service.ts)
-  openVideo(): Promise<
-    Result<import('./render').OpenedMedia<import('./render').VideoProbe> | null>
-  >;
+  openVideo(
+    selectionId?: string,
+  ): Promise<Result<import('./render').OpenedMedia<import('./render').VideoProbe> | null>>;
   openAudio(): Promise<
     Result<import('./render').OpenedMedia<import('./render').AudioProbe> | null>
   >;
@@ -238,7 +240,7 @@ export interface DesktopBridge {
   ): Promise<Result<ShaderPreviewSource>>;
   platform: string;
   versions: { electron: string; chromium: string };
-  openImage(): Promise<Result<ImportedImage | null>>;
+  openImage(selectionId?: string): Promise<Result<ImportedImage | null>>;
   openSampleImage(): Promise<Result<ImportedImage>>;
   layerImageFromSource(id: string): Promise<Result<LayerImage>>;
   openLayerImage(
@@ -279,7 +281,7 @@ export interface DesktopBridge {
     thumbnail: string,
     choice: 'image' | 'statue',
   ): Promise<Result<EffectPreset>>;
-  openProject(): Promise<Result<OpenedProject | null>>;
+  openProject(selectionId?: string): Promise<Result<OpenedProject | null>>;
   listRecentProjects(): Promise<Result<readonly RecentProject[]>>;
   openRecentProject(id: string): Promise<Result<OpenedProject>>;
   clearRecentProjects(): Promise<Result<void>>;

@@ -59,6 +59,7 @@ import {
 import { trackPointer } from './pointer';
 import { PopoverMenu, type MenuItem } from './PopoverMenu';
 import { CurvesView } from './CurvesView';
+import type { FilmstripPreview } from './use-filmstrip';
 import {
   MAX_PX_PER_FRAME,
   TRACK_HEADER_WIDTH,
@@ -79,10 +80,6 @@ export interface SelectedParameter {
   readonly effectId: string;
   readonly key: string;
 }
-export interface FilmstripFrame {
-  readonly frame: number;
-  readonly url: string;
-}
 
 export interface TimelineDockProps {
   project: ProjectState;
@@ -95,7 +92,7 @@ export interface TimelineDockProps {
   disabled: boolean;
   modulation: ModulationContext;
   stillThumbnail: string | null;
-  filmstrip: readonly FilmstripFrame[];
+  filmstrip: FilmstripPreview;
   laneView: 'keys' | 'curves';
   onLaneView(view: 'keys' | 'curves'): void;
   onSeek(frame: number): void;
@@ -221,17 +218,17 @@ export function TimelineDock(props: TimelineDockProps) {
   const setView = (next: LaneView | null) =>
     setZoom(next ? clampView(next, frames, laneWidth) : null);
 
-  // Ctrl + wheel zooms around the pointer; Shift + wheel pans.
+  // Control/Command + wheel zooms around the pointer; Shift + wheel pans.
   useEffect(() => {
     const element = tracksRef.current;
     if (!element) return;
     const wheel = (event: WheelEvent) => {
-      if (!event.ctrlKey && !event.shiftKey) return;
+      if (!event.ctrlKey && !event.metaKey && !event.shiftKey) return;
       event.preventDefault();
       const bounds = element.getBoundingClientRect();
       const x = event.clientX - bounds.left - TRACK_HEADER_WIDTH;
       const current = clampView(zoom ?? fitView(frames, laneWidth), frames, laneWidth);
-      if (event.ctrlKey) {
+      if (event.ctrlKey || event.metaKey) {
         const next = Math.min(
           MAX_PX_PER_FRAME,
           current.pxPerFrame * Math.exp(-(event.deltaY || event.deltaX) * 0.002),
@@ -396,13 +393,16 @@ export function TimelineDock(props: TimelineDockProps) {
       onKeyDown={(event) => {
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)
           return;
+        // Leave application commands (especially Cmd+Z on Mac) to the history
+        // handler. Selection zoom, fit and deletion use unmodified keys.
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
         if ((event.key === 'Delete' || event.key === 'Backspace') && keySelection) {
           event.preventDefault();
           removeSelectedKeys();
         } else if (event.key === '\\') {
           event.preventDefault();
           setView(null);
-        } else if (event.key.toLowerCase() === 'z' && !event.ctrlKey && keySelection) {
+        } else if (event.key.toLowerCase() === 'z' && keySelection) {
           event.preventDefault();
           const low = Math.min(...keySelection.frames);
           const high = Math.max(...keySelection.frames);
@@ -444,11 +444,29 @@ export function TimelineDock(props: TimelineDockProps) {
           <button
             className="transport-play"
             aria-label={playing ? 'Pause' : 'Play'}
-            title={playing ? 'Pause (Space)' : 'Play (Space)'}
+            title={
+              props.filmstrip.loading
+                ? 'Loading filmstrip — playback will be available when ready'
+                : playing
+                  ? 'Pause (Space)'
+                  : 'Play (Space)'
+            }
+            disabled={props.filmstrip.loading}
             onClick={props.onTogglePlay}
           >
-            {playing ? <PauseIcon /> : <PlayIcon />}
+            {props.filmstrip.loading ? (
+              <span className="filmstrip-spinner" aria-hidden="true" />
+            ) : playing ? (
+              <PauseIcon />
+            ) : (
+              <PlayIcon />
+            )}
           </button>
+          {props.filmstrip.loading && (
+            <span className="visually-hidden" role="status">
+              Loading filmstrip. Playback is paused until ready.
+            </span>
+          )}
           <button
             className="ib"
             aria-label="Next keyframe"
@@ -842,7 +860,7 @@ export function TimelineDock(props: TimelineDockProps) {
 
             <div className="timeline-rows">
               <TrackRow
-                className="source-row"
+                className={`source-row${props.filmstrip.loading ? ' loading-filmstrip' : ''}`}
                 header={
                   <>
                     {timeline.video ? <VideoIcon /> : <ImageModeIcon />}
@@ -852,7 +870,13 @@ export function TimelineDock(props: TimelineDockProps) {
                     >
                       Source · {timeline.video?.name ?? project.source?.name ?? 'No image'}
                     </span>
-                    <span className="track-meta">{timeline.video ? 'Video' : 'Still'}</span>
+                    <span className="track-meta">
+                      {props.filmstrip.loading
+                        ? 'Video · Loading…'
+                        : timeline.video
+                          ? 'Video'
+                          : 'Still'}
+                    </span>
                   </>
                 }
                 onLanePointerDown={seekFromLane}
@@ -964,7 +988,8 @@ export function TimelineDock(props: TimelineDockProps) {
       )}
       <div className="timeline-scrollbar">
         <span className="timeline-hint">
-          Ctrl + scroll to zoom · Shift + scroll to pan · \ fit · Z zoom to selection
+          {window.gleech.platform === 'darwin' ? 'Cmd' : 'Ctrl'} + scroll to zoom · Shift + scroll
+          to pan · \ fit · Z zoom to selection
         </span>
         <HorizontalScroll view={view} frames={frames} laneWidth={laneWidth} onView={setView} />
       </div>
@@ -1257,7 +1282,7 @@ function Filmstrip({
   laneWidth: number;
   frames: number;
   still: string | null;
-  filmstrip: readonly FilmstripFrame[];
+  filmstrip: FilmstripPreview;
 }) {
   if (still)
     return (
@@ -1271,18 +1296,41 @@ function Filmstrip({
         }}
       />
     );
+  if (filmstrip.loading)
+    return (
+      <div
+        className="filmstrip loading"
+        role="progressbar"
+        aria-label="Loading video filmstrip"
+        aria-valuemin={0}
+        aria-valuemax={filmstrip.total}
+        aria-valuenow={filmstrip.completed}
+        aria-valuetext={`Loading filmstrip: ${filmstrip.completed} of ${filmstrip.total}. Playback paused.`}
+      >
+        <span className="filmstrip-loading-label">
+          <span className="filmstrip-spinner" aria-hidden="true" />
+          Loading filmstrip · {filmstrip.completed}/{filmstrip.total}
+        </span>
+      </div>
+    );
+  if (filmstrip.failed)
+    return (
+      <div className="filmstrip unavailable" role="status">
+        Filmstrip unavailable · Playback ready
+      </div>
+    );
   const visible = visibleFrames(view, laneWidth);
   const thumbWidth = 64;
   const stride = Math.max(1, Math.round(thumbWidth / view.pxPerFrame));
   const tiles: { frame: number; url: string }[] = [];
-  if (filmstrip.length)
+  if (filmstrip.frames.length)
     for (
       let at = Math.floor(visible.first / stride) * stride;
       at <= Math.min(frames - 1, visible.last);
       at += stride
     ) {
-      let nearest = filmstrip[0]!;
-      for (const candidate of filmstrip)
+      let nearest = filmstrip.frames[0]!;
+      for (const candidate of filmstrip.frames)
         if (Math.abs(candidate.frame - at) < Math.abs(nearest.frame - at)) nearest = candidate;
       tiles.push({ frame: at, url: nearest.url });
     }

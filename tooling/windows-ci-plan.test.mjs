@@ -30,7 +30,9 @@ test('native test frames require an isolated smoke profile and explicit test env
 });
 test('routine changes keep critical workflows without rebuilding or packaging', () => {
   const plan = createWindowsPlan('quick', scripts);
-  assert.equal(plan.length, 12);
+  assert.equal(plan.length, 14);
+  assert.ok(plan.some(({ args }) => args[0] === 'tooling/open-file-check.mjs'));
+  assert.ok(plan.some(({ args }) => args[0] === 'tooling/terminal-updates-check.mjs'));
   for (const name of ['image', 'editing', 'project', 'preset-transfer', 'mcp', 'cli'])
     assert.ok(
       plan.some(({ args }) => args[0] === `tooling/${name}-check.mjs` && args.includes('--cpu')),
