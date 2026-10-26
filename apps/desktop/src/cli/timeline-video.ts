@@ -54,6 +54,7 @@ export function cliVideoSource(clip: VideoClip, ffmpeg: FfmpegLocator, signal?: 
       options.width,
       options.height,
       options.count,
+      options.lowMemory,
     );
     readers.add(reader);
     return {

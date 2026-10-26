@@ -65,8 +65,17 @@ import {
 } from './render-request';
 import { shortTime } from './timeline/timeline-math';
 import { CloseIcon, LoopIcon, SequenceIcon, VideoIcon, WaveformIcon } from './Icons';
+import { RenderSafetyControls, RenderMemoryWarning } from './RenderSafetyControls';
+import {
+  assessRenderMemory,
+  renderSafety,
+  type RenderSafetySettings,
+  type RenderMemoryAssessment,
+  type RenderMemoryBudget,
+} from '../../shared/render-safety';
 
 export interface RenderSettingsMemory {
+  readonly safety?: RenderSafetySettings;
   readonly video: VideoRenderSettings | null;
   readonly gif: GifRenderSettings | null;
   readonly outputFolder: string | null;
@@ -440,6 +449,19 @@ export function RenderDialog({
   const [ffmpeg, setFfmpeg] = useState<FfmpegStatus | null>(null);
   const [aspectLock, setAspectLock] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [safety, setSafety] = useState(() => renderSafety(memory.safety));
+  const [budget, setBudget] = useState<RenderMemoryBudget | null>(null);
+  const [memoryWarning, setMemoryWarning] = useState<RenderMemoryAssessment | null>(null);
+  const [checkingMemory, setCheckingMemory] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void window.gleech.renderMemoryBudget().then((result) => {
+      if (active && result.ok) setBudget(result.value);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const dialog = modal.current!;
@@ -460,13 +482,49 @@ export function RenderDialog({
     };
   }, [folder]);
   useEffect(() => {
-    onMemory({ video, gif, outputFolder: folder, tab });
-  }, [video, gif, folder, tab, onMemory]);
+    onMemory({ video, gif, outputFolder: folder, tab, safety });
+  }, [video, gif, folder, tab, safety, onMemory]);
 
   const range = useMemo(() => renderRange(rangeKind, timeline), [rangeKind, timeline]);
   const seconds = Math.max(0, range.end - range.start);
   const separator = window.gleech.platform === 'win32' ? '\\' : '/';
   const resolved = resolveVideoOutput(video);
+  const partsAvailable = tab === 'video' && resolved.kind === 'movie';
+  const effectiveSafety = partsAvailable
+    ? safety
+    : { ...safety, segmentSeconds: 0, keepParts: false, resume: false };
+  const previewAssessment = useMemo(() => {
+    try {
+      const request = buildRenderRequest({
+        tab,
+        video,
+        gif,
+        project,
+        timeline,
+        range,
+        outputPath: folder ?? 'render.mp4',
+        videoMediaId,
+        safety: partsAvailable
+          ? safety
+          : { ...safety, segmentSeconds: 0, keepParts: false, resume: false },
+      });
+      return assessRenderMemory(request, budget);
+    } catch {
+      return null;
+    }
+  }, [
+    tab,
+    video,
+    gif,
+    project,
+    timeline,
+    range,
+    folder,
+    videoMediaId,
+    partsAvailable,
+    safety,
+    budget,
+  ]);
   const videoTimes = useMemo(
     () => videoFrameTimes(video, range, timeline, project.effects),
     [video, range, timeline, project.effects],
@@ -591,6 +649,7 @@ export function RenderDialog({
         range,
         outputPath,
         videoMediaId,
+        safety: effectiveSafety,
         ...(sequenceFolder ? { name: stem } : {}),
       });
     } catch (failure) {
@@ -598,10 +657,24 @@ export function RenderDialog({
       return null;
     }
   };
-  const submit = (close: boolean) => {
+  const submit = async (close: boolean) => {
     setError(null);
     const request = build();
-    if (request) onQueue(request, close);
+    if (!request || checkingMemory) return;
+    setCheckingMemory(true);
+    try {
+      const current = unwrap(await window.gleech.renderMemoryBudget());
+      setBudget(current);
+      const assessment = assessRenderMemory(request, current);
+      if (safety.mode === 'tiled' && assessment.tiledUnavailable)
+        throw new Error(assessment.tiledUnavailable);
+      if (safety.checkMemory && assessment.status === 'insufficient') setMemoryWarning(assessment);
+      else onQueue(request, close);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Memory check failed.');
+    } finally {
+      setCheckingMemory(false);
+    }
   };
 
   const presetTile = (
@@ -2077,8 +2150,41 @@ export function RenderDialog({
               </section>
             </>
           )}
+          <RenderSafetyControls
+            value={safety}
+            assessment={previewAssessment}
+            partsAvailable={partsAvailable}
+            onChange={setSafety}
+          />
         </div>
       </div>
+      {memoryWarning && (
+        <RenderMemoryWarning
+          assessment={memoryWarning}
+          partsAvailable={partsAvailable}
+          choose={(action) => {
+            setMemoryWarning(null);
+            if (action === 'one-frame' || action === 'tiled')
+              setSafety((previous) => ({ ...previous, mode: action }));
+            if (action === 'parts')
+              setSafety((previous) => ({
+                ...previous,
+                mode: 'one-frame',
+                segmentSeconds: previous.segmentSeconds || 30,
+                keepParts: true,
+              }));
+            if (action === 'smaller') {
+              if (tab === 'video')
+                updateFrame({
+                  width: Math.max(2, Math.round(video.frame.width / 4) * 2),
+                  height: Math.max(2, Math.round(video.frame.height / 4) * 2),
+                });
+              else updateGif({ width: Math.max(16, Math.round(gif.width / 2)) });
+              setSafety((previous) => ({ ...previous, processing: 'output' }));
+            }
+          }}
+        />
+      )}
       <footer className="render-footer">
         <span className="render-footer-note">
           <span className="mode-chip-dot" aria-hidden="true" />
@@ -2092,7 +2198,9 @@ export function RenderDialog({
         </button>
         <button
           type="button"
-          disabled={ffmpegMissing || clipOffline || !outputPath}
+          disabled={
+            ffmpegMissing || clipOffline || !outputPath || checkingMemory || !!memoryWarning
+          }
           onClick={() => submit(false)}
         >
           Add to Queue
@@ -2100,7 +2208,9 @@ export function RenderDialog({
         <button
           type="button"
           className="primary-button"
-          disabled={ffmpegMissing || clipOffline || !outputPath}
+          disabled={
+            ffmpegMissing || clipOffline || !outputPath || checkingMemory || !!memoryWarning
+          }
           onClick={() => submit(true)}
         >
           {tab === 'video' ? videoRenderLabel(video, videoTimes.length) : gifRenderLabel(gif)}

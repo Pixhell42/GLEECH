@@ -35,6 +35,9 @@ const isActive = (effect: EffectInstance) =>
   effect.enabled && effect.params.amount > 0 && effect.application.coverage > 0;
 
 const layerCache = new Map<string, { png: string; pending: Promise<RgbaImage> }>();
+export function clearHeadlessRenderCaches() {
+  layerCache.clear();
+}
 async function decodeLayers(
   effects: readonly EffectInstance[],
 ): Promise<ReadonlyMap<string, RgbaImage>> {

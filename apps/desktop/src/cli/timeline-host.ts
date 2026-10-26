@@ -7,10 +7,17 @@ import type { TimelineRenderAdapters } from '../shared/timeline-runner';
 import type { RenderFrame } from '../shared/render';
 import { cliVideoSource } from './timeline-video';
 import { resizeImage } from './codec';
-import { draftFor, renderHeadless, type HeadlessRenderResult } from './engine';
+import {
+  clearHeadlessRenderCaches,
+  draftFor,
+  renderHeadless,
+  type HeadlessRenderResult,
+} from './engine';
+import { closeGpu } from './gpu';
 import { userDataCandidates } from './library';
 import { resourcesDir } from './runtime';
 import type { Session } from './session';
+import { renderMemoryBudget } from '../main/render-memory';
 
 const locators = new WeakMap<Session, FfmpegLocator>();
 export function terminalFfmpeg(session: Session): FfmpegLocator {
@@ -46,6 +53,12 @@ export function terminalTimelineHost(
   const backends = new Set<string>();
   let lastRender: HeadlessRenderResult | null = null;
   const adapters: Omit<TimelineRenderAdapters, 'begin'> = {
+    memoryBudget: renderMemoryBudget,
+    releaseEffects: async () => {
+      lastRender = null;
+      clearHeadlessRenderCaches();
+      await closeGpu();
+    },
     source: video?.source ?? {
       kind: 'still',
       read: () =>

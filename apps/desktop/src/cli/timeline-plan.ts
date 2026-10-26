@@ -7,6 +7,7 @@ import { renderRange } from '../shared/render-plan';
 import type { GifRenderSettings, RangeKind } from '../shared/render';
 import { UsageError } from './errors';
 import { resolveTimelineMedia } from './timeline-project';
+import { renderSafety, type ExportMemoryMode } from '../shared/render-safety';
 
 export const TIMELINE_OPTIONS: ParseArgsConfig['options'] = {
   timeline: { type: 'boolean' },
@@ -16,6 +17,13 @@ export const TIMELINE_OPTIONS: ParseArgsConfig['options'] = {
   end: { type: 'string' },
   width: { type: 'string' },
   'no-audio': { type: 'boolean' },
+  'memory-mode': { type: 'string' },
+  'no-memory-check': { type: 'boolean' },
+  'segment-seconds': { type: 'string' },
+  'keep-parts': { type: 'boolean' },
+  resume: { type: 'boolean' },
+  'tile-size': { type: 'string' },
+  'processing-resolution': { type: 'string' },
 };
 
 export function validateTimelineOptions(values: Record<string, unknown>): void {
@@ -107,6 +115,20 @@ export function cliTimelinePlan(
     output ??
     join(dirname(input), `${name}${format === 'png' ? '-frames' : `-timeline.${format}`}`);
   const video = defaultVideoSettings({ ...source, fps });
+  const mode = String(values['memory-mode'] ?? 'auto');
+  if (!['auto', 'standard', 'one-frame', 'tiled'].includes(mode))
+    throw new UsageError('--memory-mode must be auto, standard, one-frame or tiled.');
+  const segmentSeconds = numberOption(values, 'segment-seconds', 0, 0, 600);
+  const tileSize = numberOption(values, 'tile-size', 512, 256, 1024);
+  if (![256, 512, 1024].includes(tileSize))
+    throw new UsageError('--tile-size must be 256, 512 or 1024.');
+  const processing = String(values['processing-resolution'] ?? 'source');
+  if (!['source', 'output'].includes(processing))
+    throw new UsageError('--processing-resolution must be source or output.');
+  if (segmentSeconds > 0 && format !== 'mp4')
+    throw new UsageError('Movie parts require --format mp4.');
+  if ((values['keep-parts'] || values['resume']) && !segmentSeconds)
+    throw new UsageError('--keep-parts and --resume require --segment-seconds.');
   const gif = defaultGifSettings();
   const request = buildTimelineRenderRequest({
     tab: format === 'gif' ? 'gif' : 'video',
@@ -115,6 +137,15 @@ export function cliTimelinePlan(
     range,
     outputPath,
     name,
+    safety: renderSafety({
+      mode: mode as ExportMemoryMode,
+      checkMemory: !values['no-memory-check'],
+      segmentSeconds,
+      keepParts: !!values['keep-parts'],
+      resume: !!values['resume'],
+      tileSize: tileSize as 256 | 512 | 1024,
+      processing: processing as 'source' | 'output',
+    }),
     video: {
       ...video,
       preset: 'custom',

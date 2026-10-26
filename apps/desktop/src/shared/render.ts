@@ -183,6 +183,12 @@ export interface MediaInput {
 
 /** Everything the encoder service needs; frames arrive separately. */
 export interface RenderJobSpec {
+  readonly safety?: import('./render-safety').RenderSafetySettings;
+  /** SHA-256 of the immutable project/frame/settings snapshot, for saved parts. */
+  readonly resumeIdentity?: string;
+  readonly sourcePath?: string;
+  /** CLI staging uses a temporary output; saved parts belong beside the final target. */
+  readonly checkpointTarget?: string;
   readonly kind: RenderTab;
   readonly name: string;
   readonly video?: VideoRenderSettings;
@@ -212,6 +218,8 @@ export interface RenderFrame {
 }
 
 export interface RenderResult {
+  readonly checkpointPath?: string;
+  readonly resumedFrames?: number;
   readonly outputPath: string;
   readonly bytes: number;
   readonly files: number;

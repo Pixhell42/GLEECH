@@ -385,7 +385,46 @@ if (ffmpeg) {
     await cli([...args, '-f', 'png', '-o', past, '--start', '1.5', '--end', '2']);
     assert.ok(second.equals(await pixels(join(past, (await readdir(past))[0]))));
     const movie = join(output, 'clip-with-audio.mp4');
-    await cli([...args, '-o', movie]);
+    const partsArgs = [
+      ...args,
+      '-o',
+      movie,
+      '--memory-mode',
+      'one-frame',
+      '--segment-seconds',
+      '1',
+      '--keep-parts',
+      '--json',
+    ];
+    const segmented = JSON.parse((await cli(partsArgs)).stdout);
+    assert.equal(segmented.resumedFrames, 0);
+    assert.equal(dirname(segmented.checkpointPath), output);
+    const resumed = JSON.parse((await cli([...partsArgs, '--resume', '-y'])).stdout);
+    assert.equal(resumed.resumedFrames, 4);
+    const frames = (
+      await media([
+        '-v',
+        'error',
+        '-i',
+        movie,
+        '-map',
+        '0:v:0',
+        '-f',
+        'rawvideo',
+        '-pix_fmt',
+        'rgba',
+        'pipe:1',
+      ])
+    ).stdout;
+    assert.equal(frames.length, 4 * 32 * 16 * 4);
+    assert.ok(frames[0] > 230 && frames[2] < 20);
+    for (let index = 1; index < 4; index++) {
+      const start = index * 32 * 16 * 4;
+      assert.ok(
+        frames[start + 2] > 230 && frames[start] < 20,
+        'Parts must retain clip EOF frames.',
+      );
+    }
     const decoded = await media([
       '-v',
       'error',

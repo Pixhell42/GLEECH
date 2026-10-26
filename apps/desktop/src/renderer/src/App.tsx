@@ -2851,6 +2851,13 @@ export function App() {
               setPlayhead: (target) => {
                 // Playback would override a playhead set from MCP.
                 setPlaying(false);
+                // The following MCP request can arrive before React commits
+                // the state update. Publish the requested frame immediately.
+                frameContext.current = {
+                  ...frameContext.current,
+                  frame: target,
+                  t: frameTime(target, commands.getState().timeline?.fps ?? 30),
+                };
                 setPlayhead(target);
               },
               videoMediaId: () => clipMediaId.current,

@@ -4,6 +4,11 @@ import { renderRange } from '../../shared/render-plan';
 import { outputStem, renderSourceSize } from '../../shared/render-request';
 import type { RangeKind } from '../../shared/render';
 import type { Session } from '../session';
+import {
+  renderSafety,
+  type RenderSafetySettings,
+  type RenderMemoryAssessment,
+} from '../../shared/render-safety';
 
 export const timelineRanges = (timeline: Timeline): RangeKind[] => [
   'whole',
@@ -92,6 +97,9 @@ export class TimelineTransport {
 }
 
 export interface TimelineExportModal {
+  safety: RenderSafetySettings;
+  memory?: RenderMemoryAssessment | undefined;
+  memoryKey?: string;
   kind: 'timeline-export';
   row: number;
   format: 'mp4' | 'gif' | 'png';
@@ -115,9 +123,24 @@ export function timelineOutputPath(session: Session, format: TimelineExportModal
   );
 }
 
+export function timelineSafetyValues(modal: TimelineExportModal): Record<string, unknown> {
+  const safety = modal.safety;
+  const movie = modal.format === 'mp4';
+  return {
+    'memory-mode': safety.mode,
+    'no-memory-check': !safety.checkMemory,
+    'processing-resolution': safety.processing,
+    'tile-size': String(safety.tileSize),
+    'segment-seconds': String(movie ? safety.segmentSeconds : 0),
+    'keep-parts': movie && safety.keepParts,
+    resume: movie && safety.resume,
+  };
+}
+
 export function timelineExportModal(session: Session, range: RangeKind): TimelineExportModal {
   return {
     kind: 'timeline-export',
+    safety: renderSafety(),
     row: 0,
     format: 'mp4',
     range,

@@ -41,6 +41,8 @@ import {
 import { Session } from '../session';
 import { prepareTerminalUpdate } from '../update-install';
 import { exportTimeline } from '../timeline';
+import { assessRenderMemory, memorySize, tiledRenderUnavailable } from '../../shared/render-safety';
+import { renderMemoryBudget } from '../../main/render-memory';
 import { cliTimelinePlan } from '../timeline-plan';
 import { previewTimeline, type TimelinePreviewFrame } from '../timeline-preview';
 import {
@@ -77,6 +79,7 @@ import { Terminal, type InputEvent, type KeyEvent, type MouseEvent } from './ter
 import {
   TimelineTransport,
   timelineExportModal,
+  timelineSafetyValues,
   timelineOutputPath,
   timelineRanges,
   type TimelineExportModal,
@@ -1514,7 +1517,38 @@ export async function runTui(
   }
 
   function drawTimelineExport(m: TimelineExportModal) {
-    const r = box(82, 15, 'EXPORT TIMELINE');
+    const r = box(88, 22, 'EXPORT TIMELINE');
+    const memoryKey = JSON.stringify([
+      m.format,
+      m.range,
+      m.fps,
+      m.width,
+      m.audio,
+      m.path,
+      m.safety,
+    ]);
+    if (memoryKey !== m.memoryKey) {
+      m.memoryKey = memoryKey;
+      try {
+        const plan = cliTimelinePlan(
+          session.state,
+          session.path ?? resolve(`${defaultStem()}.gleech`),
+          {
+            timeline: true,
+            format: m.format,
+            range: m.range,
+            fps: m.fps,
+            width: m.width,
+            output: resolve(m.path),
+            'no-audio': !m.audio,
+            ...timelineSafetyValues(m),
+          },
+        );
+        m.memory = assessRenderMemory(plan.request, renderMemoryBudget());
+      } catch {
+        m.memory = undefined;
+      }
+    }
     const rows = [
       ['Format', m.format === 'png' ? 'PNG sequence' : m.format.toUpperCase()],
       [
@@ -1529,13 +1563,35 @@ export async function runTui(
       ],
       [m.format === 'png' ? 'Folder' : 'File', m.path],
       ['Render', 'Enter to export'],
+      ['Memory mode', m.safety.mode === 'one-frame' ? 'One frame at a time' : m.safety.mode],
+      ['Memory check', m.safety.checkMemory ? 'On · estimate before export' : 'Off'],
+      [
+        'Effects size',
+        m.safety.processing === 'source'
+          ? 'Full source resolution'
+          : 'Output resolution when smaller',
+      ],
+      [
+        'Movie parts',
+        m.format === 'mp4'
+          ? m.safety.segmentSeconds
+            ? `${m.safety.segmentSeconds}s · assemble at end`
+            : 'Off'
+          : 'Movies only',
+      ],
+      ['Keep parts', m.safety.keepParts ? 'On · recovery files beside output' : 'Off'],
+      ['Resume', m.safety.resume ? 'On · reuse verified matching parts' : 'Off'],
+      ['Tile size', `${m.safety.tileSize}px · compatible color effects only`],
     ];
-    rows.forEach(([label, value], index) => {
-      const y = r.y + 2 + index;
+    const visible = Math.max(1, r.h - 7);
+    const start = Math.max(0, m.row - visible + 1);
+    rows.slice(start, start + visible).forEach(([label, value], position) => {
+      const index = start + position;
+      const y = r.y + 2 + position;
       const bg = m.row === index ? C.select : C.elevated;
       screen.fill({ x: r.x + 1, y, w: r.w - 2, h: 1 }, bg);
-      screen.text(r.x + 2, y, label!, { fg: m.row === index ? C.hot : C.muted, bg }, 8);
-      screen.text(r.x + 12, y, value!, { fg: C.text, bg }, r.w - 14);
+      screen.text(r.x + 2, y, label!, { fg: m.row === index ? C.hot : C.muted, bg }, 12);
+      screen.text(r.x + 16, y, value!, { fg: C.text, bg }, r.w - 18);
       hits.push({
         rect: { x: r.x + 1, y, w: r.w - 2, h: 1 },
         press() {
@@ -1548,11 +1604,19 @@ export async function runTui(
     });
     screen.text(
       r.x + 2,
-      r.y + 10,
+      r.y + r.h - 4,
       m.error ?? 'Existing output needs a second Enter to replace.',
       { fg: m.error ? C.warn : C.faint, bg: C.elevated },
       r.w - 4,
     );
+    if (m.memory)
+      screen.text(
+        r.x + 2,
+        r.y + r.h - 3,
+        `Est. RAM ${memorySize(m.memory.estimatedPeakBytes)} · safe budget ${memorySize(m.memory.usableRAMBytes ?? 0)} · GPU memory unknown`,
+        { fg: m.memory.status === 'insufficient' ? C.warn : C.faint, bg: C.elevated },
+        r.w - 4,
+      );
     screen.text(
       r.x + 2,
       r.y + r.h - 2,
@@ -1570,6 +1634,8 @@ export async function runTui(
       m.format =
         formats[(formats.indexOf(m.format) + direction + formats.length) % formats.length]!;
       if (!m.pathEdited) m.path = timelineOutputPath(session, m.format);
+      if (m.format !== 'mp4')
+        m.safety = { ...m.safety, segmentSeconds: 0, keepParts: false, resume: false };
       if (!m.fpsEdited) m.fps = String(m.format === 'gif' ? 15 : session.state.timeline!.fps);
       if (!m.widthEdited)
         m.width = String(
@@ -1596,9 +1662,59 @@ export async function runTui(
       );
       m.widthEdited = true;
     } else if (m.row === 4 && m.format === 'mp4') m.audio = !m.audio;
+    else if (m.row === 7) {
+      const modes = ['auto', 'standard', 'one-frame', 'tiled'] as const;
+      const choices = modes.filter(
+        (mode) => mode !== 'tiled' || !tiledRenderUnavailable(session.state.effects),
+      );
+      const index = Math.max(0, choices.indexOf(m.safety.mode));
+      m.safety = {
+        ...m.safety,
+        mode: choices[(index + direction + choices.length) % choices.length]!,
+      };
+    } else if (m.row === 8) m.safety = { ...m.safety, checkMemory: !m.safety.checkMemory };
+    else if (m.row === 9)
+      m.safety = {
+        ...m.safety,
+        processing: m.safety.processing === 'source' ? 'output' : 'source',
+      };
+    else if (m.row === 10 && m.format === 'mp4') {
+      const lengths = [0, 5, 15, 30, 60, 120, 300, 600];
+      const index = Math.max(0, lengths.indexOf(m.safety.segmentSeconds));
+      const segmentSeconds = lengths[(index + direction + lengths.length) % lengths.length]!;
+      m.safety = {
+        ...m.safety,
+        segmentSeconds,
+        ...(!segmentSeconds ? { keepParts: false, resume: false } : {}),
+      };
+    } else if (m.row === 11 && m.format === 'mp4') {
+      const keepParts = !m.safety.keepParts;
+      m.safety = {
+        ...m.safety,
+        keepParts,
+        segmentSeconds: m.safety.segmentSeconds || 30,
+        ...(!keepParts ? { resume: false } : {}),
+      };
+    } else if (m.row === 12 && m.format === 'mp4') {
+      const resume = !m.safety.resume;
+      m.safety = {
+        ...m.safety,
+        resume,
+        segmentSeconds: m.safety.segmentSeconds || 30,
+        ...(resume ? { keepParts: true } : {}),
+      };
+    } else if (m.row === 13) {
+      const sizes = [256, 512, 1024] as const;
+      m.safety = {
+        ...m.safety,
+        tileSize:
+          sizes[(sizes.indexOf(m.safety.tileSize) + direction + sizes.length) % sizes.length]!,
+      };
+    }
   }
 
   function editTimelineExport(m: TimelineExportModal) {
+    if (m.row >= 7) return changeTimelineExport(m, 1);
     if ([0, 1, 4].includes(m.row)) return changeTimelineExport(m, 1);
     if (![2, 3, 5].includes(m.row)) return;
     const field = m.row === 2 ? 'fps' : m.row === 3 ? 'width' : 'path';
@@ -1645,6 +1761,7 @@ export async function runTui(
         width: m.width,
         'no-audio': !m.audio,
         output: resolve(m.path.trim()),
+        ...timelineSafetyValues(m),
       };
       const plan = cliTimelinePlan(
         session.state,
@@ -2509,7 +2626,7 @@ export async function runTui(
     if (m.kind === 'timeline-export') {
       if (k?.name === 'up' || k?.name === 'down' || k?.name === 'tab') {
         const direction = k.name === 'up' || (k.name === 'tab' && k.shift) ? -1 : 1;
-        m.row = (m.row + direction + 7) % 7;
+        m.row = (m.row + direction + 14) % 14;
       } else if (k?.name === 'left' || k?.name === 'right' || k?.name === 'space')
         changeTimelineExport(m, k.name === 'left' ? -1 : 1);
       else if (k?.name === 'enter') {
