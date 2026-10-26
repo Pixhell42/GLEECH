@@ -180,6 +180,46 @@ palettes use palettegen with Bayer, Floyd–Steinberg or Sierra dithering and a
 lossy setting. A size limit lowers quality automatically and notes when the
 loop was trimmed to fit.
 
+### Memory and recovery
+
+The **Memory and recovery** section estimates peak RAM before an export starts.
+Memory checks are on by default; an export that exceeds the estimate's safe
+budget opens a warning with selectable alternatives. The shared runner checks
+again when a queued job starts, using currently available RAM (including
+reclaimable memory reported by the OS) and headroom for the
+app and OS. This is a conservative estimate; codec, effect and driver allocations
+vary, and available GPU memory cannot be reliably measured on every system.
+
+- **Automatic** chooses standard buffering or one frame at a time based on free
+  RAM. **Standard** keeps normal throughput. **One frame at a time** limits
+  decoder read-ahead, frame overlap and software encoder buffering, trading speed
+  for a smaller working set. Frames are streamed to the encoder as they finish.
+- **Tiled processing** bounds effect intermediates with 256, 512 or 1024-pixel
+  tiles. It supports uniform, full-coverage Hue/Saturation, Levels/Curves,
+  Gradient Map and Photo Adjustments. Spatial effects, imported shaders, painted
+  masks and coordinate-dependent application/tint settings are refused rather
+  than rendered with seams. The full input and output frame must still fit.
+- **Effect processing size** can reduce effects to the output resolution when
+  exporting a smaller video. Full source resolution preserves the existing
+  rendering behavior. Smaller processing can change fine effect detail.
+- **Render in parts** encodes short movie files and assembles their video streams
+  without re-encoding. Audio is mixed once over the complete range. Disposable
+  caches and decoders restart between parts for frame-independent stacks.
+- **Keep completed parts for recovery** stores verified parts beside the output
+  in a hidden `.<output>.<identity>.gleech-parts` folder. **Resume completed parts**
+  reuses them when the project, media, range, processing and encoding settings,
+  output path and part length match. Select the same settings after reopening
+  the project. An interrupted part is rendered again; completed parts are hashed
+  before reuse. Imported shaders may replay earlier frames to restore state.
+
+Parts and resume apply to Video movie outputs, including lossless movies; they
+are unavailable for GIF/Loops and image sequences. Without Keep enabled, parts
+are temporary and removed when the job ends or is cancelled. Kept parts remain
+after success, cancellation or failure; remove their folder manually once no
+longer needed and no export is using it. They consume additional disk space.
+Splitting a video into parts does not solve a single frame that cannot fit;
+choose compatible tiles or a smaller processing resolution for that case.
+
 ### ffmpeg
 
 Movies, loops and video import use ffmpeg. Packaged apps include FFmpeg with

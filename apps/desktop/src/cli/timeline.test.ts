@@ -17,6 +17,17 @@ import { decodePng, encodePng } from './png';
 import { Session } from './session';
 import { cliTimelinePlan, validateTimelineOptions } from './timeline-plan';
 import { exportTimeline } from './timeline';
+import { terminalFfmpeg } from './timeline-host';
+
+// Export behavior must not depend on other tests consuming the runner's RAM.
+// Real budget reporting and low-memory rejection have their own tests.
+vi.mock('../main/render-memory', () => ({
+  renderMemoryBudget: () => ({
+    totalRAMBytes: 16 * 1024 ** 3,
+    availableRAMBytes: 12 * 1024 ** 3,
+    availableGPUBytes: null,
+  }),
+}));
 
 const pixels = Uint8Array.from([0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255]);
 const png = encodePng({ width: 2, height: 2, pixels: pixels.buffer });
@@ -112,6 +123,27 @@ describe('CLI timeline plans', () => {
     expect(plan.request.project.timeline?.video?.path).toBe(join(dirname(path), 'clip ü #1.mp4'));
     expect(withVideo.timeline.video.path).toBe('clip ü #1.mp4');
   });
+  it('passes selected memory and recovery controls to the shared runner', () => {
+    const plan = cliTimelinePlan(project(), path, {
+      timeline: true,
+      'memory-mode': 'one-frame',
+      'no-memory-check': true,
+      'segment-seconds': '20',
+      'keep-parts': true,
+      resume: true,
+      'tile-size': '256',
+      'processing-resolution': 'output',
+    });
+    expect(plan.request.spec.safety).toEqual({
+      checkMemory: false,
+      mode: 'one-frame',
+      segmentSeconds: 20,
+      keepParts: true,
+      resume: true,
+      tileSize: 256,
+      processing: 'output',
+    });
+  });
   it.each([
     { fps: 'NaN' },
     { fps: '0' },
@@ -126,16 +158,65 @@ describe('CLI timeline plans', () => {
     { output: 'wrong.jpg' },
     { quality: '80' },
     { show: true },
+    { 'memory-mode': 'unbounded' },
+    { 'segment-seconds': '-1' },
+    { 'segment-seconds': '601' },
+    { 'segment-seconds': 'NaN' },
+    { 'keep-parts': true },
+    { resume: true },
+    { format: 'gif', 'segment-seconds': '30' },
+    { format: 'png', 'segment-seconds': '30' },
+    { 'tile-size': '300' },
+    { 'processing-resolution': 'preview' },
   ])('rejects invalid timeline options: %o', (values) => {
     expect(() => cliTimelinePlan(project(), path, { timeline: true, ...values })).toThrow();
   });
   it('rejects timeline-only flags on still renders and projects without a timeline', () => {
     expect(() => validateTimelineOptions({ fps: '24' })).toThrow('requires --timeline');
+    expect(() => validateTimelineOptions({ 'memory-mode': 'one-frame' })).toThrow(
+      'requires --timeline',
+    );
     expect(() => cliTimelinePlan(createProject('Still'), path, options)).toThrow('no timeline');
   });
 });
 
 describe('terminal timeline exports', () => {
+  it('resumes saved movie parts across terminal sessions with a new staging folder', async (context) => {
+    await temporary(async (directory, session) => {
+      if (!(await terminalFfmpeg(session).status()).available) {
+        context.skip();
+        return;
+      }
+      const output = join(directory, 'recover.mp4');
+      const values = {
+        timeline: true,
+        output,
+        width: '16',
+        'memory-mode': 'one-frame',
+        'segment-seconds': '1',
+        'keep-parts': true,
+      };
+      const controller = new AbortController();
+      await expect(
+        exportTimeline(session, values, {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            if (progress.done === 2) controller.abort();
+          },
+        }),
+      ).rejects.toBeInstanceOf(RenderCancelledError);
+      expect(await readdir(directory)).not.toContain('recover.mp4');
+      const reopened = await Session.open(session.path!);
+      const result = await exportTimeline(reopened, { ...values, resume: true });
+      expect(result.resumedFrames).toBe(2);
+      expect(result.checkpointPath).toContain('.gleech-parts');
+      expect(dirname(result.checkpointPath!)).toBe(directory);
+      expect((await readFile(output)).subarray(4, 8).toString()).toBe('ftyp');
+      expect((await readdir(directory)).some((name) => name.startsWith('.gleech-timeline-'))).toBe(
+        false,
+      );
+    });
+  });
   it('exports animated pixels through the production CLI command and reports JSON', async () => {
     await temporary(async (directory, session) => {
       let stdout = '';

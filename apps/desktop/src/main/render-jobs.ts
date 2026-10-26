@@ -12,6 +12,7 @@ import {
   buildAudioFileArgs,
   buildLoopArgs,
   buildVideoArgs,
+  buildVideoAssemblyArgs,
   describeFfmpegError,
   describeOverrides,
   hardwareProbeArgs,
@@ -47,8 +48,11 @@ import type {
   RenderResult,
   VideoRenderSettings,
 } from '../shared/render';
+import { renderSafety } from '../shared/render-safety';
+import { createMovieParts } from './render-parts';
 
 export interface RenderJobs {
+  resumeFrames(jobId: unknown): number;
   begin(spec: unknown): Promise<string>;
   frame(jobId: unknown, frame: unknown, original?: unknown): Promise<void>;
   finish(jobId: unknown): Promise<RenderResult>;
@@ -70,6 +74,7 @@ const MAX_SIDE = 16384;
 const MAX_PIXELS = 64 * 1024 * 1024;
 
 interface JobImpl {
+  readonly resumeFrames?: number;
   /** Called once per frame, in order; may run concurrently with earlier frames. */
   accept(edited: RawImage, original: RawImage | undefined, index: number): Promise<void>;
   finish(received: number): Promise<RenderResult>;
@@ -255,6 +260,40 @@ export function validateSpec(value: unknown): RenderJobSpec {
     fail('Invalid render request.');
   if (value['kind'] === 'video') checkVideo(value['video']);
   else checkGif(value['gif']);
+  if (value['safety'] !== undefined) {
+    const safety = value['safety'];
+    if (
+      !isRecord(safety) ||
+      typeof safety['checkMemory'] !== 'boolean' ||
+      !oneOf(safety['mode'], ['auto', 'standard', 'one-frame', 'tiled']) ||
+      !isNumber(safety['segmentSeconds'], 0, 600) ||
+      typeof safety['keepParts'] !== 'boolean' ||
+      typeof safety['resume'] !== 'boolean' ||
+      !oneOf(safety['tileSize'], [256, 512, 1024])
+    )
+      fail('Invalid export memory settings.');
+    if (!oneOf(safety['processing'], ['source', 'output'])) fail('Invalid effect processing size.');
+    if ((safety['keepParts'] || safety['resume']) && !(Number(safety['segmentSeconds']) > 0))
+      fail('Enable movie parts before keeping or resuming them.');
+    if (
+      Number(safety['segmentSeconds']) > 0 &&
+      (value['kind'] !== 'video' || (value['video'] as VideoRenderSettings).output !== 'movie')
+    )
+      fail('Parts and resume are available for movie exports.');
+  }
+  for (const key of ['sourcePath', 'checkpointTarget'])
+    if (
+      value[key] !== undefined &&
+      (typeof value[key] !== 'string' ||
+        !isAbsolute(value[key] as string) ||
+        (value[key] as string).includes('\0'))
+    )
+      fail(`Invalid ${key}.`);
+  if (
+    value['resumeIdentity'] !== undefined &&
+    (typeof value['resumeIdentity'] !== 'string' || !/^[a-f0-9]{64}$/.test(value['resumeIdentity']))
+  )
+    fail('Invalid export checkpoint identity.');
   return value as unknown as RenderJobSpec;
 }
 
@@ -495,23 +534,26 @@ async function movieJob(
   settings: VideoRenderSettings,
   id: string,
   context: JobContext,
+  pinned?: { status: FfmpegStatus & { path: string }; encoder: string },
 ): Promise<JobImpl> {
   const output = resolveVideoOutput(settings);
   if (output.kind !== 'movie') throw new Error('Internal: not a movie output.');
   const notes: string[] = [];
   if (output.switched) notes.push(output.switched);
-  const status = await requireFfmpeg(context.ffmpeg);
-  const encoder = await chooseEncoder(
-    status.path,
-    videoEncoderCandidates(
-      output.codec,
+  const status = pinned?.status ?? (await requireFfmpeg(context.ffmpeg));
+  const encoder =
+    pinned?.encoder ??
+    (await chooseEncoder(
+      status.path,
+      videoEncoderCandidates(
+        output.codec,
+        settings.advanced.encoder,
+        status.encoders,
+        context.platform,
+      ),
       settings.advanced.encoder,
-      status.encoders,
-      context.platform,
-    ),
-    settings.advanced.encoder,
-    notes,
-  );
+      notes,
+    ));
   const target = withExtension(spec.outputPath, output.extension, notes);
   await mkdir(dirname(target), { recursive: true });
   const temp = partialPath(target, id);
@@ -531,6 +573,9 @@ async function movieJob(
       audio: inputs.track,
       clipAudio: inputs.clip,
       outputPath: temp,
+      ...(spec.safety?.mode === 'one-frame' || spec.safety?.mode === 'tiled'
+        ? { lowMemory: true }
+        : {}),
     }),
   );
   const plan: FramePlan = {
@@ -562,6 +607,60 @@ async function movieJob(
     async cancel() {
       await ffmpeg.kill();
       await unlink(temp).catch(() => {});
+    },
+  };
+}
+
+async function segmentedMovieJob(
+  spec: RenderJobSpec,
+  settings: VideoRenderSettings,
+  id: string,
+  context: JobContext,
+): Promise<JobImpl> {
+  const output = resolveVideoOutput(settings);
+  if (output.kind !== 'movie') throw new Error('Parts require a movie output.');
+  const status = await requireFfmpeg(context.ffmpeg);
+  const notes: string[] = output.switched ? [output.switched] : [];
+  const encoder = await chooseEncoder(
+    status.path,
+    videoEncoderCandidates(
+      output.codec,
+      settings.advanced.encoder,
+      status.encoders,
+      context.platform,
+    ),
+    settings.advanced.encoder,
+    notes,
+  );
+  const target = withExtension(spec.outputPath, output.extension, notes);
+  await mkdir(dirname(target), { recursive: true });
+  const temporary = partialPath(target, id);
+  const parts = await createMovieParts({
+    spec,
+    extension: output.extension,
+    temporary: context.tempDir,
+    encoderSignature: `${encoder}:${status.version}:${status.path}`,
+    createPart: (part, partId) => movieJob(part, part.video!, partId, context, { status, encoder }),
+    assemble: async (listPath) => {
+      await runToEnd(
+        status.path,
+        buildVideoAssemblyArgs({
+          spec,
+          listPath,
+          outputPath: temporary,
+          encoders: status.encoders,
+        }),
+        (process) => context.track(id, process),
+      );
+      const path = await commit(temporary, target, notes);
+      return { outputPath: path, bytes: (await stat(path)).size, files: 1, notes };
+    },
+  });
+  return {
+    ...parts,
+    async cancel() {
+      await parts.cancel();
+      await unlink(temporary).catch(() => {});
     },
   };
 }
@@ -1001,6 +1100,7 @@ export function createRenderJobs(options: RenderJobsOptions): RenderJobs {
   }
 
   return {
+    resumeFrames: (jobId) => session(jobId).impl.resumeFrames ?? 0,
     async begin(value) {
       const spec = validateSpec(value);
       const id = randomUUID();
@@ -1029,7 +1129,9 @@ export function createRenderJobs(options: RenderJobsOptions): RenderJobs {
           );
           impl =
             video.output === 'movie'
-              ? await movieJob(spec, video, id, context)
+              ? spec.safety && spec.safety.segmentSeconds > 0
+                ? await segmentedMovieJob(spec, video, id, context)
+                : await movieJob(spec, video, id, context)
               : video.sequence.kind === 'files'
                 ? await filesJob(spec, video, id, context)
                 : await flipbookJob(spec, video, id, context);
@@ -1038,9 +1140,14 @@ export function createRenderJobs(options: RenderJobsOptions): RenderJobs {
           spec,
           impl,
           // Overlap a couple of frames below 4K-ish sizes; one at a time above.
-          window: pixels > 16 * 1024 * 1024 ? 1 : 2,
+          window:
+            pixels > 16 * 1024 * 1024 ||
+            (spec.safety &&
+              (renderSafety(spec.safety).mode !== 'standard' || spec.safety.segmentSeconds > 0))
+              ? 1
+              : 2,
           inflight: new Set(),
-          received: 0,
+          received: impl.resumeFrames ?? 0,
           error: null,
           state: 'open',
           tempDir,

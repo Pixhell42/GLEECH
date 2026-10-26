@@ -112,6 +112,8 @@ export interface DesktopBridge {
   /** Whether a render output file already exists (only in folders renders may use). */
   renderOutputExists(path: string): Promise<Result<boolean>>;
   beginRender(spec: import('./render').RenderJobSpec): Promise<Result<string>>;
+  renderMemoryBudget(): Promise<Result<import('./render-safety').RenderMemoryBudget>>;
+  renderResumeFrames(jobId: string): Promise<Result<number>>;
   renderFrame(
     jobId: string,
     frame: import('./render').RenderFrame,

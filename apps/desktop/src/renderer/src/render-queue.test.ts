@@ -14,6 +14,14 @@ class WorkerDouble {
 const image = { width: 2, height: 1, pixels: new Uint8Array([1, 2, 3, 255, 4, 5, 6, 255]).buffer };
 const ok = <T>(value: T) => ({ ok: true as const, value });
 const bridge = () => ({
+  renderMemoryBudget: vi.fn(async () =>
+    ok({
+      totalRAMBytes: 16 * 1024 ** 3,
+      availableRAMBytes: 12 * 1024 ** 3,
+      availableGPUBytes: null,
+    }),
+  ),
+  renderResumeFrames: vi.fn(async () => ok(0)),
   beginRender: vi.fn(async () => ok('encoder')),
   openVideoReader: vi.fn(async () => ok('reader')),
   readVideoFrame: vi.fn(async () => ok<typeof image | null>(null)),

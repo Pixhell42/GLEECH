@@ -40,10 +40,15 @@ export async function runDesktopTimelineRender(
   request: DesktopTimelineRenderRequest,
   options: TimelineRunOptions,
 ) {
-  const processor = new EffectProcessor();
+  let processor = new EffectProcessor();
   const sourceId = request.project.source?.id;
   const mediaId = request.videoMediaId;
   const adapters: TimelineRenderAdapters = {
+    memoryBudget: async () => unwrap(await window.gleech.renderMemoryBudget()),
+    releaseEffects: () => {
+      processor.dispose();
+      processor = new EffectProcessor();
+    },
     source: mediaId
       ? {
           kind: 'video',
@@ -72,6 +77,7 @@ export async function runDesktopTimelineRender(
     begin: async (spec) => {
       const encoder = unwrap(await window.gleech.beginRender(spec));
       return {
+        resumeFrames: unwrap(await window.gleech.renderResumeFrames(encoder)),
         frame: async (image, original) =>
           unwrap(await window.gleech.renderFrame(encoder, image, original)),
         finish: async () => unwrap(await window.gleech.finishRender(encoder)),
