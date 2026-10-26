@@ -13,6 +13,14 @@ import {
 import { RenderCancelledError } from '@gleech/effects';
 import type { RenderFrame, RenderJobSpec, RenderResult, RenderTab } from './render';
 import { isUniform } from './render-plan';
+import {
+  assessRenderMemory,
+  renderSafety,
+  renderTiledFrame,
+  RenderMemoryError,
+  tiledRenderUnavailable,
+  type RenderMemoryBudget,
+} from './render-safety';
 
 export interface TimelineRenderRequest {
   readonly kind: RenderTab;
@@ -38,6 +46,7 @@ export interface TimelineFrameReader {
 }
 
 export interface TimelineReaderOptions {
+  readonly lowMemory?: boolean;
   readonly start: number;
   readonly fps: number;
   readonly count: number;
@@ -56,6 +65,7 @@ export type TimelineFrameSource =
     };
 
 export interface TimelineEncoder {
+  readonly resumeFrames?: number;
   frame(image: RenderFrame, original?: RenderFrame): Promise<void>;
   finish(): Promise<RenderResult>;
   /** Must interrupt an in-flight frame/finish and release partial output. */
@@ -69,6 +79,9 @@ export interface TimelineEffectContext {
 }
 
 export interface TimelineRenderAdapters {
+  memoryBudget?(): Promise<RenderMemoryBudget> | RenderMemoryBudget;
+  /** Drop disposable caches between parts, only for frame-independent stacks. */
+  releaseEffects?(): void | Promise<void>;
   readonly source: TimelineFrameSource;
   resize(image: RenderFrame, width: number, height: number): RenderFrame | Promise<RenderFrame>;
   /** Keep input pixels intact: stills and held clip frames are reused. */
@@ -95,6 +108,45 @@ export interface TimelineRunOptions {
   readonly onProgress?: (progress: TimelineRenderProgress) => void;
 }
 
+export async function timelineCheckpointIdentity(
+  request: TimelineRenderRequest,
+  sourcePixels?: ArrayBuffer,
+): Promise<string> {
+  const hash = async (bytes: ArrayBuffer) =>
+    Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+  const sourceHash = sourcePixels ? await hash(sourcePixels) : undefined;
+  const text = JSON.stringify(
+    {
+      project: request.project,
+      times: request.times,
+      inputFps: request.inputFps,
+      renderSize: request.renderSize,
+      overlay: request.overlay,
+      video: request.spec.video,
+      gif: request.spec.gif,
+      segmentSeconds: request.spec.safety?.segmentSeconds,
+      sourceHash,
+    },
+    function (key, value: unknown) {
+      // Desktop remaps image registry IDs when reopening a saved project. They
+      // do not change pixels or effect seeds, so cannot invalidate recovery.
+      if (key === 'posterId') return undefined;
+      if (
+        key === 'id' &&
+        typeof this.width === 'number' &&
+        typeof this.height === 'number' &&
+        typeof this.format === 'string' &&
+        typeof this.hasAlpha === 'boolean'
+      )
+        return undefined;
+      return value;
+    },
+  );
+  return hash(new TextEncoder().encode(text).buffer as ArrayBuffer);
+}
+
 /**
  * Streams one frame at a time with backpressure. Owns the reader/encoder it
  * opens, but leaves reusable effect engines and GPU helpers with the caller.
@@ -117,6 +169,32 @@ export async function runTimelineRender(
     throw new Error('Choose at least one valid timeline frame to render.');
   if (!Number.isFinite(inputFps) || inputFps <= 0)
     throw new Error('Choose a positive render frame rate.');
+  const assessment = assessRenderMemory(
+    request,
+    adapters.memoryBudget ? await adapters.memoryBudget() : null,
+  );
+  const safety = renderSafety(request.spec.safety);
+  if (safety.mode === 'tiled' && assessment.tiledUnavailable)
+    throw new Error(assessment.tiledUnavailable);
+  if (safety.checkMemory && assessment.status === 'insufficient')
+    throw new RenderMemoryError(assessment);
+  const effectiveSafety = { ...safety, mode: assessment.mode };
+  const lowMemory = assessment.mode !== 'standard';
+  const replay = project.effects.some((e) => e.type === 'shader-import');
+  let resumeIdentity: string | undefined;
+  let savedStill: RenderFrame | null = null;
+  if (safety.segmentSeconds > 0 && (safety.keepParts || safety.resume)) {
+    if (adapters.source.kind === 'still') {
+      const image = await adapters.source.read();
+      savedStill =
+        image.width === renderSize.width && image.height === renderSize.height
+          ? image
+          : await adapters.resize(image, renderSize.width, renderSize.height);
+      check();
+      resumeIdentity = await timelineCheckpointIdentity(request, image.pixels);
+    } else resumeIdentity = await timelineCheckpointIdentity(request);
+  }
+  check();
 
   const modulation: ModulationContext = {
     bpm: timeline.bpm ?? (timeline.audio?.analysis?.bpm || 120),
@@ -163,10 +241,10 @@ export async function runTimelineRender(
   signal?.addEventListener('abort', abort, { once: true });
   try {
     const frames = adapters.source;
-    const still = frames.kind === 'still' ? await resize(await frames.read()) : null;
-    check();
     encoder = await adapters.begin({
       ...request.spec,
+      ...(request.spec.safety || assessment.mode !== 'standard' ? { safety: effectiveSafety } : {}),
+      ...(resumeIdentity ? { resumeIdentity } : {}),
       frameCount: times.length,
       fps: inputFps,
       sourceWidth: width,
@@ -175,24 +253,56 @@ export async function runTimelineRender(
       withOriginal: overlay,
     });
     check();
+    const resumed = encoder.resumeFrames ?? 0;
+    if (!Number.isSafeInteger(resumed) || resumed < 0 || resumed > times.length)
+      throw new Error('The saved export has an invalid frame position.');
+    const first = resumed === times.length ? resumed : replay ? 0 : resumed;
+    const still =
+      first < times.length && frames.kind === 'still'
+        ? (savedStill ?? (await resize(await frames.read())))
+        : null;
+    check();
     if (
       frames.kind === 'video' &&
       frames.openReader &&
-      times.length > 1 &&
+      times.length - first > 1 &&
       isUniform(times, inputFps)
     )
       reader = await frames.openReader({
-        start: times[0]!,
+        start: times[first]!,
         fps: inputFps,
-        count: times.length,
+        count: times.length - first,
         width,
         height,
+        ...(lowMemory ? { lowMemory: true } : {}),
       });
     check();
     let subject: SubjectMask | undefined;
     let lastClipFrame: RenderFrame | null = null;
-    for (let index = 0; index < times.length; index++) {
+    if (resumed > 0 && !replay)
+      onProgress?.({ phase: 'rendering', done: resumed, total: times.length });
+    const partFrames =
+      safety.segmentSeconds > 0 ? Math.max(1, Math.round(safety.segmentSeconds * inputFps)) : 0;
+    for (let index = first; index < times.length; index++) {
       check();
+      if (partFrames && index > first && index % partFrames === 0 && !replay) {
+        await adapters.releaseEffects?.();
+        if (reader && frames.kind === 'video' && frames.openReader) {
+          await closeReader();
+          reader = null;
+          readerClosure = null;
+          reader = await frames.openReader({
+            start: times[index]!,
+            fps: inputFps,
+            count: times.length - index,
+            width,
+            height,
+            ...(lowMemory ? { lowMemory: true } : {}),
+          });
+          lastClipFrame = null;
+        }
+        check();
+      }
       const t = times[index]!;
       let raw: RenderFrame;
       if (still) raw = still;
@@ -215,15 +325,26 @@ export async function runTimelineRender(
       if (active && !subject && effectsNeedSubject(effects, raw.pixels))
         subject = await adapters.subject();
       check();
-      const rendered = active
-        ? await adapters.render(raw, effects, {
-            masterSeed: seed,
-            ...(subject ? { subjectMask: subject } : {}),
+      const context: TimelineEffectContext = {
+        masterSeed: seed,
+        ...(subject ? { subjectMask: subject } : {}),
+        isCancelled,
+      };
+      let rendered = raw;
+      if (active) {
+        if (assessment.mode === 'tiled') {
+          const unavailable = tiledRenderUnavailable(effects);
+          if (unavailable) throw new Error(unavailable);
+          rendered = await renderTiledFrame(
+            raw,
+            safety.tileSize,
+            (tile) => adapters.render(tile, effects, context),
             isCancelled,
-          })
-        : raw;
+          );
+        } else rendered = await adapters.render(raw, effects, context);
+      }
       check();
-      await encoder.frame(rendered, overlay ? raw : undefined);
+      if (index >= resumed) await encoder.frame(rendered, overlay ? raw : undefined);
       check();
       onProgress?.({ phase: 'rendering', done: index + 1, total: times.length });
     }

@@ -82,7 +82,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 function readerOptions(value: unknown): FrameReaderOptions {
-  const { start, fps, count, width, height } = (value ?? {}) as Record<string, unknown>;
+  const { start, fps, count, width, height, lowMemory } = (value ?? {}) as Record<string, unknown>;
   if (
     !isFiniteNumber(start) ||
     start < 0 ||
@@ -97,10 +97,18 @@ function readerOptions(value: unknown): FrameReaderOptions {
     !Number.isInteger(height) ||
     (width as number) < 1 ||
     (height as number) < 1 ||
-    (width as number) * (height as number) > MAX_FRAME_PIXELS
+    (width as number) * (height as number) > MAX_FRAME_PIXELS ||
+    (lowMemory !== undefined && typeof lowMemory !== 'boolean')
   )
     throw new Error('Invalid video reader options.');
-  return { start, fps, count: count as number, width: width as number, height: height as number };
+  return {
+    start,
+    fps,
+    count: count as number,
+    width: width as number,
+    height: height as number,
+    ...(lowMemory === true ? { lowMemory: true } : {}),
+  };
 }
 
 /** Registers media:* IPC handlers and the gleech-media protocol. Returns a disposer. */
@@ -274,6 +282,7 @@ export function registerMediaHandlers(
       options.width,
       options.height,
       options.count,
+      options.lowMemory,
     );
   }
 

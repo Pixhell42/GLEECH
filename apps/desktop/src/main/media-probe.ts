@@ -289,6 +289,7 @@ export function ffmpegInput(path: string): string {
 }
 
 export interface FrameReaderOptions {
+  readonly lowMemory?: boolean;
   /** Timeline time of frame 0, in media seconds. */
   readonly start: number;
   readonly fps: number;
@@ -338,6 +339,7 @@ export function videoReaderArgs(
     '-nostdin',
     '-loglevel',
     'error',
+    ...(options.lowMemory ? ['-threads', '1', '-filter_threads', '1'] : []),
     ...(seek > 0 ? ['-ss', seekText] : []),
     '-i',
     ffmpegInput(path),

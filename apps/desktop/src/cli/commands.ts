@@ -1004,6 +1004,21 @@ const HELP: Record<
       ['    --start / --end <s>', 'override timeline range boundaries in seconds'],
       ['    --width <px>', 'timeline output width; preserve source aspect ratio'],
       ['    --no-audio', 'omit timeline audio (PNG sequences are always silent)'],
+      [
+        '    --memory-mode <mode>',
+        'auto | standard | one-frame | tiled (compatible color effects)',
+      ],
+      [
+        '    --processing-resolution <size>',
+        'source | output; output can reduce fine effect detail',
+      ],
+      ['    --segment-seconds <n>', 'encode movie parts, then assemble them (1–600 seconds)'],
+      [
+        '    --keep-parts / --resume',
+        'keep completed movie parts / resume verified matching parts',
+      ],
+      ['    --tile-size <n>', '256 | 512 | 1024 pixels; used with tiled mode'],
+      ['    --no-memory-check', 'explicitly bypass the preflight RAM estimate'],
       ['-q, --quality <1-100>', 'JPEG/WebP quality (default 90)'],
       ['    --max-size <px>', 'render a reduced draft with matching field placement'],
       ['    --save-project <f>', 'also save an editable .gleech project'],

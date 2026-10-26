@@ -10,6 +10,7 @@ on:
       - tooling/github-feedback-check.mjs
       - tooling/updates-check.mjs
       - tooling/terminal-updates-check.mjs
+      - tooling/render-memory-check.mjs
       - tooling/update-package-*.mjs
       - .github/workflows/macos.yml
       - apps/desktop/electron-builder.yml
@@ -106,6 +107,7 @@ jobs:
           node tooling/updates-check.mjs "$gleech_executable"
           node tooling/terminal-updates-check.mjs "$gleech_executable"
           node tooling/open-file-check.mjs "$gleech_executable" --cpu
+          node tooling/render-memory-check.mjs "$gleech_executable"
           node tooling/support-check.mjs "$gleech_executable" --cpu
           node tooling/github-feedback-check.mjs "$gleech_executable" --cpu --allow-unavailable-keyring
       - name: Test packaged timeline and media

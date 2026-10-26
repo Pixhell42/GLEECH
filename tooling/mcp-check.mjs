@@ -771,6 +771,14 @@ try {
   assert.equal(moved.frame, 4);
   assert.equal(moved.timecode, '00:00:04');
   assert.equal((await call('get_timeline')).structuredContent.playhead.frame, 4);
+  for (const frame of [1, 8, 4]) {
+    await call('set_playhead', { frame });
+    assert.equal(
+      (await call('get_timeline')).structuredContent.playhead.frame,
+      frame,
+      'A completed set_playhead must be visible to the next MCP request.',
+    );
+  }
   const renderPresets = (await call('list_render_presets')).structuredContent;
   assert.ok(renderPresets.video.presets.some((preset) => preset.id === '1080p-social'));
   assert.deepEqual(renderPresets.ranges.work, { start: 0, end: 0.5 });
