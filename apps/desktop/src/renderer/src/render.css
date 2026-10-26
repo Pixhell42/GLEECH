@@ -1,5 +1,44 @@
 /* Render dialog (Video and GIF & Loops) and the background render queue. */
 
+.render-safety > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.render-safety > label:has(input[type='checkbox']) {
+  justify-content: flex-start;
+}
+.render-safety .render-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.render-memory-warning {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  padding: 24px;
+  overflow-y: auto;
+  color: var(--text-1);
+  background: var(--bg-elevated);
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+}
+.render-memory-warning::backdrop {
+  background: rgb(0 0 0 / 0.65);
+}
+.render-memory-warning p {
+  line-height: 1.5;
+}
+.render-memory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
 .render-dialog {
   width: min(960px, calc(100vw - 40px));
   height: min(860px, calc(100vh - 40px));

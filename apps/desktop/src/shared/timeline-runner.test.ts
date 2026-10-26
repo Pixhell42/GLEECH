@@ -10,9 +10,11 @@ import {
   type SubjectMask,
 } from '@gleech/project-model';
 import { RenderCancelledError } from '@gleech/effects';
+import { renderSafety, RenderMemoryError } from './render-safety';
 import type { RenderFrame, RenderJobSpec } from './render';
 import {
   runTimelineRender,
+  timelineCheckpointIdentity,
   type TimelineEffectContext,
   type TimelineRenderAdapters,
   type TimelineRenderRequest,
@@ -402,5 +404,74 @@ describe('shared timeline runner', () => {
     controller.abort();
     expect(h.encoder.cancel).not.toHaveBeenCalled();
     expect(h.adapters.cancelEffects).not.toHaveBeenCalled();
+  });
+
+  it('checks memory before opening a decoder, reading pixels, or starting an encoder', async () => {
+    const h = host();
+    await expect(
+      runTimelineRender(request(), {
+        ...h.adapters,
+        memoryBudget: () => ({
+          totalRAMBytes: 1024 ** 3,
+          availableRAMBytes: 128 * 1024 ** 2,
+          availableGPUBytes: null,
+        }),
+      }),
+    ).rejects.toBeInstanceOf(RenderMemoryError);
+    expect(h.still.read).not.toHaveBeenCalled();
+    expect(h.adapters.begin).not.toHaveBeenCalled();
+  });
+
+  it('resumes at global timeline time and seed without re-encoding completed frames', async () => {
+    const h = host();
+    const job = request([createEffect('noise-grain', 'grain')]);
+    const resumedEncoder = { ...h.encoder, resumeFrames: 1 };
+    h.adapters.begin.mockResolvedValue(resumedEncoder);
+    h.reader.read.mockResolvedValue(image());
+    await runTimelineRender(
+      { ...job, spec: { ...job.spec, safety: renderSafety({ mode: 'one-frame' }) } },
+      { ...h.adapters, source: h.video },
+    );
+    expect(h.video.openReader).toHaveBeenCalledWith({
+      start: 0.5,
+      fps: 2,
+      count: 2,
+      width: 2,
+      height: 1,
+      lowMemory: true,
+    });
+    expect(h.encoder.frame).toHaveBeenCalledTimes(2);
+    expect(h.adapters.render.mock.calls.map(([, , context]) => context.masterSeed)).toEqual(
+      [0.5, 1].map((t) =>
+        frameSeed(
+          job.project.masterSeed,
+          job.project.timeline!.seed,
+          Math.round(t * job.project.timeline!.fps),
+        ),
+      ),
+    );
+  });
+
+  it('drops disposable effect caches at part boundaries without resetting timeline sampling', async () => {
+    const h = host();
+    const release = vi.fn();
+    const job = request();
+    await runTimelineRender(
+      { ...job, spec: { ...job.spec, safety: renderSafety({ segmentSeconds: 1 }) } },
+      { ...h.adapters, releaseEffects: release },
+    );
+    expect(release).toHaveBeenCalledOnce();
+    expect(h.encoder.frame).toHaveBeenCalledTimes(3);
+  });
+
+  it('recognizes reopened source registry IDs but rejects changed source pixels for recovery', async () => {
+    const job = request();
+    const first = await timelineCheckpointIdentity(job, image(1).pixels);
+    const reopened = {
+      ...job,
+      project: { ...job.project, source: { ...job.project.source!, id: 'new-registry-token' } },
+    };
+    expect(await timelineCheckpointIdentity(reopened, image(1).pixels)).toBe(first);
+    expect(await timelineCheckpointIdentity(reopened, image(9).pixels)).not.toBe(first);
   });
 });
