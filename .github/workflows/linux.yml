@@ -10,6 +10,7 @@ on:
       - tooling/github-feedback-check.mjs
       - tooling/updates-check.mjs
       - tooling/terminal-updates-check.mjs
+      - tooling/render-memory-check.mjs
       - tooling/update-package-*.mjs
       - .github/workflows/linux.yml
       - apps/desktop/electron-builder.yml
