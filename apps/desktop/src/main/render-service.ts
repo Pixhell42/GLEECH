@@ -5,6 +5,7 @@ import type { FfmpegLocator } from './ffmpeg';
 import { createRenderJobs, safeName, validateSpec } from './render-jobs';
 import type { Result } from '../shared/image-api';
 import type { RenderJobSpec } from '../shared/render';
+import { renderMemoryBudget } from './render-memory';
 
 /** Files a render may write: video, loops, sprite sheets and flip books. */
 const OUTPUT_EXTENSIONS = /\.(mp4|mov|mkv|webm|gif|webp|png|apng|pdf)$/i;
@@ -87,6 +88,8 @@ export function registerRenderHandlers(
   }
 
   handle('render:ffmpeg-status', (refresh) => ffmpeg.status(refresh === true));
+  handle('render:memory-budget', () => renderMemoryBudget());
+  handle('render:resume-frames', (id) => jobs.resumeFrames(id));
   handle('render:locate-ffmpeg', async () => {
     const selection = await dialog.showOpenDialog(window, {
       title: 'Locate ffmpeg',
@@ -150,6 +153,7 @@ export function registerRenderHandlers(
     // The default folder is always allowed, even if the dialog never asked for it.
     await defaultFolder();
     assertApproved(spec);
+    if (spec.checkpointTarget) assertApproved({ ...spec, outputPath: spec.checkpointTarget });
     return jobs.begin(spec);
   });
   handle('render:frame', (jobId, frame, original) => jobs.frame(jobId, frame, original));

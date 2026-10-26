@@ -13,7 +13,7 @@ import type {
   RenderTab,
   VideoRenderSettings,
 } from './render';
-import { resolveVideoOutput } from './render-presets';
+import { gifOutputSize, resolveVideoOutput } from './render-presets';
 import { effectRenderSize, gifFrameTimes, gifInputRate, videoFrameTimes } from './render-plan';
 import type { TimelineRenderRequest } from './timeline-runner';
 
@@ -152,12 +152,28 @@ export function buildTimelineRenderRequest(input: {
   outputPath: string;
   /** Names image-sequence frames and their subfolder; defaults to the project name. */
   name?: string;
+  safety?: import('./render-safety').RenderSafetySettings;
 }): TimelineRenderRequest {
   const { tab, video, gif, project, timeline, range, outputPath } = input;
   if (!(range.end > range.start)) throw new Error('The render range is empty.');
   const label = outputPath.split(/[\\/]/).pop() || outputPath;
   const name = input.name || projectBaseName(project.name);
   const sourceSize = renderSourceSize(project);
+  const processingSize = (size: { width: number; height: number }) => {
+    if (input.safety?.processing !== 'output') return size;
+    const target =
+      tab === 'video' ? video.frame : gifOutputSize(gif, sourceSize.width / sourceSize.height);
+    const scale = Math.min(
+      1,
+      tab === 'video' && ['crop', 'stretch'].includes(video.frame.fit)
+        ? Math.max(target.width / size.width, target.height / size.height)
+        : Math.min(target.width / size.width, target.height / size.height),
+    );
+    return {
+      width: Math.max(1, Math.round(size.width * scale)),
+      height: Math.max(1, Math.round(size.height * scale)),
+    };
+  };
   if (tab === 'video') {
     const audio = videoAudioActive(video, timeline);
     const sources = videoAudioSources(video, timeline);
@@ -169,12 +185,14 @@ export function buildTimelineRenderRequest(input: {
         kind: 'video',
         name,
         video,
+        ...(input.safety ? { safety: input.safety } : {}),
+        ...(timeline.video?.path ? { sourcePath: timeline.video.path } : {}),
         outputPath,
         ...mediaInputs(timeline, range, audio && sources.track, audio && sources.clip),
       },
       times: videoFrameTimes(video, range, timeline, project.effects),
       inputFps: video.fps,
-      renderSize: effectRenderSize(sourceSize, video.frame, video.upscale.method),
+      renderSize: processingSize(effectRenderSize(sourceSize, video.frame, video.upscale.method)),
       overlay: video.overlay.enabled,
     };
   }
@@ -186,12 +204,13 @@ export function buildTimelineRenderRequest(input: {
       kind: 'gif',
       name,
       gif,
+      ...(input.safety ? { safety: input.safety } : {}),
       outputPath,
       ...mediaInputs(timeline, range, gif.audio && loopAudioAvailable(gif, timeline), false),
     },
     times: gifFrameTimes(gif, range, timeline.fps),
     inputFps: gifInputRate(gif, timeline.fps),
-    renderSize: sourceSize,
+    renderSize: processingSize(sourceSize),
     overlay: gif.transparent && gif.format !== 'mp4',
   };
 }

@@ -83,12 +83,13 @@ export async function exportTimeline(
   const started = performance.now();
   try {
     const result = await runTimelineRender(
-      { ...request, spec: { ...request.spec, outputPath: staged } },
+      { ...request, spec: { ...request.spec, outputPath: staged, checkpointTarget: outputPath } },
       {
         ...host.adapters,
         begin: async (spec) => {
           const id = await jobs.begin(spec);
           return {
+            resumeFrames: jobs.resumeFrames(id),
             frame: (image, original) => jobs.frame(id, image, original),
             finish: () => jobs.finish(id),
             cancel: () => jobs.cancel(id),
@@ -137,6 +138,8 @@ export async function exportTimeline(
       backends: [...host.backends],
       warnings: [...host.warnings],
       notes: result.notes,
+      ...(result.checkpointPath ? { checkpointPath: result.checkpointPath } : {}),
+      ...(result.resumedFrames !== undefined ? { resumedFrames: result.resumedFrames } : {}),
       milliseconds: Math.round(performance.now() - started),
     };
   } finally {

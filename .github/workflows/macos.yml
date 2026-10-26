@@ -100,6 +100,7 @@ jobs:
           node tooling/updates-check.mjs "$gleech_executable"
           node tooling/terminal-updates-check.mjs "$gleech_executable"
           node tooling/open-file-check.mjs "$gleech_executable" --cpu
+          node tooling/render-memory-check.mjs "$gleech_executable"
           node tooling/support-check.mjs "$gleech_executable" --cpu
           node tooling/github-feedback-check.mjs "$gleech_executable" --cpu --allow-unavailable-keyring
       - name: Upload verified alpha package
