@@ -36,6 +36,7 @@ export class FrameReader {
     private readonly width: number,
     private readonly height: number,
     private readonly count: number,
+    private readonly lowMemory = false,
   ) {
     this.frameBytes = width * height * 4;
     this.process = spawnFfmpeg(ffmpegPath, args);
@@ -44,7 +45,7 @@ export class FrameReader {
     stdout.on('data', (chunk: Buffer) => {
       this.chunks.push(chunk);
       this.buffered += chunk.length;
-      if (this.buffered >= this.frameBytes * 2) stdout.pause();
+      if (this.buffered >= this.frameBytes * (this.lowMemory ? 1 : 2)) stdout.pause();
       this.notify();
     });
     stderr.setEncoding('utf8').on('data', (text: string) => {
@@ -112,7 +113,8 @@ export class FrameReader {
     }
     this.buffered -= this.frameBytes;
     this.delivered++;
-    if (this.buffered < this.frameBytes * 2 && !this.exited) this.process.stdout.resume();
+    if (!this.lowMemory && this.buffered < this.frameBytes * 2 && !this.exited)
+      this.process.stdout.resume();
     return { width: this.width, height: this.height, pixels };
   }
 

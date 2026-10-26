@@ -545,6 +545,29 @@ describe('interactive TUI timeline', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+  it('keeps every export memory and recovery option reachable in a small terminal', async () => {
+    const doc = session();
+    const state = doc.state;
+    const tui = terminalHarness(doc, 72, 20);
+    try {
+      await tui.see('TIMELINE');
+      tui.key('e');
+      await tui.see('EXPORT TIMELINE');
+      tui.key(down.repeat(7) + right + right);
+      await tui.see('One frame at a time');
+      tui.key(down.repeat(3) + right);
+      await tui.see('5s · assemble at end');
+      tui.key(down + ' ' + down + ' ');
+      await tui.see('On · reuse verified matching parts');
+      tui.key(down);
+      await tui.see('Tile size');
+      tui.key(esc);
+      expect(doc.state).toBe(state);
+      expect(doc.dirty).toBe(false);
+    } finally {
+      await tui.close();
+    }
+  });
   it('uses plain t for modes and Shift+T for Add Shader in either mode', async () => {
     const doc = session();
     const state = doc.state;
@@ -661,9 +684,16 @@ describe('interactive TUI timeline', () => {
       tui.key('r' + 'e');
       await tui.see('EXPORT TIMELINE');
       // Click Format twice: MP4 -> GIF -> PNG, exercising modal mouse capture.
-      tui.key('\x1b[<0;40;10M');
+      const clickFormat = () => {
+        const lines = tui.text().split('\n');
+        const row = lines.findIndex((line) => line.includes('Format'));
+        expect(row).toBeGreaterThanOrEqual(0);
+        const column = lines[row]!.indexOf('Format');
+        tui.key(`\x1b[<0;${column + 1};${row + 1}M`);
+      };
+      clickFormat();
       await tui.see('GIF');
-      tui.key('\x1b[<0;40;10M');
+      clickFormat();
       await tui.see('PNG sequence');
       expect(tui.text()).toContain('Work area');
       tui.key(down.repeat(6) + enter);

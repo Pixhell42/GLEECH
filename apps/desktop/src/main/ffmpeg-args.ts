@@ -10,6 +10,7 @@ import type {
   VideoRenderSettings,
 } from '../shared/render';
 import type { MovieContainer, ResolvedMovie, VideoCodec } from '../shared/render-presets';
+import { resolveVideoOutput } from '../shared/render-presets';
 
 const HARDWARE = /_(nvenc|amf|qsv|mf|videotoolbox|vaapi)$/;
 
@@ -76,6 +77,11 @@ export function formatRate(fps: number): string {
     if (Math.abs(fps - (base * 1000) / 1001) < 0.002) return `${base * 1000}/1001`;
   }
   return Number.isInteger(fps) ? String(fps) : String(Math.round(fps * 1000) / 1000);
+}
+
+export function encodedFrameDuration(frames: number, fps: number): number {
+  const rate = formatRate(fps).split('/').map(Number);
+  return (frames * (rate[1] ?? 1)) / rate[0]!;
 }
 
 function seconds(value: number): string {
@@ -453,6 +459,7 @@ export interface VideoArgsInput {
   readonly audio?: MediaInput | undefined;
   readonly clipAudio?: MediaInput | undefined;
   readonly outputPath: string;
+  readonly lowMemory?: boolean;
 }
 
 export function buildVideoArgs(input: VideoArgsInput): string[] {
@@ -474,7 +481,8 @@ export function buildVideoArgs(input: VideoArgsInput): string[] {
     '-i',
     'pipe:0',
   ];
-  const duration = input.frameCount / input.fps;
+  if (input.lowMemory) args.unshift('-filter_threads', '1', '-filter_complex_threads', '1');
+  const duration = encodedFrameDuration(input.frameCount, input.fps);
   const audio = settings.audio.enabled
     ? audioPlan({
         audio: settings.audio,
@@ -490,12 +498,78 @@ export function buildVideoArgs(input: VideoArgsInput): string[] {
   args.push('-filter_complex', graph.join(';'), '-map', '[vout]');
   if (audio) args.push('-map', '[aout]');
   args.push(...plan.args);
+  if (input.lowMemory) args.push(...lowMemoryEncoderArgs(input.encoder));
   if (plan.yuv) args.push(...YUV_TAGS);
   if (audio) args.push(...audioCodecArgs(settings.audio, output.container, input.encoders));
   // Video arrives slowly from the GPU; let audio packets queue meanwhile.
   args.push('-max_muxing_queue_size', '9999');
   const interFrame = output.codec === 'h264' || output.codec === 'hevc';
   if (interFrame && output.container !== 'mkv' && settings.advanced.fastStart)
+    args.push('-movflags', '+faststart');
+  args.push('-f', output.container === 'mkv' ? 'matroska' : output.container, input.outputPath);
+  return args;
+}
+
+/** Bound reference/lookahead allocations where the selected codec exposes them. */
+export function lowMemoryEncoderArgs(encoder: string): string[] {
+  if (encoder === 'libx264')
+    return ['-threads', '1', '-bf', '0', '-rc-lookahead', '0', '-x264-params', 'sync-lookahead=0'];
+  if (encoder === 'libx265')
+    return [
+      '-threads',
+      '1',
+      '-bf',
+      '0',
+      '-x265-params',
+      'pools=none:frame-threads=1:rc-lookahead=0:log-level=error',
+    ];
+  if (encoder === 'libvpx-vp9') return ['-threads', '1', '-lag-in-frames', '0', '-row-mt', '0'];
+  return ['-threads', '1'];
+}
+
+/** Copy compatible part video streams; apply audio trim/mix/fades once globally. */
+export function buildVideoAssemblyArgs(input: {
+  spec: import('../shared/render').RenderJobSpec;
+  listPath: string;
+  outputPath: string;
+  encoders: readonly string[];
+}): string[] {
+  const settings = input.spec.video!;
+  const output = resolveVideoOutput(settings);
+  if (output.kind !== 'movie') throw new Error('Only movies can be assembled from parts.');
+  const duration = encodedFrameDuration(input.spec.frameCount, input.spec.fps);
+  const audio = settings.audio.enabled
+    ? audioPlan({
+        audio: settings.audio,
+        track: input.spec.audio,
+        clip: input.spec.clipAudio,
+        duration,
+        firstInput: 1,
+      })
+    : null;
+  const args = [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'concat',
+    '-safe',
+    '1',
+    '-i',
+    input.listPath,
+  ];
+  if (audio) args.push(...audio.inputs, '-filter_complex', audio.filter);
+  args.push('-map', '0:v:0', '-c:v', 'copy');
+  if (audio)
+    args.push(
+      '-map',
+      '[aout]',
+      ...audioCodecArgs(settings.audio, output.container, input.encoders),
+    );
+  else args.push('-an');
+  args.push('-t', seconds(duration));
+  if ((output.container === 'mp4' || output.container === 'mov') && settings.advanced.fastStart)
     args.push('-movflags', '+faststart');
   args.push('-f', output.container === 'mkv' ? 'matroska' : output.container, input.outputPath);
   return args;

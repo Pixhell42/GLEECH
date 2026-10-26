@@ -83,6 +83,7 @@
     "test:ui-redesign": "pnpm build && node tooling/ui-redesign-check.mjs",
     "test:window-controls": "pnpm build && node tooling/window-controls-check.mjs",
     "test:timeline": "pnpm build && node tooling/timeline-check.mjs && node tooling/timeline-media-check.mjs && node tooling/open-file-check.mjs",
+    "test:render-memory": "pnpm build && node tooling/render-memory-check.mjs",
     "benchmark:video": "pnpm build && node tooling/video-playback-check.mjs --visible",
     "test:updates": "pnpm build && node tooling/updates-check.mjs",
     "test:terminal-updates": "pnpm build && node tooling/terminal-updates-check.mjs",

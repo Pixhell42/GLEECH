@@ -170,6 +170,35 @@ Timeline mode accepts one project at a time. Still-only options such as
 `--quality`, `--show`, `--max-size` and `--save-preset` are rejected. Ordinary
 `render project.gleech` continues to export the base still stack.
 
+Memory checks are on by default and use the same runner as desktop. An
+insufficient-memory error occurs before decoding or encoding begins. Choose:
+
+- `--memory-mode auto|standard|one-frame|tiled` (default `auto`). One-frame mode
+  reduces decoder and encoder buffering; tiled mode accepts only compatible
+  full-coverage color effects. `--tile-size 256|512|1024` defaults to 512.
+- `--processing-resolution output --width 1920` to process effects at the smaller
+  output size. The default `source` preserves full source detail.
+- `--segment-seconds 30` to encode MP4 in parts, then assemble with continuous
+  audio. Zero disables parts; the maximum is 600 seconds.
+- `--keep-parts` to retain completed parts beside the destination and `--resume`
+  to verify and reuse them. Both require a positive `--segment-seconds`. Reuse
+  requires the same project, media, output path, range and rendering settings.
+- `--no-memory-check` to proceed without the RAM-budget gate. Estimates are
+  approximate and GPU availability can remain unknown; a single frame still
+  has to fit even when using parts.
+
+```sh
+gleech render animation.gleech --timeline -o movie.mp4 --memory-mode one-frame --segment-seconds 30 --keep-parts
+# After cancellation or interruption, repeat with --resume:
+gleech render animation.gleech --timeline -o movie.mp4 --memory-mode one-frame --segment-seconds 30 --keep-parts --resume
+```
+
+Completed parts live in a hidden `.<output>.<identity>.gleech-parts` folder;
+remove it manually when recovery is no longer needed. Existing completed output
+still requires `-y` to replace. JSON results include `checkpointPath` and
+`resumedFrames` when applicable. See [memory and recovery](TIMELINE.md#memory-and-recovery)
+for tile compatibility, saved-part storage and limitations.
+
 ### GLEECH rolls and variations
 
 ```sh
@@ -279,6 +308,11 @@ export and preserves prior output. `E` exports the current frame as an image,
 and `O` opens that frame at full resolution in your image viewer. Switch to
 image mode with `t` to preview or export the base image stack. `Shift+T` opens
 Add Shader in either mode.
+
+The same export modal also exposes memory mode/checks, source or output
+processing resolution, part duration, keep/resume and tile size. Navigate with
+arrows or Tab; the list scrolls in smaller terminals. A RAM estimate appears
+below the selected row. Memory errors keep the settings available for adjustment.
 
 ### Settings and updates
 
