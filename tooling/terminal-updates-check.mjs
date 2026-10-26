@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { _electron as electron } from 'playwright';
+import { closeTestApp } from './close-test-app.mjs';
 
 const run = promisify(execFile);
 const root = resolve(import.meta.dirname, '..');
@@ -161,6 +162,6 @@ try {
   );
   console.log('PASS terminal updater refuses to replace files while the desktop is open');
 } finally {
-  await desktop.close();
+  await closeTestApp(desktop);
 }
 console.log(`Terminal updater checks passed. Fixtures: ${output}`);
