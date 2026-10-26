@@ -185,7 +185,8 @@ loop was trimmed to fit.
 The **Memory and recovery** section estimates peak RAM before an export starts.
 Memory checks are on by default; an export that exceeds the estimate's safe
 budget opens a warning with selectable alternatives. The shared runner checks
-again when a queued job starts, using currently free RAM and headroom for the
+again when a queued job starts, using currently available RAM (including
+reclaimable memory reported by the OS) and headroom for the
 app and OS. This is a conservative estimate; codec, effect and driver allocations
 vary, and available GPU memory cannot be reliably measured on every system.
 

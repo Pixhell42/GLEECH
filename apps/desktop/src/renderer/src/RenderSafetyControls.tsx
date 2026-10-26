@@ -30,7 +30,7 @@ export function RenderSafetyControls({
           ? `Estimated peak RAM: ${memorySize(assessment.estimatedPeakBytes)} · ` +
             (assessment.availableRAMBytes === null
               ? 'Free RAM unavailable'
-              : `Currently free: ${memorySize(assessment.availableRAMBytes)}`)
+              : `Currently available: ${memorySize(assessment.availableRAMBytes)}`)
           : 'Preparing memory estimate…'}
       </p>
       <label>
