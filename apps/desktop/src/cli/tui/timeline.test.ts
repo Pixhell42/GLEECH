@@ -28,6 +28,16 @@ import { TimelineTransport } from './timeline';
 import { createTuiSettings, type TuiSettings } from './settings';
 import type { prepareTerminalUpdate } from '../update-install';
 
+// Terminal UI/export scenarios need a stable budget under parallel test load.
+// The budget provider and insufficient-memory gate are tested separately.
+vi.mock('../../main/render-memory', () => ({
+  renderMemoryBudget: () => ({
+    totalRAMBytes: 16 * 1024 ** 3,
+    availableRAMBytes: 12 * 1024 ** 3,
+    availableGPUBytes: null,
+  }),
+}));
+
 const pixels = Uint8Array.from([0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255]);
 const png = encodePng({ width: 2, height: 2, pixels: pixels.buffer });
 function project(): ProjectState {
