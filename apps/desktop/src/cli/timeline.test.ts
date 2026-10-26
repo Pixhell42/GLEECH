@@ -19,6 +19,16 @@ import { cliTimelinePlan, validateTimelineOptions } from './timeline-plan';
 import { exportTimeline } from './timeline';
 import { terminalFfmpeg } from './timeline-host';
 
+// Export behavior must not depend on other tests consuming the runner's RAM.
+// Real budget reporting and low-memory rejection have their own tests.
+vi.mock('../main/render-memory', () => ({
+  renderMemoryBudget: () => ({
+    totalRAMBytes: 16 * 1024 ** 3,
+    availableRAMBytes: 12 * 1024 ** 3,
+    availableGPUBytes: null,
+  }),
+}));
+
 const pixels = Uint8Array.from([0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255]);
 const png = encodePng({ width: 2, height: 2, pixels: pixels.buffer });
 function project(): ProjectState {
