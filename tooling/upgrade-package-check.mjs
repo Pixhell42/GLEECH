@@ -261,12 +261,10 @@ async function settle() {
 }
 async function recipe() {
   await settle();
-  return page
-    .locator('.image-layer')
-    .evaluate((element) => ({
-      effects: JSON.parse(element.dataset.renderRecipe),
-      seed: Number(element.dataset.renderSeed),
-    }));
+  return page.locator('.image-layer').evaluate((element) => ({
+    effects: JSON.parse(element.dataset.renderRecipe),
+    seed: Number(element.dataset.renderSeed),
+  }));
 }
 const sharp = createRequire(join(root, 'apps/desktop/package.json'))('sharp');
 async function exported(version, name) {
