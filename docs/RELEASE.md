@@ -2,13 +2,21 @@
 
 ## Current checkpoint
 
-Version 0.2.0 is being prepared for Windows x64, macOS arm64/x64 and Linux x64,
-including the bundled CLI/TUI and FFmpeg. The
-[candidate notes and remaining gates](RELEASE-0.2.0.md) track this preparation.
-The candidate now uses official Electron 45.1.0 with Node.js 24.22.1. All six
-retained runtime probe groups pass on Windows x64; packaged checks on every
-target and the remaining release gates are still required. The temporary custom
-Electron backport is retired; see the current runtime review below.
+Version 0.2.0 is published for Windows x64 beta, macOS arm64/x64 experimental
+alpha and Linux x64 experimental alpha, including the bundled CLI/TUI and FFmpeg.
+The [release notes](RELEASE-0.2.0.md) link the packages, source materials and
+known security issue. Official Electron 45.1.0 with Node.js 24.22.1 passes all six
+retained runtime probe groups on every packaged target. The complete release
+plan passed 291 hosted and 24 physical Windows GPU commands. Installed acceptance
+passed seven lifecycle groups per target plus eight Windows normal-mode checks;
+hosted macOS/Linux coverage limits remain documented in the release notes.
+The temporary custom Electron backport is retired.
+
+The maintainer accepted the disclosed BoringSSL CVE-2026-35189 exception for
+0.2.0 only, then approved publication on October 28, 2026. The runtime remains
+affected. Reassess the exception before the next release or when an official
+compatible Electron includes the fix. The checklist below remains the reusable
+process for future releases.
 
 Windows x64 app/NSIS installer builds and packaged GPU/CPU image/mask workflows,
 menus, version metadata, MCP profiles and bundled assets have passed. The user
@@ -93,8 +101,10 @@ fix. However, Chromium's BoringSSL revision
 [CVE-2026-35189 fix](https://github.com/google/boringssl/commit/9b639f5b3b086508c03f6a4a1792e4a6043777ac).
 Electron 45.1.0's BoringSSL patch list contains only the cipher/export patches,
 and the tagged provider still contains the removed relative-name code.
-**Public release remains on hold for this provider fix or a reviewed applicability
-decision.** Passing the six Node/V8 probes does not clear this separate hold.
+The October 28 applicability review confirmed a reachable certificate-processing
+path before trust rejection. The maintainer accepted the disclosed availability
+and unsaved-work risk for 0.2.0 only; see the [public known issue](RELEASE-0.2.0.md#known-security-issue).
+Passing the six Node/V8 probes does not establish that BoringSSL is patched.
 The temporary custom backport is not restored or used for packaging.
 
 Evidence: [Chromium dependencies](https://github.com/chromium/chromium/blob/156.0.8078.49/DEPS),
@@ -116,7 +126,7 @@ exercise malformed memory-corruption input. Snapshot randomness relies on the
 upstream Node fix/tests because Electron does not support user-land snapshot
 building. Review the linked Chromium V8/Brotli/BoringSSL revisions as well as Node;
 the Node version alone does not attest those providers. Native Mac/Linux checks
-and final release approval remain required.
+and final approval were completed for 0.2.0; repeat them for future releases.
 
 ## Runtime security review — 2026-10-21
 

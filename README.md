@@ -15,10 +15,10 @@ any effect control with keyframes, curves, audio and LFO modulators, and renders
 video, GIFs and loops, image sequences and flip books (see
 [Timeline, video and GIF](docs/TIMELINE.md)). Movie and loop export use ffmpeg.
 
-The **0.2.0 release candidate** brings timelines to desktop, CLI and TUI on all
+**GLEECH 0.2.0** brings timelines to desktop, CLI and TUI on all
 three platforms, with bundled FFmpeg. The terminal tools use the shared timeline
 runner for saved animation, external video and audio, MP4, GIF and PNG sequences.
-See the [0.2.0 release notes and preparation status](docs/RELEASE-0.2.0.md) and
+See the [0.2.0 release notes](docs/RELEASE-0.2.0.md) and
 [CLI/TUI guide](docs/CLI.md).
 
 The current library contains **109 built-in effects**, including **46 original
@@ -27,8 +27,12 @@ Imported shaders are additional library entries. See the [effect inventory](docs
 
 ## Run the app
 
-Download a Windows package from [Releases](https://github.com/Pixhell42/GLEECH/releases)
-when a release is published. Development installers are unsigned. An unpacked
+Download 0.2.0 for [Windows x64](https://github.com/Pixhell42/GLEECH/releases/tag/v0.2.0),
+[macOS Intel / Apple Silicon](https://github.com/Pixhell42/GLEECH/releases/tag/macos-alpha-0.2.0),
+or [Linux x64](https://github.com/Pixhell42/GLEECH/releases/tag/linux-omarchy-alpha-0.2.0).
+Windows is a beta; macOS and Linux are experimental alphas. Packages are unsigned,
+and macOS builds are not notarized. Read the [known security issue](docs/RELEASE-0.2.0.md#known-security-issue)
+before using network features. An unpacked
 build can be run through `GLEECH.exe` with its accompanying folders intact.
 Packaged builds include their runtime; Node.js and pnpm are only needed to build
 from source. GPU features depend on your graphics hardware and driver.
