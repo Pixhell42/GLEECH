@@ -19,12 +19,13 @@ assert.ok(
   target && ['install', 'exercise', 'uninstall'].includes(phase),
   'Usage: installed-package-check.mjs install|exercise|uninstall (native targets only)',
 );
-const output = resolve('test-results/installed-acceptance', key);
+const root = resolve(import.meta.dirname, '..');
+const output = resolve(root, 'test-results/installed-acceptance', key);
 await mkdir(output, { recursive: true });
 const reportPath = join(output, 'report.json');
 const artifact =
   process.platform === 'win32'
-    ? resolve('public-release/release-0.2.0-2026-10-28', target.archive)
+    ? resolve(root, 'public-release/release-0.2.0-2026-10-28', target.archive)
     : join(output, 'download', target.archive);
 const installed =
   process.platform === 'darwin'
@@ -224,18 +225,16 @@ try {
           : join(resources, 'cli', process.platform === 'win32' ? 'gleech.cmd' : 'gleech');
       async function invoke(args, file = launcher) {
         if (process.platform === 'win32') {
-          assert.ok([file, ...args].every((item) => !/["\r\n%]/.test(item)));
+          const quoted = [file, ...args].map((item) => {
+            if (!/^[a-zA-Z0-9_./:\\ ()-]+$/.test(item))
+              throw new Error('Unsupported Windows launcher argument.');
+            return '"' + item + '"';
+          });
           return (
-            await command(
-              'cmd.exe',
-              [
-                '/d',
-                '/s',
-                '/c',
-                '"' + [file, ...args].map((item) => '"' + item + '"').join(' ') + '"',
-              ],
-              { env: terminalEnv, windowsVerbatimArguments: true },
-            )
+            await command('cmd.exe', ['/d', '/s', '/c', '"' + quoted.join(' ') + '"'], {
+              env: terminalEnv,
+              windowsVerbatimArguments: true,
+            })
           ).stdout;
         }
         if (process.platform !== 'linux' || file !== installed)
