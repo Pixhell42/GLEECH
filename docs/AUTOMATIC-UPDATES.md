@@ -66,6 +66,19 @@ See [terminal setup](CLI.md) for the platform commands.
   it, replace GLEECH.app at the same location, then reopen. Fully automatic macOS
   installation requires signed application bundles; signing checks are not bypassed.
 
+### Windows CLI in 0.2.0
+
+Installed acceptance found that `gleech update --yes` can report a verified
+download without completing installation after the terminal exits. For the
+published Windows 0.2.0 package, use **Settings > Updates > Install & Update**
+instead; the native desktop installation, relaunch and unsaved-session recovery
+passed. Check the version after reopening. A verified download message alone
+does not confirm that the new version is installed.
+
+Release metadata cannot repair the updater inside an existing binary. A future
+Windows package needs its own CLI handoff fix and installed acceptance; the
+desktop updater can deliver that replacement package.
+
 ### Linux without FUSE
 
 The `APPIMAGE_EXTRACT_AND_RUN=1` fallback shares an extracted runtime between
