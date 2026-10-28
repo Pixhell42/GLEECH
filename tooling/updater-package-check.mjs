@@ -136,9 +136,22 @@ const report = {
 const save = () => writeFile(join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
 async function check(name, fn) {
   console.log('START', name);
+  report.activeCheck = name;
+  await save();
   const time = Date.now();
-  await fn();
+  let timer;
+  try {
+    await Promise.race([
+      fn(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Acceptance check timed out: ' + name)), 480000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
   report.checks.push({ name, passed: true, durationMs: Date.now() - time });
+  delete report.activeCheck;
   await save();
   console.log('PASS', name);
 }
@@ -214,7 +227,17 @@ async function closeSender() {
   if (app) {
     const closing = app;
     app = null;
-    await closeTestApp(closing);
+    let timer;
+    try {
+      await Promise.race([
+        closeTestApp(closing),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Sender cleanup timed out.')), 30000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 async function launchSender() {
@@ -322,6 +345,14 @@ async function recipe() {
   }));
 }
 const sharp = createRequire(join(root, 'apps/desktop/package.json'))('sharp');
+const asar = createRequire(join(root, 'apps/desktop/package.json'))('@electron/asar');
+async function receiverInstalled() {
+  // Inspect package bytes without repeatedly starting the executable while NSIS
+  // is waiting for old processes to release it.
+  if (process.platform === 'linux') return (await sha(installed)) === config.payload.sha256;
+  const packageInfo = JSON.parse(asar.extractFile(join(resources, 'app.asar'), 'package.json'));
+  return packageInfo.version === config.version;
+}
 async function exportPixels(name, sender = true) {
   const path = join(artwork, name);
   if (sender) await choose('save', path);
@@ -672,17 +703,13 @@ try {
     );
     assert.equal((await cli(['--version'])).stdout.trim(), '0.2.0');
     const result = await cli(['update', '--yes']);
+    report.terminalCommand = { stdout: result.stdout, stderr: result.stderr };
     assert.match(result.stdout, /Download verified/);
     assert.match(result.stderr, /Downloading and verifying GLEECH 0.2.1/);
     if (process.platform === 'darwin') await manualMacReplacement();
     else {
-      await poll(async () => {
-        try {
-          return (await cli(['--version'])).stdout.trim() === '0.2.1';
-        } catch {
-          return false;
-        }
-      }, 'The real CLI updater did not install 0.2.1.');
+      await poll(receiverInstalled, 'The real CLI updater did not install 0.2.1.');
+      assert.equal((await cli(['--version'])).stdout.trim(), '0.2.1');
       assert.equal(
         await exists(config.receiverFile),
         false,
@@ -702,6 +729,7 @@ try {
   report.unqualifiedPass = report.knownIssues.length === 0;
 } catch (error) {
   report.error = String(error.stack ?? error);
+  console.error(report.error);
   process.exitCode = 1;
   try {
     if (page && !page.isClosed())

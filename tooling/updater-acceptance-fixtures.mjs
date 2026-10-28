@@ -118,6 +118,16 @@ export function installUpdateRouting(electron, config) {
     throw new Error('Unexpected network destination in updater acceptance.');
   };
   if (electron) {
+    if (process.argv.includes('--gleech-terminal-update')) {
+      const append = process.getBuiltinModule('fs').appendFileSync;
+      for (const level of ['info', 'warn', 'error']) {
+        const original = console[level].bind(console);
+        console[level] = (...values) => {
+          append(config.childLog, values.map(String).join(' ') + '\n');
+          original(...values);
+        };
+      }
+    }
     const nativeRequest = electron.net.request.bind(electron.net);
     electron.net.request = (options) => {
       const url =
