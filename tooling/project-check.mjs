@@ -14,7 +14,7 @@ const sharp = createRequire(resolve(root, 'apps/desktop/package.json'))('sharp')
 const output = resolve(root, 'test-results/project-check');
 await mkdir(output, { recursive: true });
 const cpu = process.argv.includes('--cpu');
-const executablePath = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
+const executablePath = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const label = `${executablePath ? 'packaged-' : ''}${cpu ? 'cpu' : 'auto'}`;
 const imagePath = resolve(output, 'original.png');
 const pixels = Buffer.alloc(257 * 129 * 4);
@@ -127,7 +127,7 @@ try {
   }
   async function openProject(path, canceled = false) {
     await chooseOpen(path, canceled);
-    await page.keyboard.press('Control+o');
+    await fileAction(page, 'Open project Ctrl+O');
   }
   await configure();
   await page.getByRole('button', { name: 'File menu', exact: true }).click();
@@ -201,7 +201,7 @@ try {
   await settle();
   assert.ok(!(await page.title()).startsWith('•'));
   await chooseSave(copyPath);
-  await page.keyboard.press('Control+Shift+s');
+  await fileAction(page, 'Save project as… Ctrl+Shift+S');
   await status(`Saved ${basename(copyPath)}`);
   assert.ok((await readFile(copyPath)).equals(await readFile(projectPath)));
   await page.getByRole('slider', { name: 'Softness', exact: true }).fill('0.33');
@@ -226,7 +226,7 @@ try {
   await status(`Saved ${basename(copyPath)}`);
   await chooseSave(resolve(output, 'missing-directory', 'cannot-save.gleech'));
   const beforeFailure = Buffer.from(await readFile(copyPath));
-  await page.keyboard.press('Control+Shift+s');
+  await fileAction(page, 'Save project as… Ctrl+Shift+S');
   await page.getByRole('alert').waitFor();
   assert.ok((await readFile(copyPath)).equals(beforeFailure));
   await page.getByRole('button', { name: 'Dismiss error' }).click();

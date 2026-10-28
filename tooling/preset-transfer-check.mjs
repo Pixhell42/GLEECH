@@ -15,7 +15,7 @@ const sharp = createRequire(resolve(root, 'apps/desktop/package.json'))('sharp')
 const output = resolve(root, 'test-results/preset-transfer-check');
 await mkdir(output, { recursive: true });
 const cpu = process.argv.includes('--cpu');
-const executablePath = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
+const executablePath = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const label = `${executablePath ? 'packaged-' : ''}${cpu ? 'cpu' : 'auto'}`;
 const profileA = await mkdtemp(resolve(output, `${label}-source-`));
 const profileB = await mkdtemp(resolve(output, `${label}-destination-`));
