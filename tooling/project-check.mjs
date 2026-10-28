@@ -133,7 +133,7 @@ try {
   await page.getByRole('button', { name: 'File menu', exact: true }).click();
   await page.locator('.file-menu-items').getByRole('button', { name: 'Save', exact: true }).click();
   assert.equal(
-    await page.getByRole('button', { name: 'Save project Ctrl+S', exact: true }).isDisabled(),
+    await page.getByRole('button', { name: /^Save project (Ctrl|Cmd)\+S$/ }).isDisabled(),
     true,
   );
   await page.keyboard.press('Escape');

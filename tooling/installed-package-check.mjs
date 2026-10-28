@@ -336,6 +336,11 @@ try {
     report.phases.uninstall = 'passed';
     report.complete = true;
   }
+  if (report.error) {
+    report.resolvedFailures ??= [];
+    report.resolvedFailures.push({ resolvedDuringPhase: phase, error: report.error });
+    delete report.error;
+  }
   report.updatedAt = new Date().toISOString();
   await save();
 } catch (error) {
