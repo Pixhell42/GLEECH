@@ -60,7 +60,10 @@ for (const name of [
   'GITHUB_TOKEN',
 ])
   delete env[name];
-if (process.platform === 'linux') env.APPIMAGE_EXTRACT_AND_RUN = '1';
+if (process.platform === 'linux') {
+  env.APPIMAGE_EXTRACT_AND_RUN = '1';
+  delete env.NO_CLEANUP;
+}
 const run = promisify(execFile);
 const command = (file, args) =>
   run(file, args, { env, shell: false, windowsHide: true, timeout: 180000, maxBuffer: 8e6 });
@@ -112,6 +115,7 @@ const report = {
   privateReceiverOnly: true,
   checks: [],
   complete: false,
+  knownIssues: [],
   limitations: [
     'Release-list and download transport use a loopback fixture; updater IPC, checksum verification, recovery, installers and shutdown remain real.',
     'The private 0.2.1 receiver adds only inspection/startup receipts and fixture discovery routing, in addition to its version bump.',
@@ -232,6 +236,7 @@ async function launchSender() {
     args: process.argv,
     platform: process.platform,
     arch: process.arch,
+    resources: process.resourcesPath,
   }));
   assert.equal(runtime.version, '0.2.0');
   assert.equal(runtime.packaged, true);
@@ -322,10 +327,8 @@ async function exportPixels(name, sender = true) {
   if (sender) await choose('save', path);
   else throw new Error('Use the CLI to validate receiver pixels after saving.');
   await fileAction(page, 'Quick PNG Export Ctrl+Shift+E');
-  await page
-    .getByRole('status')
-    .filter({ hasText: 'Exported ' + name })
-    .waitFor();
+  // Timeline mode hides the image-mode notice; verify the actual exported file.
+  await poll(() => exists(path), 'The PNG export was not written.');
   return sharp(path).ensureAlpha().raw().toBuffer();
 }
 const original = join(artwork, 'working-project.gleech');
@@ -450,6 +453,15 @@ try {
       fixture.state.kind = 'valid';
     });
   await check('real-cli-discovers-update-and-refuses-install-while-desktop-is-open', async () => {
+    const resourcesBefore =
+      process.platform === 'linux'
+        ? await exists(join(report.senderRuntime.resources, 'app-update.yml'))
+        : true;
+    assert.equal(
+      resourcesBefore,
+      true,
+      'The installed sender must include its updater configuration.',
+    );
     const value = JSON.parse((await cli(['update', '--check', '--json'])).stdout);
     assert.equal(value.currentVersion, '0.2.0');
     assert.equal(value.version, '0.2.1');
@@ -458,28 +470,51 @@ try {
       /Save and close the GLEECH desktop/.test(error.stderr ?? error.message),
     );
     assert.equal((await getState()).currentVersion, '0.2.0');
+    if (process.platform === 'linux') {
+      const resourcesAfter = await exists(join(report.senderRuntime.resources, 'app-update.yml'));
+      report.linuxExtractionConcurrency = { resourcesBefore, resourcesAfter };
+      if (!resourcesAfter) {
+        report.knownIssues.push({
+          platform: 'linux',
+          mode: 'APPIMAGE_EXTRACT_AND_RUN=1',
+          observed:
+            'A CLI invocation removed the running desktop extraction cache, including app-update.yml.',
+          workaround: 'Set NO_CLEANUP=1 for desktop and CLI extraction-mode launches.',
+          reference:
+            'https://docs.appimage.org/user-guide/troubleshooting/fuse.html#extract-and-run-type-2-appimages',
+        });
+        await closeSender();
+        env.NO_CLEANUP = '1';
+        await launchSender();
+        assert.equal(await exists(join(report.senderRuntime.resources, 'app-update.yml')), true);
+        report.linuxWorkaroundEnabled = true;
+        report.limitations.push(
+          'The NO_CLEANUP workaround retains extraction caches for disposable-runner teardown.',
+        );
+      }
+    }
   });
   await check('automatic-download-can-be-disabled-and-cancelled', async () => {
     fixture.state.slow = true;
     const enabled = await page.evaluate(() => window.gleech.setAutomaticUpdates(true));
     assert.equal(enabled.ok, true);
-    await page.waitForFunction(
+    await poll(
       async () => {
-        const state = (await window.gleech.updateState()).value;
+        const state = await getState();
         return state.phase === 'downloading' && state.progress.transferred > 0;
       },
-      undefined,
-      { timeout: 120000 },
+      'Automatic download did not transfer bytes.',
+      120000,
     );
     const disabled = await page.evaluate(() => window.gleech.setAutomaticUpdates(false));
     assert.equal(disabled.ok, true);
-    await page.waitForFunction(
+    await poll(
       async () => {
-        const state = (await window.gleech.updateState()).value;
+        const state = await getState();
         return state.phase === 'available' && !state.automatic && state.error === null;
       },
-      undefined,
-      { timeout: 120000 },
+      'Automatic cancellation did not settle safely.',
+      120000,
     );
     fixture.state.slow = false;
   });
@@ -599,10 +634,10 @@ try {
     assert.ok(values.presets.value.some((p) => p.id === presetId));
     await assert.rejects(access(join(profile, 'update-recovery/session.json')), { code: 'ENOENT' });
     await fileAction(page, 'Save project Ctrl+S');
-    await page
-      .getByRole('status')
-      .filter({ hasText: 'Saved ' + basename(original) })
-      .waitFor();
+    await poll(
+      async () => (await sha(original)) !== savedHash,
+      'Save did not update the original project binding.',
+    );
     assert.notEqual(await sha(original), savedHash);
     report.projectProof = {
       originalSavedSHA256: savedHash,
@@ -664,6 +699,7 @@ try {
   });
   assert.deepEqual(errors, []);
   report.complete = true;
+  report.unqualifiedPass = report.knownIssues.length === 0;
 } catch (error) {
   report.error = String(error.stack ?? error);
   process.exitCode = 1;
@@ -698,6 +734,8 @@ console.log(
   JSON.stringify({
     target: key,
     passed: report.complete,
+    unqualifiedPass: report.unqualifiedPass ?? false,
+    knownIssues: report.knownIssues.length,
     checks: report.checks.length,
     cleanup: report.cleanup,
   }),
