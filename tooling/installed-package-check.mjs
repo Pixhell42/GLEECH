@@ -168,12 +168,7 @@ try {
         assert.equal(resolve(runtime.userData), profile);
         if (process.platform === 'linux') assert.equal(resolve(runtime.appimage), installed);
         else assert.equal(resolve(runtime.executable).toLowerCase(), executable.toLowerCase());
-        for (const file of [
-          'ffmpeg',
-          'cli/gleech.cjs',
-          'mcp/server.cjs',
-          'THIRD_PARTY_NOTICES.md',
-        ])
+        for (const file of ['ffmpeg', 'cli/gleech.cjs', 'mcp/server.cjs', 'THIRD_PARTY_NOTICES.md'])
           await access(join(runtime.resources, file));
         report.runtime = runtime;
         await page.screenshot({ path: join(output, 'installed-startup.png') });
