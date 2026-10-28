@@ -12,8 +12,16 @@ on:
       - tooling/terminal-updates-check.mjs
       - tooling/render-memory-check.mjs
       - tooling/update-package-*.mjs
+      - tooling/runtime-security*/**
+      - tooling/runtime-security-check.mjs
       - .github/workflows/macos.yml
       - apps/desktop/electron-builder.yml
+      - packages/*/src/**
+      - tooling/timeline-*.mjs
+      - tooling/file-action.mjs
+      - tooling/test-electron.mjs
+      - tooling/capture-test-window.mjs
+      - tooling/close-test-app.mjs
       - apps/desktop/package.json
       - apps/desktop/src/main/subject-detection.ts
       - package.json
@@ -51,7 +59,7 @@ jobs:
   build:
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +97,7 @@ jobs:
           GLEECH_MAC_APP: ${{ matrix.app }}
         run: |
           gleech_executable="$GLEECH_MAC_APP/Contents/MacOS/GLEECH"
+          node tooling/runtime-security-check.mjs "$gleech_executable"
           node tooling/ffmpeg-package-check.mjs "$GLEECH_MAC_APP/Contents/Resources"
           node tooling/update-package-check.mjs "$GLEECH_MAC_APP/Contents/Resources" apps/desktop/release
           node tooling/ffmpeg-check.mjs "$gleech_executable"
@@ -104,6 +113,13 @@ jobs:
           node tooling/render-memory-check.mjs "$gleech_executable"
           node tooling/support-check.mjs "$gleech_executable" --cpu
           node tooling/github-feedback-check.mjs "$gleech_executable" --cpu --allow-unavailable-keyring
+      - name: Test packaged timeline and media
+        env:
+          GLEECH_MAC_APP: ${{ matrix.app }}
+        run: |
+          gleech_executable="$GLEECH_MAC_APP/Contents/MacOS/GLEECH"
+          node tooling/timeline-check.mjs "$gleech_executable" --cpu --require-ffmpeg
+          node tooling/timeline-media-check.mjs "$gleech_executable" --cpu --require-ffmpeg
       - name: Upload verified alpha package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

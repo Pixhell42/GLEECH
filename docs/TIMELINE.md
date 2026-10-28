@@ -135,7 +135,8 @@ and doesn't slow down the picture; renders read the clip itself.
 
 ## Rendering
 
-Render Video… (Ctrl+Shift+R) and Export GIF… (Ctrl+Shift+G) in the Export menu,
+Render Video… (Ctrl+Shift+R, Command+Shift+R on Mac) and Export GIF…
+(Ctrl+Shift+G, Command+Shift+G on Mac) in the Export menu,
 and the timeline's Render Video button, open one dialog with two tabs. The left
 column shows the frame at the playhead, the range (work area, whole timeline or
 In/Out, set with I and O), a live summary with the estimated file size and the
@@ -237,5 +238,6 @@ timeline, move the playhead and queue renders; see [MCP](MCP.md#timeline-and-ren
 - , and . : previous / next keyframe.
 - I / O: set In and Out; M: add a marker at the playhead.
 - Delete: remove selected keys; \\: fit the timeline; Z: zoom to the selected keys.
-- Ctrl + scroll: zoom the timeline; Shift + scroll: pan.
-- Ctrl+Shift+R: Render Video…; Ctrl+Shift+G: Export GIF….
+- Ctrl + scroll (Command + scroll on Mac): zoom the timeline; Shift + scroll: pan.
+- Ctrl+Shift+R: Render Video…; Ctrl+Shift+G: Export GIF…. Use Command instead of
+  Ctrl on Mac, including Undo (Command+Z) and Redo (Command+Shift+Z).

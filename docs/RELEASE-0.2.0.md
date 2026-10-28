@@ -6,11 +6,22 @@ Publication requires final maintainer approval after the gates below pass.
 
 ## What changes from 0.1.2
 
-The separate `codex/settings-and-auto-updates` branch adds compact LFO waveform
-icons, a Settings window and GitHub update downloads with session recovery and
-once-per-version patch notes. These features are not part of the previously frozen
-candidate binaries. See [automatic updates](AUTOMATIC-UPDATES.md) for platform
-behavior, release metadata and acceptance requirements before including the branch.
+The 0.2.0 candidate brings the completed desktop, CLI/TUI and platform work into
+one source tree for Windows x64, macOS arm64/x64 and Linux x64. Rebuild every
+package from this tree; earlier candidate binaries do not contain all these changes.
+
+- **Settings and updates:** desktop and terminal Settings collect update controls,
+  support links, feedback, community and version information. GitHub update
+  downloads support session recovery and once-per-version patch notes. CLI/TUI
+  update commands use the same installer engine. See [automatic updates](AUTOMATIC-UPDATES.md)
+  for installation requirements and platform behavior.
+- **Video playback and file opening:** improved native playback and frame handling,
+  a shared Open File action for images, projects and video, and packaged file-opening
+  checks. Compact LFO waveform icons make modulation choices easier to scan.
+- **Export memory and recovery:** desktop, CLI and TUI expose RAM-budget checks,
+  one-frame and compatible tiled processing, output-resolution processing and
+  segmented movie exports. Keep completed parts and resume interrupted renders
+  after their project/media/settings checks pass. See [memory and recovery](TIMELINE.md#memory-and-recovery).
 
 - **Desktop timelines:** animate effect controls with keyframes, easing and
   Bezier curves, audio analysis and LFOs. Scrub external video, mix audio, set
@@ -30,8 +41,10 @@ behavior, release metadata and acceptance requirements before including the bran
 - **Bundled FFmpeg:** all four desktop packages include the pinned FFmpeg build
   and terminal launchers. Desktop, CLI/TUI and local MCP use the embedded runtime;
   users do not need to install Node.js or FFmpeg separately.
-- **Toolchain updates:** Node.js 22.23.4 for development/CI, Vite 7.3.7 and
-  Electron 44.9.3. Electron's embedded Node security review remains open below.
+- **Toolchain updates:** Node.js 22.23.4 for development/CI, Vite 7.3.7 and official
+  Electron 45.1.0, embedding Node.js 24.22.1 and Chromium 156.0.8078.49.
+  The temporary custom Electron backport is retired. Runtime probes now run
+  against development and packaged executables; see the [runtime review](RELEASE.md#official-electron-runtime--2026-10-28).
 
 External video and audio are referenced by path, rather than embedded in
 `.gleech` projects. Keep those files available when moving a project between
@@ -80,14 +93,17 @@ Run `gleech uninstall-cli` before moving or uninstalling the app. See the
 
 ## Maintainer gates
 
-- [ ] **Embedded runtime security:** verify a stable Electron release covers the
-      October 21 Node.js security batch, including CVE-2026-105482. Electron 44.9.3's
-      loopback DNS NUL-validation probe still reproduces the missing fix. The
-      [runtime review](RELEASE.md#runtime-security-review--2026-10-21) records the
-      evidence. Do not describe this candidate as fully patched or publish it while
-      this hold remains unresolved.
-- [ ] Freeze the Windows/main and native port candidate commits, preserve port
-      differences and record each binary's actual source commit/tree. Build source
+- [ ] **Embedded runtime security:** official Electron 45.1.0 passes all six retained
+      runtime probe groups on Windows x64. Verify the actual packaged executable on
+      every target, retain provider/source evidence and the per-target reports.
+      Electron 44.10.0 still fails the V8 JSON regression and is not the release pin.
+      See the [current runtime review](RELEASE.md#official-electron-runtime--2026-10-28).
+      That review still finds BoringSSL's CVE-2026-35189 fix missing from the
+      linked provider. Publication stays on hold for an upstream fix or a reviewed
+      applicability decision; the temporary custom patch is excluded.
+- [ ] Freeze the integrated main and synchronized native port candidate commits;
+      use the same application changes and Electron pin on every platform. Record
+      each binary's actual source commit/tree. Build source
       ZIPs from tracked files at those commits, without local reference material.
 - [ ] Frozen install, `pnpm check`, production build and production/full audits.
 - [ ] Exact-candidate hosted Windows full lane and physical-GPU full lane;

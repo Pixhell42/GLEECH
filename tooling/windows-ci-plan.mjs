@@ -72,14 +72,15 @@ export function createWindowsPlan(mode, scripts, packagedPath) {
     }
   }
   add(['tooling/smoke.mjs']);
+  add(['tooling/runtime-security-check.mjs']);
   if (mode === 'quick') {
     for (const script of ['image', 'editing', 'project', 'preset-transfer', 'mcp'])
       add([`tooling/${script}-check.mjs`, '--cpu']);
     add(['tooling/cli-check.mjs', '--cpu', '--require-ffmpeg']);
     add(['tooling/ui-color-check.mjs']);
     add(['tooling/ffmpeg-check.mjs']);
-    add(['tooling/timeline-check.mjs']);
-    add(['tooling/timeline-media-check.mjs']);
+    add(['tooling/timeline-check.mjs', '--require-ffmpeg']);
+    add(['tooling/timeline-media-check.mjs', '--require-ffmpeg']);
     add(['tooling/render-memory-check.mjs']);
     add(['tooling/open-file-check.mjs']);
     add(['tooling/updates-check.mjs']);

@@ -375,10 +375,14 @@ try {
   await status('Canceled');
   // Save/Discard/Cancel must protect both opening another project and native window closing.
   const beforeGuard = await recipe();
+  const guardsBeforeOpen = await app.evaluate(() => globalThis.guardCalls);
   await decision(2);
-  await chooseOpen(projectPath, true);
+  // Unified Open File chooses a target before asking about unsaved changes.
+  // A canceled picker would bypass this guard and make the test a false positive.
+  await chooseOpen(projectPath);
   await page.keyboard.press('Control+o');
-  await status('Canceled');
+  await status(/^Canceled$/);
+  assert.equal(await app.evaluate(() => globalThis.guardCalls), guardsBeforeOpen + 1);
   assert.deepEqual(await recipe(), beforeGuard);
   await decision(0);
   await chooseSave(projectPath, true);
@@ -403,13 +407,11 @@ try {
   await status('Canceled');
   assert.equal(page.isClosed(), false);
   assert.ok((await page.title()).startsWith('•'));
-  // A dirty project's normal Save uses the existing handle; failed Save must keep the window alive.
+  // A dirty project's normal Save uses its existing handle before opening the selected project.
   await decision(0);
-  await app.evaluate(({ dialog }) => {
-    dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
-  });
+  await chooseOpen(projectPath);
   await page.keyboard.press('Control+o');
-  await status('Open canceled');
+  await status('Opened ' + basename(projectPath));
   assert.ok(!(await page.title()).startsWith('•'));
   await restore('Second variation');
   await saved();

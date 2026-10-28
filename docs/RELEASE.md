@@ -5,8 +5,10 @@
 Version 0.2.0 is being prepared for Windows x64, macOS arm64/x64 and Linux x64,
 including the bundled CLI/TUI and FFmpeg. The
 [candidate notes and remaining gates](RELEASE-0.2.0.md) track this preparation.
-Publication is on hold pending verified coverage of the October 21 Node.js
-security fixes in a stable Electron runtime; see the runtime review below.
+The candidate now uses official Electron 45.1.0 with Node.js 24.22.1. All six
+retained runtime probe groups pass on Windows x64; packaged checks on every
+target and the remaining release gates are still required. The temporary custom
+Electron backport is retired; see the current runtime review below.
 
 Windows x64 app/NSIS installer builds and packaged GPU/CPU image/mask workflows,
 menus, version metadata, MCP profiles and bundled assets have passed. The user
@@ -69,7 +71,56 @@ Passing development checks does not publish a release.
       masks, local MCP and uninstall without deleting artwork/projects unexpectedly.
 - [ ] Publish source and binaries only after final review/approval.
 
+## Official Electron runtime — 2026-10-28
+
+The shared desktop dependency and lockfile pin official
+[Electron 45.1.0](https://releases.electronjs.org/release/v45.1.0): Node.js 24.22.1,
+Chromium 156.0.8078.49, V8 15.6.75.19 and module ABI 150. Electron's
+[Node roll](https://github.com/electron/electron/pull/55163) includes the October 21
+security release. Development and CI continue to use Node.js 22.23.4.
+
+Electron 44.10.0 updates Node.js but still fails V8's escaped-JSON-key regression.
+Electron 45.1.0 passes all six retained groups on Windows x64: escaped JSON keys,
+DNS NUL rejection, TLS noncanonical hostnames, Brotli binding/roundtrip, both
+idle/queued HTTP-agent socket reuse and permission-denied realpathSync. The
+temporary custom source-build tooling and patches have been removed.
+
+Provider source review confirms that Chromium's V8 revision
+`392e44423f46d75904da712fadea4c7d5d97967f` descends from the escaped-key fix, and
+Brotli revision `cfa184a997ac19454d5a3ae97f6d600aac2445a6` descends from its decoder
+fix. However, Chromium's BoringSSL revision
+`2ea3200c3a3ec176613ab7a0b9a4ffc6db846120` is four commits behind the provider's
+[CVE-2026-35189 fix](https://github.com/google/boringssl/commit/9b639f5b3b086508c03f6a4a1792e4a6043777ac).
+Electron 45.1.0's BoringSSL patch list contains only the cipher/export patches,
+and the tagged provider still contains the removed relative-name code.
+**Public release remains on hold for this provider fix or a reviewed applicability
+decision.** Passing the six Node/V8 probes does not clear this separate hold.
+The temporary custom backport is not restored or used for packaging.
+
+Evidence: [Chromium dependencies](https://github.com/chromium/chromium/blob/156.0.8078.49/DEPS),
+[V8 ancestry](https://github.com/v8/v8/compare/93cd21e8254b65c15ff131b2dcadf19beadb559d...392e44423f46d75904da712fadea4c7d5d97967f),
+[Brotli ancestry](https://github.com/google/brotli/compare/0ed4268a4401abcb4472096340477cf4af7d1a2b...cfa184a997ac19454d5a3ae97f6d600aac2445a6),
+[BoringSSL ancestry](https://github.com/google/boringssl/compare/9b639f5b3b086508c03f6a4a1792e4a6043777ac...2ea3200c3a3ec176613ab7a0b9a4ffc6db846120),
+[Electron provider patches](https://github.com/electron/electron/tree/v45.1.0/patches/boringssl).
+
+Run `node tooling/runtime-security-check.mjs` for the installed development runtime,
+or pass an actual packaged executable as its sole argument. It requires the exact
+reviewed runtime/dependency versions and every probe group, fails on any mismatch
+and saves the executable digest and JSON evidence under `test-results/runtime-security/`.
+Windows quick/full plans and the native Mac/Linux package workflows require these
+checks. Keep their reports with the release record.
+
+Passing behavioral probes does not replace provider/source review, the full
+application regressions or native acceptance. The benign Brotli probe does not
+exercise malformed memory-corruption input. Snapshot randomness relies on the
+upstream Node fix/tests because Electron does not support user-land snapshot
+building. Review the linked Chromium V8/Brotli/BoringSSL revisions as well as Node;
+the Node version alone does not attest those providers. Native Mac/Linux checks
+and final release approval remain required.
+
 ## Runtime security review — 2026-10-21
+
+Historical baseline; superseded by the October 28 runtime selection above.
 
 The build/CI Node.js baseline is 22.23.4, including the workspace engine minimum
 and all workflows that read `.node-version`. This is the
@@ -78,7 +129,7 @@ covering DNS input validation, TLS hostname checks, Brotli decoding, HTTP agent
 handling, snapshot randomness and the permission model.
 
 Packaged desktop, CLI/TUI and MCP processes use Electron's embedded Node.js,
-independently of the build machine's Node. Electron is pinned to
+independently of the build machine's Node. Electron was pinned to
 [44.9.3](https://releases.electronjs.org/release/v44.9.3), which includes upstream
 Chromium/V8 fixes and still reports Node.js 24.22.0. Its tagged source also
 contains a
@@ -128,6 +179,12 @@ The follow-up `pnpm audit --prod` reports zero known vulnerabilities. This does
 not change the outstanding Electron embedded-runtime review above.
 
 ## Dependency audit baseline — 2026-10-14
+
+Revalidated 2026-10-28 for the 0.2.0 integration: compatible lockfile updates select
+`qs` 6.16.1 and Undici 6.29.1/7.30.1. The production audit reports zero advisories;
+the full audit reports only the existing high-severity `http-cache-semantics`
+finding. The historical `sprintf-js` finding is no longer reported by the registry.
+The reviewed packaging safeguards remain enforced; no audit suppression is used.
 
 The production `pnpm audit --prod` scan reported zero known advisories.
 The full audit found two unpatched transitive packaging-tool advisories:

@@ -7,22 +7,21 @@ import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
 import { fileAction } from './file-action.mjs';
+import {
+  timelineTestOptions,
+  verifyTimelineRuntime,
+  verifyTimelineBackend,
+} from './timeline-test-options.mjs';
 
 const output = resolve('test-results/timeline');
 await mkdir(output, { recursive: true });
 const profile = await mkdtemp(resolve(output, 'profile-'));
 const renders = await mkdtemp(resolve(output, 'renders-'));
-const env = { ...process.env, GLEECH_SMOKE_USER_DATA: profile, GLEECH_TEST_NATIVE_FRAMES: '1' };
-delete env.ELECTRON_RUN_AS_NODE;
-delete env.ELECTRON_RENDERER_URL;
-// CI also passes a packaged GLEECH.exe to run the same check against the installer build.
-const exe = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
-const app = await electron.launch({
-  args: [...(exe ? [] : [resolve('apps/desktop')]), '--smoke-test'],
-  env,
-  ...(exe ? { executablePath: resolve(exe) } : {}),
-});
+const options = timelineTestOptions(process.argv.slice(2), profile);
+const primary = process.platform === 'darwin' ? 'Meta' : 'Control';
+const app = await electron.launch(options.launch);
 try {
+  await verifyTimelineRuntime(app, options);
   const page = await app.firstWindow();
   page.setDefaultTimeout(30000);
   const errors = [];
@@ -73,6 +72,7 @@ try {
     .getByRole('button', { name: 'Motion Mosh', exact: true })
     .click();
   await settle();
+  await verifyTimelineBackend(page, options);
 
   // Image mode looks like today's app: no timeline, no time chip.
   assert.equal(await page.locator('.timeline-dock').count(), 0);
@@ -86,7 +86,7 @@ try {
     await page.locator('.file-menu-items').getByRole('button', { name: 'Export' }).click();
     const button = page
       .locator('.file-menu-items')
-      .getByRole('button', { name: 'Render Video… Ctrl+Shift+R', exact: true });
+      .getByRole('button', { name: /^Render Video… / });
     const disabled = await button.isDisabled();
     await page.keyboard.press('Escape');
     return disabled;
@@ -157,9 +157,35 @@ try {
   await page.mouse.up();
   const dragged = await keyFrame(1);
   assert.ok(dragged >= 50, `key followed the drag to frame ${dragged}`);
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await page.locator('.lane-key.selected').focus();
+  await page.keyboard.press(`${primary}+z`);
   assert.equal(await keyFrame(1), 30, 'one Undo restores the dragged key');
+  const restored = await page.locator('.lane-key').nth(1).boundingBox();
+  assert.ok(Math.abs(restored.x - box.x) < 1, 'Undo leaves the timeline zoom unchanged');
   assert.equal(await page.locator('.key-drag-hint').count(), 0);
+
+  // Command on Mac and Control elsewhere zoom the actual timeline, without
+  // triggering browser page zoom. Plain backslash fits it again.
+  const firstKey = await page.locator('.lane-key').first().boundingBox();
+  const keyLeft = await page
+    .locator('.lane-key')
+    .nth(1)
+    .evaluate((key) => Number.parseFloat(key.style.left));
+  await page.locator('.timeline-tracks').dispatchEvent('wheel', {
+    deltaY: -240,
+    clientX: firstKey.x + firstKey.width / 2,
+    clientY: firstKey.y,
+    ctrlKey: primary === 'Control',
+    metaKey: primary === 'Meta',
+  });
+  await page.waitForFunction(
+    (left) => Number.parseFloat(document.querySelectorAll('.lane-key')[1].style.left) > left,
+    keyLeft * 1.1,
+  );
+  const zoomed = await page.locator('.lane-key').nth(1).boundingBox();
+  assert.ok(zoomed.x > restored.x + 10, 'the platform modifier zooms key spacing');
+  await page.locator('.lane-key').first().focus();
+  await page.keyboard.press('\\');
 
   // Curves view shows the same keys on one graph.
   await page.getByRole('button', { name: 'Curves', exact: true }).click();
@@ -206,7 +232,7 @@ try {
   // GIF over In / Out.
   const gifPath = join(renders, 'loop.gif');
   await stubSave(gifPath);
-  await page.keyboard.press('Control+Shift+G');
+  await page.keyboard.press(`${primary}+Shift+G`);
   const dialog = page.locator('dialog.render-dialog');
   await dialog.waitFor();
   await dialog.getByRole('radio', { name: 'In / Out', exact: true }).click();
@@ -214,6 +240,7 @@ try {
   await savesTo(gifPath);
   const status = await page.evaluate(() => window.gleech.renderStatus(true));
   const ffmpeg = status.ok && status.value.available;
+  if (options.requireFfmpeg) assert.ok(ffmpeg, 'The native timeline test requires working FFmpeg.');
   if (ffmpeg) {
     await dialog.getByRole('button', { name: 'Export GIF', exact: true }).click();
     await page.locator('.render-job[data-status="done"]').waitFor({ timeout: 240000 });
@@ -231,7 +258,7 @@ try {
   // PNG sequence of the In / Out range (no ffmpeg needed).
   const sequence = await mkdtemp(join(renders, 'frames-'));
   await stubFolder(sequence);
-  await page.keyboard.press('Control+Shift+R');
+  await page.keyboard.press(`${primary}+Shift+R`);
   await dialog.waitFor();
   await dialog.getByRole('radio', { name: 'In / Out', exact: true }).click();
   await dialog.getByRole('radio', { name: 'Image sequence', exact: true }).click();
@@ -252,7 +279,7 @@ try {
   if (ffmpeg) {
     const moviePath = join(renders, 'movie.mp4');
     await stubSave(moviePath);
-    await page.keyboard.press('Control+Shift+R');
+    await page.keyboard.press(`${primary}+Shift+R`);
     await dialog.waitFor();
     await dialog.getByRole('radio', { name: 'In / Out', exact: true }).click();
     await dialog.getByRole('radio', { name: 'Movie file', exact: true }).click();
@@ -274,7 +301,7 @@ try {
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
   }, projectPath);
-  await page.keyboard.press('Control+o');
+  await page.keyboard.press(`${primary}+o`);
   await page.locator('.operation-banner').waitFor({ state: 'hidden', timeout: 120000 });
   await page.getByRole('tab', { name: 'Timeline', exact: true }).click();
   await page.locator('.timeline-dock').waitFor();
@@ -282,7 +309,7 @@ try {
   assert.match(await page.getByRole('button', { name: 'Seed mode' }).textContent(), /Every 2/);
 
   // Renders are named after the saved project, and the name can be typed.
-  await page.keyboard.press('Control+Shift+G');
+  await page.keyboard.press(`${primary}+Shift+G`);
   await dialog.waitFor();
   const fileName = dialog.getByRole('textbox', { name: 'File name', exact: true });
   assert.equal(await fileName.inputValue(), 'timeline');
@@ -315,7 +342,7 @@ try {
       .click();
   const named = await mkdtemp(join(renders, 'named-'));
   await stubFolder(named);
-  await page.keyboard.press('Control+Shift+R');
+  await page.keyboard.press(`${primary}+Shift+R`);
   await dialog.waitFor();
   await dialog.getByRole('radio', { name: 'In / Out', exact: true }).click();
   await dialog.getByRole('radio', { name: 'Image sequence', exact: true }).click();

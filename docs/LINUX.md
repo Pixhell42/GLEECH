@@ -87,6 +87,28 @@ rendering or relax pixel assertions. GPU availability depends on the adapter and
 driver; retain a separate CPU fallback result. Normal application launches do
 not use this test option or Playwright's launch flags.
 
+### Timeline and media
+
+The native Linux job runs both complete desktop timeline suites against the
+actual AppImage under a virtual display before uploading it. FFmpeg is required,
+so media tests cannot silently skip. The suites exercise animation and undo,
+curves, transport, seeded frames, ranges, GIF/MP4 and PNG sequence exports,
+video/audio import, audio-driven controls, project reload and media paths with
+spaces and Unicode. Each run records its packaged runtime and rendering backend.
+
+```sh
+# Native CPU fallback in a graphical session:
+node tooling/timeline-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu --require-ffmpeg
+node tooling/timeline-media-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu --require-ffmpeg
+# The opt-in Vulkan launcher on a physical, supported GPU:
+node tooling/timeline-check.mjs tooling/run-linux-webgpu.sh --require-webgpu --require-ffmpeg
+node tooling/timeline-media-check.mjs tooling/run-linux-webgpu.sh --require-webgpu --require-ffmpeg
+```
+
+To test a delivered package, substitute its AppImage path for the executable.
+`--require-webgpu` rejects CPU fallback; hosted CPU checks do not certify a
+particular Omarchy compositor or GPU driver.
+
 ## Settings and terminal support
 
 The Settings feature branch includes the same inline Donate/Feedback screens,

@@ -140,17 +140,41 @@ test('Mac upload follows advisory, native package and runtime checks', () => {
     'pnpm dist:mac',
     'node tooling/mac-package-check.mjs',
     'node tooling/smoke.mjs',
+    'node tooling/runtime-security-check.mjs',
     'node tooling/image-check.mjs',
     'node tooling/mcp-check.mjs',
     'node tooling/mcp-clients-check.mjs',
     'node tooling/cli-check.mjs',
     'node tooling/cli-launcher-check.mjs',
+    'node tooling/timeline-check.mjs',
+    'node tooling/timeline-media-check.mjs',
   ]) {
     const check = steps.findIndex((step) => step.run?.includes(command));
     assert.ok(check >= 0 && check < upload, `Missing pre-upload check: ${command}`);
   }
   assert.equal(steps[upload].if, undefined, 'Artifacts must require successful earlier steps.');
   assert.equal(workflow.jobs.build.strategy['fail-fast'], false);
+});
+
+test('Mac timeline checks target each native app, require codecs and run on source changes', () => {
+  const step = workflow.jobs.build.steps.find(
+    (entry) => entry.name === 'Test packaged timeline and media',
+  );
+  assert.equal(step.env.GLEECH_MAC_APP, '${{ matrix.app }}');
+  assert.ok(step.run.includes('$GLEECH_MAC_APP/Contents/MacOS/GLEECH'));
+  for (const name of ['timeline', 'timeline-media'])
+    assert.ok(
+      step.run.includes(
+        `node tooling/${name}-check.mjs "$gleech_executable" --cpu --require-ffmpeg`,
+      ),
+    );
+  for (const path of [
+    'apps/desktop/src/**',
+    'packages/*/src/**',
+    'tooling/timeline-*.mjs',
+    'tooling/file-action.mjs',
+  ])
+    assert.ok(workflow.on.pull_request.paths.includes(path), `Missing native coverage for ${path}`);
 });
 
 test('Mac workflow keeps permissions read-only and uploads only package deliverables', () => {
