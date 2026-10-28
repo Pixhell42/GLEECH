@@ -351,7 +351,9 @@ async function receiverInstalled() {
   // Inspect package bytes without repeatedly starting the executable while NSIS
   // is waiting for old processes to release it.
   if (process.platform === 'linux') return (await sha(installed)) === config.payload.sha256;
-  const packageInfo = JSON.parse(asar.extractFile(join(resources, 'app.asar'), 'package.json'));
+  const archive = join(resources, 'app.asar');
+  asar.uncache(archive);
+  const packageInfo = JSON.parse(asar.extractFile(archive, 'package.json'));
   return packageInfo.version === config.version;
 }
 async function exportPixels(name, sender = true) {

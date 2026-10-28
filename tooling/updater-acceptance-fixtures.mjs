@@ -120,6 +120,13 @@ export function installUpdateRouting(electron, config) {
   if (electron) {
     if (process.argv.includes('--gleech-terminal-update')) {
       const append = process.getBuiltinModule('fs').appendFileSync;
+      const trace = (event, details = {}) =>
+        append(config.childLog, JSON.stringify({ event, pid: process.pid, ...details }) + '\n');
+      trace('helper-started');
+      process.on('message', (message) => trace('ipc-request', { type: message?.type }));
+      process.once('disconnect', () => trace('ipc-disconnected'));
+      process.once('exit', (code) => trace('helper-exit', { code }));
+      electron.app.on('before-quit', () => trace('before-quit'));
       for (const level of ['info', 'warn', 'error']) {
         const original = console[level].bind(console);
         console[level] = (...values) => {
