@@ -260,6 +260,7 @@ async function launchSender() {
     platform: process.platform,
     arch: process.arch,
     resources: process.resourcesPath,
+    pid: process.pid,
   }));
   assert.equal(runtime.version, '0.2.0');
   assert.equal(runtime.packaged, true);
@@ -633,7 +634,11 @@ try {
   await check('desktop-installs-through-real-engine-and-saves-recovery-checkpoint', async () => {
     const observer = await checkpointObserver();
     try {
-      const closed = app.waitForEvent('close', { timeout: 180000 });
+      // The extraction runtime/relaunched AppImage can retain the launcher's
+      // inherited pipes. Verify the Electron sender PID, rather than waiting
+      // for Playwright's wrapper streams to close before inspecting its receiver.
+      const closed =
+        process.platform === 'linux' ? null : app.waitForEvent('close', { timeout: 180000 });
       await fileAction(page, 'Settings');
       const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
       await settings.getByRole('button', { name: 'Install & Update', exact: true }).click();
@@ -642,7 +647,18 @@ try {
       assert.equal(checkpoint.documentPath, original);
       assert.equal(checkpoint.mode, 'timeline');
       report.checkpoint = checkpoint;
-      await closed;
+      if (closed) await closed;
+      else
+        await poll(() => {
+          try {
+            process.kill(report.senderRuntime.pid, 0);
+            return false;
+          } catch (error) {
+            if (error.code === 'ESRCH') return true;
+            throw error;
+          }
+        }, 'The Electron sender did not exit for installation.');
+      report.senderExitObserved = true;
       app = null;
       assert.equal(await sha(original), savedHash);
       if (process.platform === 'darwin') await manualMacReplacement();
