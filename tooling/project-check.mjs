@@ -47,6 +47,7 @@ const launch = () =>
     timeout: 30000,
   });
 let app = await launch();
+console.log('Project acceptance: launched native process');
 let page;
 const errors = [];
 let exports = 0;
@@ -131,6 +132,7 @@ try {
     await fileAction(page, 'Open project Ctrl+O');
   }
   await configure();
+  console.log('Project acceptance: renderer ready');
   await page.getByRole('button', { name: 'File menu', exact: true }).click();
   await page.locator('.file-menu-items').getByRole('button', { name: 'Save', exact: true }).click();
   assert.equal(
@@ -139,6 +141,7 @@ try {
   );
   await page.keyboard.press('Escape');
   await chooseOpen(imagePath);
+  console.log('Project acceptance: invoking Open File');
   await fileAction(page, 'Open image Ctrl+Shift+O');
   await status('Opened original.png');
   console.log('Project acceptance: imported image');

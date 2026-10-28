@@ -127,22 +127,60 @@ async function check(name, fn) {
 }
 async function subprocess(name, file, args) {
   await check(name, async () => {
-    try {
-      const pending = command(file, args, {
-        timeout: name === 'installed-local-mcp-and-shader-workflows' ? 600000 : 180000,
+    assert.equal(file, process.execPath, 'Acceptance suites must use this Node runtime.');
+    const result = await new Promise((accept, reject) => {
+      const child = spawn(process.execPath, args, {
+        env,
+        windowsHide: true,
+        shell: false,
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
-      pending.child.stdout.on('data', (chunk) => process.stdout.write(chunk));
-      pending.child.stderr.on('data', (chunk) => process.stderr.write(chunk));
-      const result = await pending;
-      await writeFile(join(output, name + '.log'), result.stdout + '\n' + result.stderr);
-      console.log(result.stdout.trim());
-    } catch (error) {
-      await writeFile(
-        join(output, name + '.log'),
-        (error.stdout ?? '') + '\n' + (error.stderr ?? '') + '\n' + String(error),
-      );
-      throw error;
-    }
+      let stdout = '',
+        stderr = '',
+        timedOut = false;
+      const timeout = name === 'installed-local-mcp-and-shader-workflows' ? 600000 : 180000;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        // Kill only the process tree created for this suite. A surviving native
+        // child can otherwise keep stdout open after the Node driver times out.
+        if (process.platform === 'win32') {
+          void run('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
+            windowsHide: true,
+            shell: false,
+          }).catch(() => {});
+        } else {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+          } catch (error) {
+            if (error.code !== 'ESRCH') reject(error);
+          }
+        }
+      }, timeout);
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk;
+        process.stdout.write(chunk);
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+        process.stderr.write(chunk);
+      });
+      child.once('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.once('close', (code) => {
+        clearTimeout(timer);
+        accept({ code, stdout, stderr, timedOut });
+      });
+    });
+    await writeFile(join(output, name + '.log'), result.stdout + '\n' + result.stderr);
+    assert.equal(
+      result.timedOut,
+      false,
+      `${name} exceeded its bounded runtime; see the retained log.`,
+    );
+    assert.equal(result.code, 0, `${name} failed; see the retained log.`);
   });
 }
 try {
