@@ -1,5 +1,5 @@
 // Runs in the actual executable being reviewed, including ELECTRON_RUN_AS_NODE.
-// Fixtures and network traffic are confined to the provided scratch folder and
+// Fixtures and network traffic are confined to a generated scratch folder and
 // loopback. A successful probe supplements, rather than replaces, source review.
 import assert from 'node:assert/strict';
 import dns from 'node:dns';
@@ -11,13 +11,13 @@ import tls from 'node:tls';
 import zlib from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runInNewContext } from 'node:vm';
+import { testEscapedKeys } from './fixtures/v8-json-escaped-keys.mjs';
 
 const probeFile = fileURLToPath(import.meta.url);
 
 if (process.argv[2] === '--permission-child') {
   try {
-    fs.realpathSync(process.argv[3]);
+    fs.realpathSync(path.resolve('denied/private-fixture.txt'));
     console.log(JSON.stringify({ denied: false }));
   } catch (error) {
     console.log(JSON.stringify({ denied: error.code === 'ERR_ACCESS_DENIED', code: error.code }));
@@ -30,11 +30,10 @@ if (process.argv[2] === '--permission-child') {
 }
 
 async function main() {
-  const scratch = process.argv[2];
-  assert.ok(
-    scratch && fs.statSync(scratch).isDirectory(),
-    'Supply the isolated scratch directory.',
-  );
+  assert.equal(process.argv.length, 2, 'The runtime probe does not accept paths or scripts.');
+  const output = path.resolve(import.meta.dirname, '../../test-results/runtime-security');
+  fs.mkdirSync(output, { recursive: true });
+  const scratch = fs.mkdtempSync(path.join(output, 'fixtures-'));
   const checks = [];
   const check = async (name, cves, action) => {
     try {
@@ -46,21 +45,8 @@ async function main() {
   };
 
   await check('v8-json-escaped-keys', [], () => {
-    // Run V8's unchanged six-case regression in an independent JS context.
-    const script = fs.readFileSync(
-      new URL('./fixtures/v8-json-escaped-keys.txt', import.meta.url),
-      'utf8',
-    );
-    runInNewContext(
-      script,
-      {
-        assertArrayEquals(expected, actual) {
-          assert.deepEqual(Array.from(actual), Array.from(expected));
-        },
-        assertEquals: assert.equal,
-      },
-      { timeout: 5000 },
-    );
+    // Statically import V8's six regression cases; never evaluate file text.
+    testEscapedKeys();
     return { upstreamCommit: '93cd21e8254b65c15ff131b2dcadf19beadb559d', cases: 6 };
   });
 
@@ -159,12 +145,12 @@ async function main() {
       [
         '--permission',
         `--allow-fs-read=${probeFile}`,
+        `--allow-fs-read=${path.resolve(import.meta.dirname, 'fixtures')}`,
         `--allow-fs-read=${allowed}`,
         probeFile,
         '--permission-child',
-        fixture,
       ],
-      { encoding: 'utf8', timeout: 15000, windowsHide: true, env: process.env },
+      { cwd: scratch, encoding: 'utf8', timeout: 15000, windowsHide: true, env: process.env },
     );
     assert.equal(child.error, undefined, child.error?.message);
     assert.equal(child.status, 0, child.stderr);
@@ -196,7 +182,8 @@ async function checkAgent(queued) {
   const sockets = new Set();
   const server = http.createServer((request, response) => {
     serverSocket ??= request.socket;
-    response.end(request.url);
+    response.setHeader('Content-Type', 'text/plain');
+    response.end('fixture');
   });
   server.on('connection', (socket) => {
     sockets.add(socket);
@@ -221,7 +208,7 @@ async function checkAgent(queued) {
         res.once('end', () => {
           try {
             assert.equal(res.headers['x-poisoned'], undefined);
-            assert.equal(body, request.path);
+            assert.equal(body, 'fixture');
             resolve();
           } catch (error) {
             reject(error);

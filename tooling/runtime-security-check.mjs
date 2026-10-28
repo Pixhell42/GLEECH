@@ -8,7 +8,21 @@ import { basename, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const root = resolve(import.meta.dirname, '..');
 assert.ok(process.argv.length <= 3, 'Usage: runtime-security-check.mjs [electron-or-app-path]');
-const executable = process.argv[2] ? resolve(process.argv[2]) : require('electron');
+const knownExecutables = new Map(
+  [
+    require('electron'),
+    ...[
+      'apps/desktop/release/win-unpacked/GLEECH.exe',
+      'apps/desktop/release/mac/GLEECH.app/Contents/MacOS/GLEECH',
+      'apps/desktop/release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH',
+      'apps/desktop/release/linux-unpacked/gleech-bin',
+    ].map((file) => resolve(root, file)),
+  ].map((file) => [file, file]),
+);
+const executable = knownExecutables.get(
+  process.argv[2] ? resolve(process.argv[2]) : require('electron'),
+);
+assert.ok(executable, 'Use the installed Electron runtime or a known packaged GLEECH executable.');
 const output = resolve(root, 'test-results/runtime-security');
 await mkdir(output, { recursive: true });
 const scratch = await mkdtemp(resolve(output, 'probe-'));
@@ -16,11 +30,11 @@ const env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
 delete env.NODE_OPTIONS;
 delete env.ELECTRON_RENDERER_URL;
 const result = await new Promise((accept, reject) => {
-  const child = spawn(
-    executable,
-    [resolve(root, 'tooling/runtime-security/runtime-probe.mjs'), scratch],
-    { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
+  const child = spawn(executable, [resolve(root, 'tooling/runtime-security/runtime-probe.mjs')], {
+    env,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   let stdout = '';
   let stderr = '';
   const timer = setTimeout(() => {
