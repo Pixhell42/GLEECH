@@ -109,7 +109,14 @@ function command(file, args, options = {}) {
   // These tools run only from ordinary CI/workspace paths. Reject shell
   // metacharacters before invoking a program, including the Windows CMD lane.
   if (!/^[a-zA-Z0-9_./:\\ ()-]+$/.test(file)) throw new Error('Unsupported executable path.');
-  return run(file, args, { env, timeout: 180000, maxBuffer: 8e6, windowsHide: true, ...options });
+  return run(file, args, {
+    env: options.env ?? env,
+    timeout: options.timeout ?? 180000,
+    maxBuffer: 8e6,
+    windowsHide: true,
+    windowsVerbatimArguments: options.windowsVerbatimArguments === true,
+    shell: false,
+  });
 }
 async function check(name, fn) {
   const started = Date.now();

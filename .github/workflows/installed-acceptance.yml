@@ -71,5 +71,7 @@ jobs:
             test-results/installed-acceptance/${{ matrix.target }}/*.log
             test-results/installed-acceptance/${{ matrix.target }}/*.png
             test-results/installed-acceptance/${{ matrix.target }}/artwork/*
+            test-results/project-check/*failure*
+            test-results/preset-transfer-check/*failure*
           if-no-files-found: error
           retention-days: 30
