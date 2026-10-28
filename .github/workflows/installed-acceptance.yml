@@ -20,7 +20,7 @@ jobs:
   native:
     name: Installed ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

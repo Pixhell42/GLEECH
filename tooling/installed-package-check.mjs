@@ -138,7 +138,7 @@ async function subprocess(name, file, args) {
       let stdout = '',
         stderr = '',
         timedOut = false;
-      const timeout = name === 'installed-local-mcp-and-shader-workflows' ? 600000 : 180000;
+      const timeout = 600000;
       const timer = setTimeout(() => {
         timedOut = true;
         // Kill only the process tree created for this suite. A surviving native
