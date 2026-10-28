@@ -40,7 +40,7 @@ export async function startUpdateFixture(config) {
       response.end(JSON.stringify(releases()));
       return;
     }
-    if (path === '/releases/download/v0.2.1/' + config.manifest) {
+    if (path === '/Pixhell42/GLEECH/releases/download/v0.2.1/' + config.manifest) {
       const size = config.payload.bytes + (state.kind === 'invalid-manifest' ? 1 : 0);
       response.writeHead(200, { 'Content-Type': 'text/yaml' });
       response.end(
@@ -48,7 +48,7 @@ export async function startUpdateFixture(config) {
       );
       return;
     }
-    if (path !== '/releases/download/v0.2.1/' + config.payload.archive) {
+    if (path !== '/Pixhell42/GLEECH/releases/download/v0.2.1/' + config.payload.archive) {
       response.writeHead(404);
       response.end();
       return;
@@ -97,7 +97,7 @@ export async function startUpdateFixture(config) {
   });
   return {
     state,
-    origin: `http://127.0.0.1:${config.serverPort}`,
+    origin: `http://127.0.0.1:${server.address().port}`,
     async close() {
       server.closeAllConnections();
       await new Promise((accept) => server.close(accept));

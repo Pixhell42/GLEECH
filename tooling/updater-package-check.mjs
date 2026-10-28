@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { _electron as electron, chromium } from 'playwright';
 import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';
+import { targets as publishedTargets } from './installed-acceptance-plan.mjs';
 import {
   startUpdateFixture,
   installUpdateRouting,
@@ -17,18 +18,27 @@ import {
 
 assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Use disposable native CI runners.');
 const key = `${process.platform}-${process.arch}`;
+const published = publishedTargets[key];
+assert.ok(published);
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'test-results/builtin-updater', key);
 const config = JSON.parse(await readFile(join(output, 'fixture.json'), 'utf8'));
 assert.equal(config.target, key);
 assert.equal(config.privateFixtureOnly, true);
 assert.equal(config.version, '0.2.1');
+const baselinePath = join(output, 'download', published.archive);
+assert.deepEqual(config.baseline, {
+  version: '0.2.0',
+  archive: published.archive,
+  path: baselinePath,
+  sha256: published.sha256,
+});
 const artwork = join(output, 'artwork');
 await mkdir(artwork, { recursive: true });
 const installed =
   process.platform === 'darwin'
     ? '/Applications/GLEECH.app'
-    : join(output, 'installed', process.platform === 'win32' ? 'GLEECH' : config.baseline.archive);
+    : join(output, 'installed', process.platform === 'win32' ? 'GLEECH' : published.archive);
 const executable =
   process.platform === 'darwin'
     ? join(installed, 'Contents/MacOS/GLEECH')
@@ -136,19 +146,18 @@ let app,
   owned = false;
 const errors = [];
 async function installBase() {
-  assert.equal(await sha(config.baseline.path), config.baseline.sha256);
+  assert.equal(await sha(baselinePath), published.sha256);
   await assert.rejects(access(installed), { code: 'ENOENT' });
   owned = true;
   await mkdir(dirname(installed), { recursive: true });
   if (process.platform === 'win32')
-    await command(config.baseline.path, ['/S', '/currentuser', '/D=' + installed]);
+    await command(baselinePath, ['/S', '/currentuser', '/D=' + installed]);
   else if (process.platform === 'darwin') {
     const expanded = join(output, 'base-expanded');
-    if (!(await exists(expanded)))
-      await command('ditto', ['-x', '-k', config.baseline.path, expanded]);
+    if (!(await exists(expanded))) await command('ditto', ['-x', '-k', baselinePath, expanded]);
     await command('ditto', [join(expanded, 'GLEECH.app'), installed]);
   } else {
-    await copyFile(config.baseline.path, installed);
+    await copyFile(baselinePath, installed);
     await chmod(installed, 0o755);
   }
 }
