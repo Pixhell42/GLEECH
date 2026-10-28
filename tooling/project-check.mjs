@@ -8,13 +8,14 @@ import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { recordDesktopFailure } from './record-desktop-failure.mjs';
 import { installTestIOTracing } from './test-io-tracing.mjs';
+import { captureTestWindow } from './capture-test-window.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sharp = createRequire(resolve(root, 'apps/desktop/package.json'))('sharp');
 const output = resolve(root, 'test-results/project-check');
 await mkdir(output, { recursive: true });
 const cpu = process.argv.includes('--cpu');
-const executablePath = process.argv.slice(2).find((arg) => arg.endsWith('.exe'));
+const executablePath = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
 const label = `${executablePath ? 'packaged-' : ''}${cpu ? 'cpu' : 'auto'}`;
 const imagePath = resolve(output, 'original.png');
 const pixels = Buffer.alloc(257 * 129 * 4);
@@ -46,6 +47,7 @@ const launch = () =>
     timeout: 30000,
   });
 let app = await launch();
+console.log('Project acceptance: launched native process');
 let page;
 const errors = [];
 let exports = 0;
@@ -127,19 +129,22 @@ try {
   }
   async function openProject(path, canceled = false) {
     await chooseOpen(path, canceled);
-    await page.keyboard.press('Control+o');
+    await fileAction(page, 'Open project Ctrl+O');
   }
   await configure();
+  console.log('Project acceptance: renderer ready');
   await page.getByRole('button', { name: 'File menu', exact: true }).click();
   await page.locator('.file-menu-items').getByRole('button', { name: 'Save', exact: true }).click();
   assert.equal(
-    await page.getByRole('button', { name: 'Save project Ctrl+S', exact: true }).isDisabled(),
+    await page.getByRole('button', { name: /^Save project (Ctrl|Cmd)\+S$/ }).isDisabled(),
     true,
   );
   await page.keyboard.press('Escape');
   await chooseOpen(imagePath);
+  console.log('Project acceptance: invoking Open File');
   await fileAction(page, 'Open image Ctrl+Shift+O');
   await status('Opened original.png');
+  console.log('Project acceptance: imported image');
   await page.getByRole('tab', { name: 'Image details', exact: true }).click();
   assert.ok(await page.getByRole('tabpanel', { name: 'Image details', exact: true }).isVisible());
   assert.ok((await page.locator('.image-info').innerText()).includes('257 × 129'));
@@ -193,6 +198,7 @@ try {
   await fileAction(page, 'Save project Ctrl+S');
   await status(`Saved ${basename(projectPath)}`);
   assert.ok((await readFile(projectPath)).subarray(0, 8).equals(Buffer.from('GLEECH02')));
+  console.log('Project acceptance: saved project and exported rendered pixels');
   assert.ok(!(await page.title()).startsWith('•'));
   await page.getByRole('slider', { name: 'Coverage', exact: true }).fill('0.25');
   await settle();
@@ -201,7 +207,7 @@ try {
   await settle();
   assert.ok(!(await page.title()).startsWith('•'));
   await chooseSave(copyPath);
-  await page.keyboard.press('Control+Shift+s');
+  await fileAction(page, 'Save project as… Ctrl+Shift+S');
   await status(`Saved ${basename(copyPath)}`);
   assert.ok((await readFile(copyPath)).equals(await readFile(projectPath)));
   await page.getByRole('slider', { name: 'Softness', exact: true }).fill('0.33');
@@ -226,12 +232,13 @@ try {
   await status(`Saved ${basename(copyPath)}`);
   await chooseSave(resolve(output, 'missing-directory', 'cannot-save.gleech'));
   const beforeFailure = Buffer.from(await readFile(copyPath));
-  await page.keyboard.press('Control+Shift+s');
+  await fileAction(page, 'Save project as… Ctrl+Shift+S');
   await page.getByRole('alert').waitFor();
   assert.ok((await readFile(copyPath)).equals(beforeFailure));
   await page.getByRole('button', { name: 'Dismiss error' }).click();
   assert.equal((await readdir(output)).filter((name) => name.endsWith('.tmp')).length, 0);
-  await app.close();
+  console.log('Project acceptance: restarting installed application');
+  await closeTestApp(app);
   app = await launch();
   page = await app.firstWindow();
   await configure();
@@ -268,11 +275,8 @@ try {
     ),
   );
   await page.getByRole('button', { name: 'About Softness', exact: true }).hover();
-  const screenshot = await app.evaluate(async ({ BrowserWindow }) => {
-    const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage();
-    return image.toPNG().toString('base64');
-  });
-  await writeFile(resolve(output, `${label}-compact.png`), Buffer.from(screenshot, 'base64'));
+  await captureTestWindow(app, resolve(output, `${label}-compact.png`));
+  console.log('Project acceptance: restart, original pixels and compact window verified');
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify(
