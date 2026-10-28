@@ -114,7 +114,6 @@ function command(file, args, options = {}) {
     timeout: options.timeout ?? 180000,
     maxBuffer: 8e6,
     windowsHide: true,
-    windowsVerbatimArguments: options.windowsVerbatimArguments === true,
     shell: false,
   });
 }
@@ -277,9 +276,13 @@ try {
             return '"' + item + '"';
           });
           return (
-            await command('cmd.exe', ['/d', '/s', '/c', '"' + quoted.join(' ') + '"'], {
+            await run('cmd.exe', ['/d', '/s', '/c', '"' + quoted.join(' ') + '"'], {
               env: terminalEnv,
+              timeout: 180000,
+              maxBuffer: 8e6,
+              windowsHide: true,
               windowsVerbatimArguments: true,
+              shell: false,
             })
           ).stdout;
         }
