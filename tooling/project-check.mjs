@@ -8,6 +8,7 @@ import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { recordDesktopFailure } from './record-desktop-failure.mjs';
 import { installTestIOTracing } from './test-io-tracing.mjs';
+import { captureTestWindow } from './capture-test-window.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sharp = createRequire(resolve(root, 'apps/desktop/package.json'))('sharp');
@@ -268,11 +269,7 @@ try {
     ),
   );
   await page.getByRole('button', { name: 'About Softness', exact: true }).hover();
-  const screenshot = await app.evaluate(async ({ BrowserWindow }) => {
-    const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage();
-    return image.toPNG().toString('base64');
-  });
-  await writeFile(resolve(output, `${label}-compact.png`), Buffer.from(screenshot, 'base64'));
+  await captureTestWindow(app, resolve(output, `${label}-compact.png`));
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify(

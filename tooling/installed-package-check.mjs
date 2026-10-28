@@ -105,7 +105,7 @@ if (phase === 'install') {
   assert.equal(report.phases.install, 'passed');
 }
 const save = () => writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
-async function command(file, args, options = {}) {
+function command(file, args, options = {}) {
   // These tools run only from ordinary CI/workspace paths. Reject shell
   // metacharacters before invoking a program, including the Windows CMD lane.
   if (!/^[a-zA-Z0-9_./:\\ ()-]+$/.test(file)) throw new Error('Unsupported executable path.');
@@ -121,7 +121,10 @@ async function check(name, fn) {
 async function subprocess(name, file, args) {
   await check(name, async () => {
     try {
-      const result = await command(file, args, { timeout: 900000 });
+      const pending = command(file, args, { timeout: 900000 });
+      pending.child.stdout.on('data', (chunk) => process.stdout.write(chunk));
+      pending.child.stderr.on('data', (chunk) => process.stderr.write(chunk));
+      const result = await pending;
       await writeFile(join(output, name + '.log'), result.stdout + '\n' + result.stderr);
       console.log(result.stdout.trim());
     } catch (error) {
