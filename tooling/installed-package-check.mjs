@@ -8,6 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
+import { captureTestWindow } from './capture-test-window.mjs';
 import { candidate, targets } from './installed-acceptance-plan.mjs';
 
 const run = promisify(execFile);
@@ -116,9 +117,17 @@ async function check(name, fn) {
 }
 async function subprocess(name, file, args) {
   await check(name, async () => {
-    const result = await command(file, args, { timeout: 900000 });
-    await writeFile(join(output, name + '.log'), result.stdout + '\n' + result.stderr);
-    console.log(result.stdout.trim());
+    try {
+      const result = await command(file, args, { timeout: 900000 });
+      await writeFile(join(output, name + '.log'), result.stdout + '\n' + result.stderr);
+      console.log(result.stdout.trim());
+    } catch (error) {
+      await writeFile(
+        join(output, name + '.log'),
+        (error.stdout ?? '') + '\n' + (error.stderr ?? '') + '\n' + String(error),
+      );
+      throw error;
+    }
   });
 }
 try {
@@ -171,7 +180,7 @@ try {
         for (const file of ['ffmpeg', 'cli/gleech.cjs', 'mcp/server.cjs', 'THIRD_PARTY_NOTICES.md'])
           await access(join(runtime.resources, file));
         report.runtime = runtime;
-        await page.screenshot({ path: join(output, 'installed-startup.png') });
+        await captureTestWindow(app, join(output, 'installed-startup.png'));
       } finally {
         if (app) await closeTestApp(app);
       }

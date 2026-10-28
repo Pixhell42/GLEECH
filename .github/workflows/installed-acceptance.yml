@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: installed-acceptance-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   native:
@@ -68,6 +68,7 @@ jobs:
           name: installed-acceptance-${{ matrix.target }}-${{ github.sha }}
           path: |
             test-results/installed-acceptance/${{ matrix.target }}/report.json
+            test-results/installed-acceptance/${{ matrix.target }}/*.log
             test-results/installed-acceptance/${{ matrix.target }}/*.png
             test-results/installed-acceptance/${{ matrix.target }}/artwork/*
           if-no-files-found: error
