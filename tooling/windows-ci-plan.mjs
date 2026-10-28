@@ -72,6 +72,7 @@ export function createWindowsPlan(mode, scripts, packagedPath) {
     }
   }
   add(['tooling/smoke.mjs']);
+  add(['tooling/runtime-security-check.mjs']);
   if (mode === 'quick') {
     for (const script of ['image', 'editing', 'project', 'preset-transfer', 'mcp'])
       add([`tooling/${script}-check.mjs`, '--cpu']);
