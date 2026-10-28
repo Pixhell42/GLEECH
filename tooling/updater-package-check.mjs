@@ -1,0 +1,695 @@
+import assert from 'node:assert/strict';
+import { execFile, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { createReadStream, watch } from 'node:fs';
+import { access, chmod, copyFile, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { _electron as electron, chromium } from 'playwright';
+import { closeTestApp } from './close-test-app.mjs';
+import { fileAction } from './file-action.mjs';
+import {
+  startUpdateFixture,
+  installUpdateRouting,
+  writeCliUpdateFixture,
+} from './updater-acceptance-fixtures.mjs';
+
+assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Use disposable native CI runners.');
+const key = `${process.platform}-${process.arch}`;
+const root = resolve(import.meta.dirname, '..');
+const output = join(root, 'test-results/builtin-updater', key);
+const config = JSON.parse(await readFile(join(output, 'fixture.json'), 'utf8'));
+assert.equal(config.target, key);
+assert.equal(config.privateFixtureOnly, true);
+assert.equal(config.version, '0.2.1');
+const artwork = join(output, 'artwork');
+await mkdir(artwork, { recursive: true });
+const installed =
+  process.platform === 'darwin'
+    ? '/Applications/GLEECH.app'
+    : join(output, 'installed', process.platform === 'win32' ? 'GLEECH' : config.baseline.archive);
+const executable =
+  process.platform === 'darwin'
+    ? join(installed, 'Contents/MacOS/GLEECH')
+    : process.platform === 'win32'
+      ? join(installed, 'GLEECH.exe')
+      : installed;
+const resources =
+  process.platform === 'darwin'
+    ? join(installed, 'Contents/Resources')
+    : join(installed, 'resources');
+const env = { ...process.env, GLEECH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' };
+for (const name of [
+  'ELECTRON_RUN_AS_NODE',
+  'ELECTRON_RENDERER_URL',
+  'GLEECH_SMOKE_USER_DATA',
+  'GLEECH_USER_DATA',
+  'NODE_OPTIONS',
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+])
+  delete env[name];
+if (process.platform === 'linux') env.APPIMAGE_EXTRACT_AND_RUN = '1';
+const run = promisify(execFile);
+const command = (file, args) =>
+  run(file, args, { env, shell: false, windowsHide: true, timeout: 180000, maxBuffer: 8e6 });
+const sha = async (path) => {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest('hex');
+};
+const load = async (path) => JSON.parse(await readFile(path, 'utf8'));
+const exists = async (path) => {
+  try {
+    await access(path);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+};
+async function poll(fn, message, timeout = 180000) {
+  const deadline = Date.now() + timeout;
+  let last;
+  while (Date.now() < deadline) {
+    try {
+      const value = await fn();
+      if (value) return value;
+    } catch (error) {
+      last = error;
+    }
+    await new Promise((done) => setTimeout(done, 250));
+  }
+  throw new Error(message + (last ? ': ' + last : ''));
+}
+const fixture = await startUpdateFixture(config);
+const routing = {
+  ...config,
+  origin: fixture.origin,
+  installedExecutable: executable,
+  childLog: join(output, 'terminal-child.log'),
+};
+const cliHook = join(output, 'cli-network.cjs');
+await writeCliUpdateFixture(cliHook, routing);
+const report = {
+  sender: config.baseline,
+  receiver: config.payload,
+  receiverVersion: config.version,
+  target: key,
+  startedAt: new Date().toISOString(),
+  publishedSenderUnmodified: true,
+  privateReceiverOnly: true,
+  checks: [],
+  complete: false,
+  limitations: [
+    'Release-list and download transport use a loopback fixture; updater IPC, checksum verification, recovery, installers and shutdown remain real.',
+    'The private 0.2.1 receiver adds only inspection/startup receipts and fixture discovery routing, in addition to its version bump.',
+    'CPU rendering and file-picker fixtures are used; physical GPUs and unsigned-download OS prompts are not certified.',
+    'Full download fallback is exercised; differential-download optimization is not certified.',
+    ...(process.platform === 'darwin'
+      ? [
+          'Finder selection is recorded; app replacement is manual, as documented for unsigned Mac builds.',
+        ]
+      : []),
+    ...(process.platform === 'linux'
+      ? [
+          'AppImage uses extraction fallback under Xvfb; FUSE and Omarchy/Wayland are not certified.',
+        ]
+      : []),
+  ],
+};
+const save = () => writeFile(join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+async function check(name, fn) {
+  console.log('START', name);
+  const time = Date.now();
+  await fn();
+  report.checks.push({ name, passed: true, durationMs: Date.now() - time });
+  await save();
+  console.log('PASS', name);
+}
+let app,
+  browser,
+  page,
+  profile,
+  receiver,
+  owned = false;
+const errors = [];
+async function installBase() {
+  assert.equal(await sha(config.baseline.path), config.baseline.sha256);
+  await assert.rejects(access(installed), { code: 'ENOENT' });
+  owned = true;
+  await mkdir(dirname(installed), { recursive: true });
+  if (process.platform === 'win32')
+    await command(config.baseline.path, ['/S', '/currentuser', '/D=' + installed]);
+  else if (process.platform === 'darwin') {
+    const expanded = join(output, 'base-expanded');
+    if (!(await exists(expanded)))
+      await command('ditto', ['-x', '-k', config.baseline.path, expanded]);
+    await command('ditto', [join(expanded, 'GLEECH.app'), installed]);
+  } else {
+    await copyFile(config.baseline.path, installed);
+    await chmod(installed, 0o755);
+  }
+}
+async function stopReceiver() {
+  if (browser) {
+    await browser.close().catch(() => {});
+    browser = null;
+  }
+  if (!receiver) return;
+  assert.equal(receiver.version, '0.2.1');
+  assert.equal(receiver.packaged, true);
+  assert.ok(Number.isSafeInteger(receiver.pid) && receiver.pid > 1);
+  if (process.platform === 'linux') assert.equal(receiver.appImage, installed);
+  else assert.equal(resolve(receiver.executable).toLowerCase(), executable.toLowerCase());
+  try {
+    process.kill(receiver.pid, 0);
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+    receiver = null;
+    return;
+  }
+  try {
+    if (process.platform === 'win32')
+      await command('taskkill.exe', ['/pid', String(receiver.pid), '/t', '/f']);
+    else process.kill(receiver.pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+  receiver = null;
+  await new Promise((done) => setTimeout(done, 1000));
+}
+async function removeInstallation() {
+  if (!owned || !(await exists(installed))) return;
+  assert.equal((await lstat(installed)).isSymbolicLink(), false);
+  if (process.platform === 'win32') {
+    await command(join(installed, 'Uninstall GLEECH.exe'), ['/S']);
+    await poll(
+      async () => !(await exists(executable)),
+      'Uninstaller did not remove the owned installation.',
+    );
+  } else if (process.platform === 'darwin')
+    await rm('/Applications/GLEECH.app', { recursive: true });
+  else {
+    assert.equal(installed, join(output, 'installed', config.baseline.archive));
+    await rm(installed);
+  }
+  owned = false;
+}
+async function closeSender() {
+  if (app) {
+    const closing = app;
+    app = null;
+    await closeTestApp(closing);
+  }
+}
+async function launchSender() {
+  app = await electron.launch({
+    executablePath: executable,
+    args: ['--disable-gpu', '--disable-software-rasterizer'],
+    env,
+    timeout: 60000,
+  });
+  app.on('console', (message) => console.log('[sender]', message.text()));
+  page = await app.firstWindow();
+  page.setDefaultTimeout(60000);
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.getByRole('heading', { name: 'GLEECH.', exact: true }).waitFor();
+  const runtime = await app.evaluate(({ app }) => ({
+    version: app.getVersion(),
+    profile: app.getPath('userData'),
+    packaged: app.isPackaged,
+    args: process.argv,
+    platform: process.platform,
+    arch: process.arch,
+  }));
+  assert.equal(runtime.version, '0.2.0');
+  assert.equal(runtime.packaged, true);
+  assert.equal(runtime.platform + '-' + runtime.arch, key);
+  assert.ok(!runtime.args.includes('--smoke-test'));
+  if (profile) assert.equal(runtime.profile, profile);
+  else profile = runtime.profile;
+  await app.evaluate(installUpdateRouting, routing);
+  const init = await page.evaluate(async () => ({
+    preference: await window.gleech.setAutomaticUpdates(false),
+    notes: await window.gleech.acknowledgeReleaseNotes('0.2.0'),
+    state: await window.gleech.updateState(),
+  }));
+  assert.equal(init.preference.ok, true);
+  assert.equal(init.notes.ok, true);
+  assert.equal(init.state.value.installMode, process.platform === 'darwin' ? 'finder' : 'native');
+  await page.getByRole('dialog', { name: /What’s new/ }).waitFor({ state: 'hidden' });
+  report.senderRuntime = runtime;
+}
+async function cli(args) {
+  if (process.platform !== 'linux')
+    return run(executable, ['--require', cliHook, join(resources, 'cli/gleech.cjs'), ...args], {
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+      shell: false,
+      windowsHide: true,
+      timeout: 240000,
+      maxBuffer: 8e6,
+    });
+  assert.ok(!/\s/.test(cliHook), 'Use the ordinary hosted workspace path for the preload.');
+  return new Promise((accept, reject) => {
+    const child = spawn(installed, ['--cli', ...args], {
+      env: { ...env, NODE_OPTIONS: '--require=' + cliHook, GLEECH_CLI_RESTORE_STDOUT: '1' },
+      stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
+      timeout: 240000,
+    });
+    let stdout = '',
+      stderr = '';
+    child.stdio[3].on('data', (data) => (stdout += data));
+    child.stderr.on('data', (data) => (stderr += data));
+    child.once('error', reject);
+    child.once('close', (code) => {
+      if (code === 0) accept({ stdout, stderr });
+      else {
+        const error = new Error(stderr);
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+      }
+    });
+  });
+}
+const getState = () => page.evaluate(async () => (await window.gleech.updateState()).value);
+const discover = () => page.evaluate(async () => (await window.gleech.checkForUpdates()).value);
+async function choose(kind, path) {
+  await app.evaluate(
+    ({ dialog }, { kind, path }) => {
+      if (kind === 'open')
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+      else dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
+    },
+    { kind, path },
+  );
+}
+async function settle() {
+  await page.waitForFunction(
+    () => {
+      const data = document.querySelector('.image-layer')?.dataset;
+      return (
+        data &&
+        data.renderRevision === data.requestedRevision &&
+        !document.querySelector('.detail-loading')
+      );
+    },
+    undefined,
+    { timeout: 120000 },
+  );
+}
+async function recipe() {
+  await settle();
+  return page.locator('.image-layer').evaluate((element) => ({
+    effects: JSON.parse(element.dataset.renderRecipe),
+    seed: Number(element.dataset.renderSeed),
+  }));
+}
+const sharp = createRequire(join(root, 'apps/desktop/package.json'))('sharp');
+async function exportPixels(name, sender = true) {
+  const path = join(artwork, name);
+  if (sender) await choose('save', path);
+  else throw new Error('Use the CLI to validate receiver pixels after saving.');
+  await fileAction(page, 'Quick PNG Export Ctrl+Shift+E');
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'Exported ' + name })
+    .waitFor();
+  return sharp(path).ensureAlpha().raw().toBuffer();
+}
+const original = join(artwork, 'working-project.gleech');
+let savedHash, expectedRecipe, expectedPixels, timecode, presetId;
+async function checkpointObserver() {
+  const folder = join(profile, 'update-recovery');
+  await mkdir(folder, { recursive: true });
+  let watching, timer;
+  const result = new Promise((accept, reject) => {
+    let reading = false;
+    const read = async () => {
+      if (reading) return;
+      reading = true;
+      try {
+        const session = await load(join(folder, 'session.json'));
+        assert.match(session.id, /^[a-f0-9-]{36}$/);
+        await copyFile(
+          join(folder, session.id + '.gleech'),
+          join(artwork, 'update-checkpoint.gleech'),
+        );
+        await writeFile(join(output, 'checkpoint.json'), JSON.stringify(session, null, 2) + '\n');
+        watching.close();
+        clearTimeout(timer);
+        accept(session);
+      } catch (error) {
+        reading = false;
+        if (error.code !== 'ENOENT') reject(error);
+      }
+    };
+    watching = watch(folder, () => {
+      void read();
+    });
+    timer = setTimeout(() => {
+      watching.close();
+      reject(new Error('The real update did not save a checkpoint.'));
+    }, 120000);
+  });
+  return {
+    result,
+    stop() {
+      watching.close();
+      clearTimeout(timer);
+    },
+  };
+}
+async function manualMacReplacement() {
+  const handoff = await poll(
+    async () => ((await exists(config.revealFile)) ? load(config.revealFile) : null),
+    'Finder handoff was not recorded.',
+  );
+  assert.equal(basename(handoff.path), config.payload.archive);
+  assert.equal(await sha(handoff.path), config.payload.sha256);
+  assert.equal((await lstat(installed)).isSymbolicLink(), false);
+  await rm('/Applications/GLEECH.app', { recursive: true });
+  const expanded = join(output, 'receiver-expanded');
+  if (!(await exists(expanded))) await command('ditto', ['-x', '-k', handoff.path, expanded]);
+  await command('ditto', [join(expanded, 'GLEECH.app'), installed]);
+  const child = spawn(executable, [], { env, stdio: 'ignore', detached: true });
+  child.unref();
+  report.finderHandoff = handoff;
+}
+async function attachReceiver() {
+  receiver = await poll(
+    async () => ((await exists(config.receiverFile)) ? load(config.receiverFile) : null),
+    'The installed receiver did not start.',
+    180000,
+  );
+  assert.equal(receiver.version, '0.2.1');
+  assert.equal(receiver.packaged, true);
+  assert.equal(receiver.profile, profile);
+  if (process.platform === 'linux') {
+    assert.equal(receiver.appImage, installed);
+    assert.equal(await sha(installed), config.payload.sha256);
+  }
+  browser = await poll(async () => {
+    try {
+      return await chromium.connectOverCDP(`http://127.0.0.1:${config.receiverPort}`, {
+        timeout: 2000,
+      });
+    } catch {
+      return null;
+    }
+  }, 'Receiver inspection port did not open.');
+  page = await poll(
+    () => browser.contexts()[0]?.pages()[0],
+    'The installed receiver has no desktop window.',
+  );
+  page.setDefaultTimeout(60000);
+  await page.getByRole('heading', { name: 'GLEECH.', exact: true }).waitFor();
+  const notes = page.getByRole('dialog', { name: 'What’s new in GLEECH 0.2.1', exact: true });
+  await notes.getByText('Private updater acceptance fixture notes.', { exact: true }).waitFor();
+  await notes.getByRole('button', { name: 'Let’s create', exact: true }).click();
+  const result = await page.evaluate(async () => ({
+    preference: await window.gleech.setAutomaticUpdates(false),
+    state: await window.gleech.updateState(),
+  }));
+  assert.equal(result.preference.ok, true);
+  assert.equal(result.state.value.currentVersion, '0.2.1');
+  return receiver;
+}
+try {
+  await check('published-0.2.0-installed-with-real-updater-enabled', async () => {
+    await installBase();
+    await launchSender();
+  });
+  await check('desktop-rejects-draft-older-current-wrong-arch-and-missing-metadata', async () => {
+    for (const kind of ['draft', 'older', 'same', 'wrong-arch', 'missing-manifest']) {
+      fixture.state.kind = kind;
+      const state = await discover();
+      assert.equal(state.phase, 'idle', kind);
+      assert.equal(state.release, null, kind);
+      assert.equal(state.error, null);
+    }
+    fixture.state.kind = 'valid';
+  });
+  if (process.platform !== 'darwin')
+    await check('native-manifest-mismatch-is-rejected-before-download', async () => {
+      fixture.state.kind = 'invalid-manifest';
+      const state = await discover();
+      assert.equal(state.phase, 'error');
+      assert.match(state.error, /manifest does not match/);
+      fixture.state.kind = 'valid';
+    });
+  await check('real-cli-discovers-update-and-refuses-install-while-desktop-is-open', async () => {
+    const value = JSON.parse((await cli(['update', '--check', '--json'])).stdout);
+    assert.equal(value.currentVersion, '0.2.0');
+    assert.equal(value.version, '0.2.1');
+    assert.equal(value.available, true);
+    await assert.rejects(cli(['update', '--yes']), (error) =>
+      /Save and close the GLEECH desktop/.test(error.stderr ?? error.message),
+    );
+    assert.equal((await getState()).currentVersion, '0.2.0');
+  });
+  await check('automatic-download-can-be-disabled-and-cancelled', async () => {
+    fixture.state.slow = true;
+    const enabled = await page.evaluate(() => window.gleech.setAutomaticUpdates(true));
+    assert.equal(enabled.ok, true);
+    await page.waitForFunction(
+      async () => {
+        const state = (await window.gleech.updateState()).value;
+        return state.phase === 'downloading' && state.progress.transferred > 0;
+      },
+      undefined,
+      { timeout: 120000 },
+    );
+    const disabled = await page.evaluate(() => window.gleech.setAutomaticUpdates(false));
+    assert.equal(disabled.ok, true);
+    await page.waitForFunction(
+      async () => {
+        const state = (await window.gleech.updateState()).value;
+        return state.phase === 'available' && !state.automatic && state.error === null;
+      },
+      undefined,
+      { timeout: 120000 },
+    );
+    fixture.state.slow = false;
+  });
+  await check('bad-github-digest-is-rejected-without-installing', async () => {
+    fixture.state.badDigest = true;
+    assert.equal((await discover()).phase, 'available');
+    const downloaded = await page.evaluate(
+      async () => (await window.gleech.downloadUpdate()).value,
+    );
+    assert.equal(downloaded.phase, 'error');
+    assert.match(downloaded.error, /integrity check/);
+    assert.equal((await getState()).currentVersion, '0.2.0');
+    assert.equal(await exists(config.receiverFile), false);
+    fixture.state.badDigest = false;
+  });
+  await check('retry-download-verifies-real-native-payload', async () => {
+    assert.equal((await discover()).phase, 'available');
+    const state = await page.evaluate(async () => (await window.gleech.downloadUpdate()).value);
+    assert.equal(state.phase, 'ready', JSON.stringify(state));
+    assert.equal(state.progress.percent, 100);
+    assert.equal(state.release.sha256, config.payload.sha256);
+    assert.ok(fixture.state.bytesServed >= config.payload.bytes);
+  });
+  await check('notification-dismissal-preserves-settings-install-access', async () => {
+    await page.evaluate(() => window.gleech.setAutomaticUpdates(true));
+    const notice = page.getByRole('status', { name: 'Software update' });
+    await notice.waitFor();
+    await notice.getByRole('button', { name: 'Dismiss update notification' }).click();
+    await notice.waitFor({ state: 'hidden' });
+    assert.equal((await getState()).dismissedVersion, '0.2.1');
+  });
+  await check('real-unsaved-project-and-timeline-prepared-for-update', async () => {
+    const input = join(artwork, 'input.png');
+    const pixels = Buffer.alloc(97 * 65 * 4);
+    for (let i = 0; i < pixels.length; i += 4)
+      pixels.set([(i * 13) % 256, (i * 17 + 41) % 256, (i * 23 + 87) % 256, 255], i);
+    await sharp(pixels, { raw: { width: 97, height: 65, channels: 4 } })
+      .png()
+      .toFile(input);
+    await choose('open', input);
+    await fileAction(page, 'Open image Ctrl+Shift+O');
+    await settle();
+    await page.getByRole('button', { name: /Add effect/ }).click();
+    await page
+      .locator('.effect-picker')
+      .getByRole('button', { name: 'RGB split', exact: true })
+      .click();
+    await choose('save', original);
+    await fileAction(page, 'Save project Ctrl+S');
+    await page
+      .getByRole('status')
+      .filter({ hasText: 'Saved ' + basename(original) })
+      .waitFor();
+    savedHash = await sha(original);
+    await page.getByRole('spinbutton', { name: 'Master seed' }).fill('8172');
+    await page.getByRole('tab', { name: 'Timeline', exact: true }).click();
+    await page.locator('.timeline-dock').waitFor();
+    expectedRecipe = await recipe();
+    expectedPixels = await exportPixels('unsaved-before-update.png');
+    timecode = await page.locator('.timecode').textContent();
+    const thumbnail =
+      'data:image/png;base64,' +
+      (
+        await sharp({ create: { width: 16, height: 16, channels: 4, background: '#80baff' } })
+          .png()
+          .toBuffer()
+      ).toString('base64');
+    const stored = await page.evaluate(
+      ({ recipe, thumbnail }) =>
+        window.gleech.storePreset(
+          { masterSeed: recipe.seed, effects: recipe.effects },
+          'Updater acceptance preset',
+          thumbnail,
+          'image',
+        ),
+      { recipe: expectedRecipe, thumbnail },
+    );
+    assert.equal(stored.ok, true);
+    presetId = stored.value.id;
+    await page.evaluate(() => localStorage.setItem('gleech.ui.color', '#80baff'));
+    await writeFile(join(profile, 'keep-updater-profile.txt'), 'preserve updater profile\n');
+    assert.ok((await page.title()).startsWith('•'));
+    report.defaultUserData = profile;
+  });
+  await check('desktop-installs-through-real-engine-and-saves-recovery-checkpoint', async () => {
+    const observer = await checkpointObserver();
+    try {
+      const closed = app.waitForEvent('close', { timeout: 180000 });
+      await fileAction(page, 'Settings');
+      const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+      await settings.getByRole('button', { name: 'Install & Update', exact: true }).click();
+      const checkpoint = await observer.result;
+      assert.equal(checkpoint.dirty, true);
+      assert.equal(checkpoint.documentPath, original);
+      assert.equal(checkpoint.mode, 'timeline');
+      report.checkpoint = checkpoint;
+      await closed;
+      app = null;
+      assert.equal(await sha(original), savedHash);
+      if (process.platform === 'darwin') await manualMacReplacement();
+      report.desktopReceiver = await attachReceiver();
+    } finally {
+      observer.stop();
+    }
+  });
+  await check('new-version-restores-unsaved-timeline-and-original-save-binding', async () => {
+    await page.locator('.timeline-dock').waitFor();
+    assert.equal(await page.locator('.timecode').textContent(), timecode);
+    assert.deepEqual(await recipe(), expectedRecipe);
+    assert.ok((await page.title()).startsWith('•'));
+    assert.equal(await sha(original), savedHash);
+    const values = await page.evaluate(async () => ({
+      color: localStorage.getItem('gleech.ui.color'),
+      presets: await window.gleech.listPresets(),
+    }));
+    assert.equal(values.color, '#80baff');
+    assert.ok(values.presets.value.some((p) => p.id === presetId));
+    await assert.rejects(access(join(profile, 'update-recovery/session.json')), { code: 'ENOENT' });
+    await fileAction(page, 'Save project Ctrl+S');
+    await page
+      .getByRole('status')
+      .filter({ hasText: 'Saved ' + basename(original) })
+      .waitFor();
+    assert.notEqual(await sha(original), savedHash);
+    report.projectProof = {
+      originalSavedSHA256: savedHash,
+      savedAfterRestoreSHA256: await sha(original),
+      checkpointSHA256: await sha(join(artwork, 'update-checkpoint.gleech')),
+      restoredPixelSHA256: createHash('sha256').update(expectedPixels).digest('hex'),
+      presetId,
+    };
+    await page.screenshot({ path: join(output, 'desktop-recovered.png') });
+    const same = await discover();
+    assert.equal(same.phase, 'idle');
+    assert.equal(same.release, null);
+    await copyFile(config.receiverFile, join(output, 'receiver-desktop.json'));
+    await stopReceiver();
+    const cliImage = join(artwork, 'receiver-cli.png');
+    await cli(['render', original, '--renderer', 'cpu', '-o', cliImage]);
+    assert.ok((await sharp(cliImage).ensureAlpha().raw().toBuffer()).equals(expectedPixels));
+  });
+  await check('real-cli-installs-after-its-own-exit-without-premature-relaunch', async () => {
+    await removeInstallation();
+    await rm(config.receiverFile, { force: true });
+    await rm(config.revealFile, { force: true });
+    await installBase();
+    await writeFile(
+      join(profile, 'updates.json'),
+      JSON.stringify({
+        automatic: false,
+        dismissedVersion: null,
+        lastSeenVersion: '0.2.0',
+        pendingNotes: null,
+      }),
+    );
+    assert.equal((await cli(['--version'])).stdout.trim(), '0.2.0');
+    const result = await cli(['update', '--yes']);
+    assert.match(result.stdout, /Download verified/);
+    assert.match(result.stderr, /Downloading and verifying GLEECH 0.2.1/);
+    if (process.platform === 'darwin') await manualMacReplacement();
+    else {
+      await poll(async () => {
+        try {
+          return (await cli(['--version'])).stdout.trim() === '0.2.1';
+        } catch {
+          return false;
+        }
+      }, 'The real CLI updater did not install 0.2.1.');
+      assert.equal(
+        await exists(config.receiverFile),
+        false,
+        'Terminal install must not unexpectedly open the desktop.',
+      );
+      const child = spawn(executable, [], { env, stdio: 'ignore', detached: true });
+      child.unref();
+    }
+    report.terminalReceiver = await attachReceiver();
+    assert.equal((await cli(['--version'])).stdout.trim(), '0.2.1');
+    await copyFile(config.receiverFile, join(output, 'receiver-terminal.json'));
+    await page.screenshot({ path: join(output, 'terminal-installed.png') });
+    await stopReceiver();
+  });
+  assert.deepEqual(errors, []);
+  report.complete = true;
+} catch (error) {
+  report.error = String(error.stack ?? error);
+  process.exitCode = 1;
+  try {
+    if (page && !page.isClosed())
+      await page.screenshot({ path: join(output, 'failure.png'), timeout: 5000 });
+  } catch {
+    /* Preserve the original failure. */
+  }
+} finally {
+  try {
+    await closeSender();
+    await stopReceiver();
+    await removeInstallation();
+    if (profile && (await exists(join(profile, 'keep-updater-profile.txt'))))
+      assert.equal(
+        await readFile(join(profile, 'keep-updater-profile.txt'), 'utf8'),
+        'preserve updater profile\n',
+      );
+    report.cleanup = 'passed';
+  } catch (error) {
+    report.cleanupError = String(error.stack ?? error);
+    report.complete = false;
+    process.exitCode = 1;
+  }
+  report.transport = { requests: fixture.state.requests, bytesServed: fixture.state.bytesServed };
+  await fixture.close();
+  report.finishedAt = new Date().toISOString();
+  await save();
+}
+console.log(
+  JSON.stringify({
+    target: key,
+    passed: report.complete,
+    checks: report.checks.length,
+    cleanup: report.cleanup,
+  }),
+);
