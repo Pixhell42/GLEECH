@@ -77,6 +77,8 @@ test('Linux artifact upload requires native, advisory, code, actual AppImage and
     'node tooling/cli-check.mjs',
     'node tooling/cli-launcher-check.mjs',
     'node tooling/appimage-check.mjs',
+    'node tooling/timeline-check.mjs',
+    'node tooling/timeline-media-check.mjs',
   ]) {
     const index = steps.findIndex((step) => step.run?.includes(command));
     assert.ok(index >= 0 && index < upload, command);
@@ -88,6 +90,27 @@ test('Linux artifact upload requires native, advisory, code, actual AppImage and
   assert.ok(appimage.run.includes('mcp-check.mjs "$GLEECH_APPIMAGE" --cpu'));
   const native = steps.findIndex((step) => step.run?.includes('process.arch'));
   assert.ok(native < steps.findIndex((step) => step.run?.includes('pnpm install')));
+});
+
+test('Linux timeline checks exercise the actual AppImage with codecs on source changes', () => {
+  const step = workflow.jobs.build.steps.find(
+    (entry) => entry.name === 'Test actual AppImage timeline and media',
+  );
+  assert.equal(step.env.APPIMAGE_EXTRACT_AND_RUN, '1');
+  assert.equal(step.env.GLEECH_APPIMAGE, '${{ steps.package.outputs.appimage }}');
+  for (const name of ['timeline', 'timeline-media'])
+    assert.ok(
+      step.run.includes(
+        `xvfb-run -a node tooling/${name}-check.mjs "$GLEECH_APPIMAGE" --cpu --require-ffmpeg`,
+      ),
+    );
+  for (const path of [
+    'apps/desktop/src/**',
+    'packages/*/src/**',
+    'tooling/timeline-*.mjs',
+    'tooling/file-action.mjs',
+  ])
+    assert.ok(workflow.on.pull_request.paths.includes(path), `Missing native coverage for ${path}`);
 });
 
 test('Linux CI keeps tokens read-only, actions pinned and uploads only reviewed deliverables', () => {

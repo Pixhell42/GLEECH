@@ -14,6 +14,12 @@ on:
       - tooling/update-package-*.mjs
       - .github/workflows/linux.yml
       - apps/desktop/electron-builder.yml
+      - packages/*/src/**
+      - tooling/timeline-*.mjs
+      - tooling/file-action.mjs
+      - tooling/test-electron.mjs
+      - tooling/capture-test-window.mjs
+      - tooling/close-test-app.mjs
       - apps/desktop/package.json
       - apps/desktop/src/main/mcp*.ts
       - apps/desktop/src/main/feedback-auth-store*.ts
@@ -106,6 +112,13 @@ jobs:
           xvfb-run -a node tooling/mcp-check.mjs "$GLEECH_APPIMAGE" --cpu
           xvfb-run -a node tooling/appimage-check.mjs "$GLEECH_APPIMAGE"
           node tooling/cli-launcher-check.mjs "$GLEECH_APPIMAGE"
+      - name: Test actual AppImage timeline and media
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          GLEECH_APPIMAGE: ${{ steps.package.outputs.appimage }}
+        run: |
+          xvfb-run -a node tooling/timeline-check.mjs "$GLEECH_APPIMAGE" --cpu --require-ffmpeg
+          xvfb-run -a node tooling/timeline-media-check.mjs "$GLEECH_APPIMAGE" --cpu --require-ffmpeg
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gleech-linux-omarchy-alpha-x64-${{ github.sha }}

@@ -123,6 +123,28 @@ node tooling/mcp-clients-check.mjs "$gleech_executable"
 Tests use isolated app profiles under `test-results/`. GPU and CPU results are
 separate; successful packaging alone does not verify rendering or MCP.
 
+### Timeline and media
+
+Both native architecture jobs run the complete desktop timeline and media suites
+against the packaged app before uploading its ZIP. They cover keyframe editing
+and undo, curves, Command shortcuts and wheel zoom, playback, seeded animation,
+In/Out ranges, GIF/MP4 and PNG sequence exports, video/audio import, audio-driven
+controls, clip frame extraction, project reload and media paths with spaces and
+Unicode. FFmpeg is required: missing codecs fail these native checks.
+
+```sh
+# CPU fallback, also used by the hosted native jobs:
+node tooling/timeline-check.mjs "$gleech_executable" --cpu --require-ffmpeg
+node tooling/timeline-media-check.mjs "$gleech_executable" --cpu --require-ffmpeg
+# In a graphical session on a physical Mac, require WebGPU explicitly:
+node tooling/timeline-check.mjs "$gleech_executable" --require-webgpu --require-ffmpeg
+node tooling/timeline-media-check.mjs "$gleech_executable" --require-webgpu --require-ffmpeg
+```
+
+The checks record their native architecture, packaged runtime and rendering
+backend. `--require-webgpu` fails on CPU fallback; hosted CPU results do not
+qualify a physical Mac's GPU. Mac shortcuts use Command in the editor and menus.
+
 Validated on an Intel Xeon W-3245 Mac Pro with macOS 26.6.2 on 2026-10-15:
 native x86_64 packaging, packaged smoke, image import/effects/clipboard/lossless
 export on AMD WebGPU and forced CPU, GPU device-loss recovery, all 62 MCP tools
