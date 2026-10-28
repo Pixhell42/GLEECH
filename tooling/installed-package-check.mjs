@@ -3,7 +3,6 @@ import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { access, chmod, copyFile, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { _electron as electron } from './test-electron.mjs';
@@ -32,7 +31,7 @@ const installed =
     ? '/Applications/GLEECH.app'
     : process.platform === 'win32'
       ? join(output, 'installed', 'GLEECH')
-      : join(homedir(), 'Applications', target.archive);
+      : join(output, 'installed', target.archive);
 const executable =
   process.platform === 'darwin'
     ? join(installed, 'Contents/MacOS/GLEECH')
