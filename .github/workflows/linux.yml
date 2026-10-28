@@ -12,6 +12,8 @@ on:
       - tooling/terminal-updates-check.mjs
       - tooling/render-memory-check.mjs
       - tooling/update-package-*.mjs
+      - tooling/runtime-security*/**
+      - tooling/runtime-security-check.mjs
       - .github/workflows/linux.yml
       - apps/desktop/electron-builder.yml
       - packages/*/src/**
@@ -91,6 +93,7 @@ jobs:
         run: pnpm check
       - name: Test unpacked image rendering and MCP clients
         run: |
+          node tooling/runtime-security-check.mjs apps/desktop/release/linux-unpacked/gleech-bin
           node tooling/update-package-check.mjs apps/desktop/release/linux-unpacked/resources apps/desktop/release
           xvfb-run -a node tooling/image-check.mjs apps/desktop/release/linux-unpacked/gleech --cpu
           xvfb-run -a node tooling/ffmpeg-check.mjs apps/desktop/release/linux-unpacked/gleech-bin

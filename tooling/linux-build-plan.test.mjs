@@ -113,6 +113,17 @@ test('Linux timeline checks exercise the actual AppImage with codecs on source c
     assert.ok(workflow.on.pull_request.paths.includes(path), `Missing native coverage for ${path}`);
 });
 
+test('Linux CI checks the packaged runtime before uploading deliverables', () => {
+  const steps = workflow.jobs.build.steps;
+  const probe = steps.findIndex((step) =>
+    step.run?.includes(
+      'node tooling/runtime-security-check.mjs apps/desktop/release/linux-unpacked/gleech-bin',
+    ),
+  );
+  const upload = steps.findIndex((step) => step.uses?.startsWith('actions/upload-artifact@'));
+  assert.ok(probe >= 0 && probe < upload);
+});
+
 test('Linux CI keeps tokens read-only, actions pinned and uploads only reviewed deliverables', () => {
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.equal(workflow.jobs.build.permissions, undefined);

@@ -140,6 +140,7 @@ test('Mac upload follows advisory, native package and runtime checks', () => {
     'pnpm dist:mac',
     'node tooling/mac-package-check.mjs',
     'node tooling/smoke.mjs',
+    'node tooling/runtime-security-check.mjs',
     'node tooling/image-check.mjs',
     'node tooling/mcp-check.mjs',
     'node tooling/mcp-clients-check.mjs',
