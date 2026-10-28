@@ -40,8 +40,14 @@ const resources =
       : null;
 const stable =
   process.platform === 'win32'
-    ? join(process.env.LOCALAPPDATA, 'GLEECH/bin/gleech.cmd')
+    ? join(homedir(), 'AppData/Local/GLEECH/bin/gleech.cmd')
     : join(homedir(), '.local/bin/gleech');
+if (process.platform === 'win32')
+  assert.equal(
+    resolve(process.env.LOCALAPPDATA ?? ''),
+    join(homedir(), 'AppData/Local'),
+    'The default-profile test requires the native user LocalAppData location.',
+  );
 const env = { ...process.env, GLEECH_NO_UPDATE_NOTIFIER: '1', SHELL: '/bin/bash', NO_COLOR: '1' };
 for (const name of [
   'ELECTRON_RUN_AS_NODE',
