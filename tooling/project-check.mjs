@@ -141,6 +141,7 @@ try {
   await chooseOpen(imagePath);
   await fileAction(page, 'Open image Ctrl+Shift+O');
   await status('Opened original.png');
+  console.log('Project acceptance: imported image');
   await page.getByRole('tab', { name: 'Image details', exact: true }).click();
   assert.ok(await page.getByRole('tabpanel', { name: 'Image details', exact: true }).isVisible());
   assert.ok((await page.locator('.image-info').innerText()).includes('257 × 129'));
@@ -194,6 +195,7 @@ try {
   await fileAction(page, 'Save project Ctrl+S');
   await status(`Saved ${basename(projectPath)}`);
   assert.ok((await readFile(projectPath)).subarray(0, 8).equals(Buffer.from('GLEECH02')));
+  console.log('Project acceptance: saved project and exported rendered pixels');
   assert.ok(!(await page.title()).startsWith('•'));
   await page.getByRole('slider', { name: 'Coverage', exact: true }).fill('0.25');
   await settle();
@@ -232,7 +234,8 @@ try {
   assert.ok((await readFile(copyPath)).equals(beforeFailure));
   await page.getByRole('button', { name: 'Dismiss error' }).click();
   assert.equal((await readdir(output)).filter((name) => name.endsWith('.tmp')).length, 0);
-  await app.close();
+  console.log('Project acceptance: restarting installed application');
+  await closeTestApp(app);
   app = await launch();
   page = await app.firstWindow();
   await configure();
@@ -270,6 +273,7 @@ try {
   );
   await page.getByRole('button', { name: 'About Softness', exact: true }).hover();
   await captureTestWindow(app, resolve(output, `${label}-compact.png`));
+  console.log('Project acceptance: restart, original pixels and compact window verified');
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify(

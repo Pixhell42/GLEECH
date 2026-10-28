@@ -122,7 +122,9 @@ async function check(name, fn) {
 async function subprocess(name, file, args) {
   await check(name, async () => {
     try {
-      const pending = command(file, args, { timeout: 900000 });
+      const pending = command(file, args, {
+        timeout: name === 'installed-local-mcp-and-shader-workflows' ? 600000 : 180000,
+      });
       pending.child.stdout.on('data', (chunk) => process.stdout.write(chunk));
       pending.child.stderr.on('data', (chunk) => process.stderr.write(chunk));
       const result = await pending;

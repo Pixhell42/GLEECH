@@ -8,6 +8,7 @@ import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { installTestIOTracing } from './test-io-tracing.mjs';
 import { recordDesktopFailure } from './record-desktop-failure.mjs';
+import { captureTestWindow } from './capture-test-window.mjs';
 import { renderEffects } from './effects-reference.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -272,12 +273,7 @@ try {
   }
   await page.mouse.move(1, 1);
   await frame();
-  const screenshot = await app.evaluate(async ({ BrowserWindow }) =>
-    (await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayAwake: true }))
-      .toPNG()
-      .toString('base64'),
-  );
-  await writeFile(resolve(output, `${label}-library.png`), Buffer.from(screenshot, 'base64'));
+  await captureTestWindow(app, resolve(output, `${label}-library.png`));
   await page.getByRole('button', { name: 'Apply Portable gold', exact: true }).click();
   await page
     .locator('.preset-flyout')
