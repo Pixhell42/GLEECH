@@ -27,6 +27,31 @@ notifications. **Check for updates now** remains available in installed builds;
 manual downloads and installation still work. Dismissing a notification hides
 that version while leaving it accessible in Settings.
 
+## Upgrading from 0.1.2
+
+0.1.2 does not contain the built-in desktop or terminal updater. Its first upgrade
+to 0.2.0 is manual; publishing update metadata cannot add the missing updater to
+an already installed 0.1.2 binary. The automatic-update behavior described here
+starts with 0.2.0.
+
+Save your work and close GLEECH and its terminal tools, then download the matching
+0.2.0 package from the [release pages](RELEASE-0.2.0.md).
+
+- **Windows:** run the new NSIS installer over the existing per-user installation
+  at the same location. An uninstall is not needed for this upgrade.
+- **macOS:** extract the correct Intel or Apple Silicon ZIP and replace the old
+  `GLEECH.app` at its existing location in Applications. Keep the same app path.
+- **Linux:** replace the old AppImage's contents at its existing path and make it
+  executable. Keeping the old filename is supported, even if it includes `0.1.2`;
+  the running version will be 0.2.0. Without FUSE, retain the documented
+  `APPIMAGE_EXTRACT_AND_RUN=1` launch option.
+
+Keep the existing user-data folder, projects and source media. Existing terminal
+launchers point at the app's location: retaining that path avoids reinstalling
+the command. If you instead move or rename the app/AppImage, rerun `install-cli`
+from its new location and update any MCP client command paths you configured.
+See [terminal setup](CLI.md) for the platform commands.
+
 ## Platform behavior
 
 - **Windows:** installed per-user NSIS builds update through electron-updater,
@@ -78,9 +103,10 @@ Update `shared/release-notes.ts` with each release for offline/manual installs.
 
 ## Publishing requirements
 
-This feature branch does not publish releases or alter the staged 0.2.0 candidates.
-Packaging commands explicitly use `--publish never`. The existing Electron security
-publication hold remains in effect.
+0.2.0 is published with the disclosed, maintainer-accepted BoringSSL exception;
+see the [release notes](RELEASE-0.2.0.md#known-security-issue). Future releases still
+require their own review and final publication approval. Packaging commands
+explicitly use `--publish never`; building does not publish a release.
 
 Each platform's release must attach the binary and its generated update manifest:
 
