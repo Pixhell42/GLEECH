@@ -12,6 +12,8 @@ on:
       - tooling/terminal-updates-check.mjs
       - tooling/render-memory-check.mjs
       - tooling/update-package-*.mjs
+      - tooling/runtime-security*/**
+      - tooling/runtime-security-check.mjs
       - .github/workflows/macos.yml
       - apps/desktop/electron-builder.yml
       - packages/*/src/**
@@ -95,6 +97,7 @@ jobs:
           GLEECH_MAC_APP: ${{ matrix.app }}
         run: |
           gleech_executable="$GLEECH_MAC_APP/Contents/MacOS/GLEECH"
+          node tooling/runtime-security-check.mjs "$gleech_executable"
           node tooling/ffmpeg-package-check.mjs "$GLEECH_MAC_APP/Contents/Resources"
           node tooling/update-package-check.mjs "$GLEECH_MAC_APP/Contents/Resources" apps/desktop/release
           node tooling/ffmpeg-check.mjs "$gleech_executable"

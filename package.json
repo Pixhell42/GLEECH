@@ -30,6 +30,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "pnpm build && node tooling/smoke.mjs",
+    "test:runtime-security": "pnpm build && node tooling/runtime-security-check.mjs",
     "test:image": "pnpm build && node tooling/image-check.mjs && node tooling/image-check.mjs --cpu",
     "test:sample-image": "pnpm build && node tooling/sample-image-check.mjs && node tooling/sample-image-check.mjs --cpu",
     "test:editing": "pnpm build && node tooling/editing-check.mjs && node tooling/editing-check.mjs --cpu",
