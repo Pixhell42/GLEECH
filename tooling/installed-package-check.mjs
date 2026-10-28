@@ -106,6 +106,9 @@ if (phase === 'install') {
 }
 const save = () => writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
 async function command(file, args, options = {}) {
+  // These tools run only from ordinary CI/workspace paths. Reject shell
+  // metacharacters before invoking a program, including the Windows CMD lane.
+  if (!/^[a-zA-Z0-9_./:\\ ()-]+$/.test(file)) throw new Error('Unsupported executable path.');
   return run(file, args, { env, timeout: 180000, maxBuffer: 8e6, windowsHide: true, ...options });
 }
 async function check(name, fn) {
@@ -344,7 +347,9 @@ try {
   report.updatedAt = new Date().toISOString();
   await save();
 } catch (error) {
-  report.phases[phase] = 'failed';
+  if (phase === 'install') report.phases.install = 'failed';
+  else if (phase === 'exercise') report.phases.exercise = 'failed';
+  else report.phases.uninstall = 'failed';
   report.complete = false;
   report.error = String(error.stack ?? error);
   await save();
