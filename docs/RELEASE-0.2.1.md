@@ -1,8 +1,11 @@
-# GLEECH 0.2.1 release preparation
+# GLEECH 0.2.1
 
-Status: candidate preparation; 0.2.1 has not been published. Windows remains a
-beta and macOS/Linux remain experimental alphas. Packages are unsigned and macOS
-builds are not notarized. The published 0.2.0 packages remain unchanged.
+Published October 29, 2026 for [Windows x64](https://github.com/Pixhell42/GLEECH/releases/tag/v0.2.1),
+[macOS Apple Silicon and Intel](https://github.com/Pixhell42/GLEECH/releases/tag/macos-alpha-0.2.1),
+and [Linux x64](https://github.com/Pixhell42/GLEECH/releases/tag/linux-omarchy-alpha-0.2.1).
+Windows remains a beta and macOS/Linux remain experimental alphas. Packages are
+unsigned and macOS builds are not notarized. The published 0.2.0 packages remain
+unchanged.
 
 ## Changes
 
@@ -34,7 +37,7 @@ Save your work before installing. Preserve your user-data folder and app path.
 
 ## Known security issue
 
-The candidate retains official Electron 45.1.0 (Node 24.22.1 and Chromium
+0.2.1 uses official Electron 45.1.0 (Node 24.22.1 and Chromium
 156.0.8078.49). On October 29, 2026, the latest stable Electron still pins
 BoringSSL revision `2ea3200c3a3ec176613ab7a0b9a4ffc6db846120` and its BoringSSL
 patch list does not backport the fix for
@@ -56,28 +59,33 @@ Primary references: [Electron releases](https://github.com/electron/electron/rel
 [Chromium dependencies](https://github.com/chromium/chromium/blob/156.0.8078.49/DEPS),
 [Electron BoringSSL patches](https://github.com/electron/electron/blob/v45.1.0/patches/boringssl/.patches).
 
-## Release gates
+## Validation
 
-- Build unmodified 0.2.1 packages on Windows x64, macOS arm64/x64 and Linux x64.
-- Retain each exact package hash, generated update metadata and source inputs.
-- Run installed-package and updater acceptance against those exact candidates,
-  including the public 0.2.0 first hop and private next-version updater fixtures.
-  Private instrumented 0.2.2 receivers must never be published.
-- Review CI, source archives, native source/relinking materials, notices,
-  provenance, checksums and all architecture-specific manifests.
-- Resolve the BoringSSL hold and obtain final approval for the exact release plan
-  before creating public tags or publishing platform releases.
-- After publication, verify public downloads, asset digests and updater discovery.
+The exact published packages passed 28 installed lifecycle groups, 55 updater
+groups and six embedded-runtime probe groups per target across all four targets.
+The actual public 0.2.0 packages updated to these uninstrumented 0.2.1 candidates;
+future updates were tested with private 0.2.2 receivers that are never published.
+Workspace checks passed 2,157 unit tests and 55 tooling checks, with six and one
+expected skips respectively. Platform CI and CodeQL passed. The production
+dependency audit reports zero advisories; it does not cover the disclosed
+embedded BoringSSL issue.
 
-Hosted acceptance uses CPU rendering and file-picker fixtures. Physical Mac/Linux
-GPUs, SmartScreen/Gatekeeper prompts, notarization, Linux FUSE and Omarchy/Wayland
-require separate verification; hosted extraction-mode results do not certify them.
+All three release pages include generated update manifests, SHA-256 checksums,
+application/native sources and provenance. The Linux release also includes the
+AppImage runtime source and relinking archive. Public asset digests, download
+routes and update discovery were verified after publication.
 
-## Candidate evidence
+Hosted acceptance uses CPU rendering and file-picker fixtures. Physical GPUs,
+SmartScreen/Gatekeeper prompts, notarization, Linux FUSE and Omarchy/Wayland
+are not certified by these checks. Mac replacement is manual. First-hop native
+relaunch is observed by the owned process, followed by a test-controlled restart
+of the same installed bytes for version/profile checks.
 
-The installed-updater workflow retains uninstrumented 0.2.1 candidate packages
+## Installed-updater acceptance
+
+The installed-updater workflow retained uninstrumented 0.2.1 release packages
 separately from reports. The candidate acts as the sender for future-update
 checks; the instrumented private 0.2.2 receiver tests native installation,
 checkpoint recovery and CLI handoff. A separate first-hop check installs the
 exact public 0.2.0 package and updates to the retained 0.2.1 candidate.
-Publication must use the retained, hash-verified candidates rather than rebuilds.
+Publication used these retained, hash-verified packages without rebuilding them.
