@@ -94,6 +94,16 @@ if (mode === 'prepare-sender') {
   else verify('native-release-check.mjs', [app]);
   verify('ffmpeg-package-check.mjs', [resources]);
   verify('update-package-check.mjs', [resources, join(root, 'apps/desktop/release')]);
+  verify('runtime-security-check.mjs', [
+    join(
+      app,
+      process.platform === 'darwin'
+        ? 'Contents/MacOS/GLEECH'
+        : process.platform === 'linux'
+          ? 'gleech-bin'
+          : 'GLEECH.exe',
+    ),
+  ]);
   const path = join(output, 'sender', archive);
   await rename(join(root, 'apps/desktop/release', archive), path);
   config.baseline = { version: '0.2.1', archive, path, sha256: await hash(path) };
@@ -105,6 +115,39 @@ if (mode === 'prepare-sender') {
   const candidateDirectory = join(output, 'release-candidate');
   await mkdir(candidateDirectory, { recursive: true });
   await copyFile(path, join(candidateDirectory, archive));
+  for (const probe of await readdir(join(root, 'test-results/runtime-security'), {
+    withFileTypes: true,
+  })) {
+    if (!probe.isDirectory() || !probe.name.startsWith('probe-')) continue;
+    const report = JSON.parse(
+      await readFile(
+        join(root, 'test-results/runtime-security', probe.name, 'report.json'),
+        'utf8',
+      ),
+    );
+    assert.equal(report.passed, true);
+    assert.equal(report.versions.electron, '45.1.0');
+    await writeFile(
+      join(candidateDirectory, 'runtime-security-' + key + '.json'),
+      JSON.stringify(report, null, 2) + '\n',
+    );
+  }
+  if (process.platform === 'linux') {
+    const runtimeNotices = join(resources, 'appimage-runtime-notices');
+    const provenance = JSON.parse(await readFile(join(runtimeNotices, 'provenance.json'), 'utf8'));
+    assert.equal(
+      await hash(join(runtimeNotices, 'source-and-relink.tar.gz')),
+      provenance.relinkSHA256,
+    );
+    await copyFile(
+      join(runtimeNotices, 'source-and-relink.tar.gz'),
+      join(candidateDirectory, 'GLEECH-0.2.1-appimage-runtime-source-and-relink.tar.gz'),
+    );
+    await copyFile(
+      join(runtimeNotices, 'provenance.json'),
+      join(candidateDirectory, 'appimage-runtime-provenance.json'),
+    );
+  }
   for (const entry of await readdir(join(root, 'apps/desktop/release'), { withFileTypes: true })) {
     if (
       entry.isFile() &&
