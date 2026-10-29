@@ -223,8 +223,8 @@ async function removeInstallation() {
     await waitWindowsInstaller();
     await command(join(installed, 'Uninstall GLEECH.exe'), ['/S']);
     await poll(
-      async () => !(await exists(executable)),
-      'Uninstaller did not remove the owned installation.',
+      async () => !(await exists(installed)),
+      'Uninstaller did not remove the owned installation directory.',
     );
   } else if (process.platform === 'darwin')
     await rm('/Applications/GLEECH.app', { recursive: true });
