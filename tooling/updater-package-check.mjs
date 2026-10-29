@@ -24,6 +24,11 @@ import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';
 import { targets as publishedTargets } from './installed-acceptance-plan.mjs';
 import {
+  findImageDesktop,
+  ownedImageDescendants,
+  parseLinuxProcessStat,
+} from './linux-updater-processes.mjs';
+import {
   startUpdateFixture,
   installUpdateRouting,
   writeCliUpdateFixture,
@@ -261,6 +266,48 @@ async function waitWindowsInstaller() {
     return exists(join(installed, 'Uninstall GLEECH.exe'));
   }, 'NSIS did not finish writing the installed package and uninstaller.');
 }
+async function linuxProcesses() {
+  assert.equal(process.platform, 'linux');
+  const records = [];
+  for (const entry of await readdir('/proc')) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      const directory = '/proc/' + entry;
+      const value = await readFile(join(directory, 'stat'), 'utf8');
+      let executable = null;
+      try {
+        executable = await readlink(join(directory, 'exe'));
+      } catch (error) {
+        if (!['ENOENT', 'EACCES', 'EPERM', 'ESRCH'].includes(error.code)) throw error;
+      }
+      records.push(parseLinuxProcessStat(Number(entry), value, executable));
+    } catch (error) {
+      if (!['ENOENT', 'EACCES', 'EPERM', 'ESRCH'].includes(error.code)) throw error;
+    }
+  }
+  return records;
+}
+async function stopOwnedLinuxLaunches() {
+  if (process.platform !== 'linux' || !owned) return;
+  assert.equal(installed, join(output, 'installed', config.baseline.archive));
+  const records = await linuxProcesses();
+  const selected = ownedImageDescendants(records, installed).reverse();
+  report.linuxCleanupProcesses = selected;
+  for (const signal of ['SIGTERM', 'SIGKILL']) {
+    const current = await linuxProcesses();
+    for (const record of selected) {
+      if (!current.some((value) => value.pid === record.pid && value.start === record.start))
+        continue;
+      assert.ok(record.pid > 1 && record.pid !== process.pid);
+      try {
+        process.kill(record.pid, signal);
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+      }
+    }
+    if (signal === 'SIGTERM') await new Promise((done) => setTimeout(done, 1000));
+  }
+}
 async function candidateRelaunchPid() {
   assert.equal(owned, true);
   if (process.platform === 'win32') {
@@ -283,23 +330,15 @@ async function candidateRelaunchPid() {
     assert.ok(pids.length <= 1, 'Only one owned candidate desktop may be running.');
     return pids[0];
   }
-  assert.equal(process.platform, 'linux');
-  for (const entry of await readdir('/proc')) {
-    if (!/^\d+$/.test(entry)) continue;
-    try {
-      const directory = '/proc/' + entry;
-      const environment = (await readFile(join(directory, 'environ'), 'utf8')).split('\0');
-      if (!environment.includes('APPIMAGE=' + installed)) continue;
-      const actualExecutable = await readlink(join(directory, 'exe'));
-      if (basename(actualExecutable) !== 'gleech-bin') continue;
-      const args = (await readFile(join(directory, 'cmdline'), 'utf8')).split('\0');
-      if (args.some((arg) => arg.startsWith('--type='))) continue;
-      return Number(entry);
-    } catch (error) {
-      if (!['ENOENT', 'EACCES', 'EPERM', 'ESRCH'].includes(error.code)) throw error;
-    }
-  }
-  return null;
+  const records = await linuxProcesses();
+  report.linuxRelaunchProcesses = records.filter(
+    (record) => /gleech/i.test(record.name) || record.executable === installed,
+  );
+  // Use kernel ancestry to the exact owned image, independent of environment
+  // memory layout or renderer/helper processes sharing the executable name.
+  const desktop = findImageDesktop(records, installed);
+  if (desktop) report.candidateLinuxProcess = desktop;
+  return desktop?.pid ?? null;
 }
 async function closeSender() {
   if (app) {
@@ -1037,6 +1076,7 @@ try {
   try {
     await closeSender();
     await stopReceiver();
+    await stopOwnedLinuxLaunches();
     await removeInstallation();
     if (profile && (await exists(join(profile, 'keep-updater-profile.txt'))))
       assert.equal(

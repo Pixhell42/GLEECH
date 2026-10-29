@@ -54,7 +54,7 @@
     "native:release:check": "node tooling/native-release-check.mjs",
     "native:attribution:check": "node tooling/native-attribution-check.mjs",
     "native:source:check": "node tooling/native-source-review-check.mjs",
-    "ci:plan:test": "node --test tooling/windows-ci-plan.test.mjs tooling/mac-build-plan.test.mjs tooling/linux-build-plan.test.mjs tooling/cli-launcher.test.mjs tooling/ffmpeg-bundle.test.mjs tooling/update-package-check.test.mjs tooling/runtime-security-policy.test.mjs tooling/updater-acceptance-fixtures.test.mjs",
+    "ci:plan:test": "node --test tooling/windows-ci-plan.test.mjs tooling/mac-build-plan.test.mjs tooling/linux-build-plan.test.mjs tooling/cli-launcher.test.mjs tooling/ffmpeg-bundle.test.mjs tooling/update-package-check.test.mjs tooling/runtime-security-policy.test.mjs tooling/updater-acceptance-fixtures.test.mjs tooling/linux-updater-processes.test.mjs",
     "pack:win": "pnpm build && pnpm --filter @gleech/desktop pack:win",
     "dist:win": "pnpm build && pnpm --filter @gleech/desktop dist:win",
     "pack:mac": "pnpm build && pnpm --filter @gleech/desktop pack:mac",

@@ -9,6 +9,7 @@ on:
       - tooling/updater-package-check.mjs
       - tooling/installed-package-check.mjs
       - tooling/release-candidate-check.mjs
+      - tooling/linux-updater-processes*.mjs
       - apps/desktop/package.json
       - package.json
       - pnpm-lock.yaml
