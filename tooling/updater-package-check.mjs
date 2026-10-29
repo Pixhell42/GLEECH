@@ -3,7 +3,18 @@ import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { createReadStream, createWriteStream, watch } from 'node:fs';
-import { access, chmod, copyFile, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  chmod,
+  copyFile,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  readlink,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { Readable } from 'node:stream';
@@ -12,6 +23,11 @@ import { _electron as electron, chromium } from 'playwright';
 import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';
 import { targets as publishedTargets } from './installed-acceptance-plan.mjs';
+import {
+  findImageDesktop,
+  ownedImageDescendants,
+  parseLinuxProcessStat,
+} from './linux-updater-processes.mjs';
 import {
   startUpdateFixture,
   installUpdateRouting,
@@ -28,7 +44,7 @@ const config = JSON.parse(await readFile(join(output, 'fixture.json'), 'utf8'));
 assert.equal(config.target, key);
 assert.equal(config.privateFixtureOnly, true);
 assert.equal(config.version, '0.2.2');
-assert.equal(config.privateSenderOnly, true);
+assert.equal(config.releaseCandidateSender, true);
 const senderArchive = published.archive.replace('0.2.0', '0.2.1');
 const baselinePath = join(output, 'sender', senderArchive);
 const publishedPath = join(output, 'published', published.archive);
@@ -119,7 +135,7 @@ const report = {
   target: key,
   startedAt: new Date().toISOString(),
   publishedSenderUnmodified: false,
-  privateSenderOnly: true,
+  releaseCandidateSender: true,
   sourceInputs: config.sourceInputs,
   privateReceiverOnly: true,
   checks: [],
@@ -194,7 +210,7 @@ async function stopReceiver() {
     browser = null;
   }
   if (!receiver) return;
-  assert.equal(receiver.version, '0.2.2');
+  assert.equal(receiver.version, config.version);
   assert.equal(receiver.packaged, true);
   assert.ok(Number.isSafeInteger(receiver.pid) && receiver.pid > 1);
   if (process.platform === 'linux') assert.equal(receiver.appImage, installed);
@@ -237,18 +253,92 @@ async function removeInstallation() {
 async function waitWindowsInstaller() {
   if (process.platform !== 'win32') return;
   await poll(async () => {
-    const { stdout } = await command('tasklist.exe', [
-      '/FI',
-      'IMAGENAME eq GLEECH-0.2.2-x64-setup.exe',
-      '/FO',
-      'CSV',
-      '/NH',
-    ]);
-    return (
-      !stdout.toLowerCase().includes('gleech-0.2.2-x64-setup.exe') &&
-      (await exists(join(installed, 'Uninstall GLEECH.exe')))
-    );
+    for (const name of new Set([config.baseline.archive, config.payload.archive])) {
+      const { stdout } = await command('tasklist.exe', [
+        '/FI',
+        'IMAGENAME eq ' + name,
+        '/FO',
+        'CSV',
+        '/NH',
+      ]);
+      if (stdout.toLowerCase().includes(name.toLowerCase())) return false;
+    }
+    return exists(join(installed, 'Uninstall GLEECH.exe'));
   }, 'NSIS did not finish writing the installed package and uninstaller.');
+}
+async function linuxProcesses() {
+  assert.equal(process.platform, 'linux');
+  const records = [];
+  for (const entry of await readdir('/proc')) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      const directory = '/proc/' + entry;
+      const value = await readFile(join(directory, 'stat'), 'utf8');
+      let executable = null;
+      try {
+        executable = await readlink(join(directory, 'exe'));
+      } catch (error) {
+        if (!['ENOENT', 'EACCES', 'EPERM', 'ESRCH'].includes(error.code)) throw error;
+      }
+      records.push(parseLinuxProcessStat(Number(entry), value, executable));
+    } catch (error) {
+      if (!['ENOENT', 'EACCES', 'EPERM', 'ESRCH'].includes(error.code)) throw error;
+    }
+  }
+  return records;
+}
+async function stopOwnedLinuxLaunches() {
+  if (process.platform !== 'linux' || !owned) return;
+  assert.equal(installed, join(output, 'installed', config.baseline.archive));
+  const records = await linuxProcesses();
+  const selected = ownedImageDescendants(records, installed).reverse();
+  report.linuxCleanupProcesses = selected;
+  for (const signal of ['SIGTERM', 'SIGKILL']) {
+    const current = await linuxProcesses();
+    for (const record of selected) {
+      if (!current.some((value) => value.pid === record.pid && value.start === record.start))
+        continue;
+      assert.ok(record.pid > 1 && record.pid !== process.pid);
+      try {
+        process.kill(record.pid, signal);
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+      }
+    }
+    if (signal === 'SIGTERM') await new Promise((done) => setTimeout(done, 1000));
+  }
+}
+async function candidateRelaunchPid() {
+  assert.equal(owned, true);
+  if (process.platform === 'win32') {
+    const { stdout } = await run(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "Get-CimInstance Win32_Process -Filter \"name='GLEECH.exe'\" | Where-Object { $_.ExecutablePath -eq $env:GLEECH_ACCEPTANCE_EXECUTABLE -and $_.CommandLine -notmatch '--type=' } | ForEach-Object { $_.ProcessId }",
+      ],
+      {
+        env: { ...env, GLEECH_ACCEPTANCE_EXECUTABLE: executable },
+        windowsHide: true,
+        timeout: 15000,
+      },
+    );
+    const pids = stdout.trim().split(/\s+/).filter(Boolean).map(Number);
+    assert.ok(pids.every((pid) => Number.isSafeInteger(pid) && pid > 1));
+    assert.ok(pids.length <= 1, 'Only one owned candidate desktop may be running.');
+    return pids[0];
+  }
+  const records = await linuxProcesses();
+  report.linuxRelaunchProcesses = records.filter(
+    (record) => /gleech/i.test(record.name) || record.executable === installed,
+  );
+  // Use kernel ancestry to the exact owned image, independent of environment
+  // memory layout or renderer/helper processes sharing the executable name.
+  const desktop = findImageDesktop(records, installed);
+  if (desktop) report.candidateLinuxProcess = desktop;
+  return desktop?.pid ?? null;
 }
 async function closeSender() {
   if (app) {
@@ -378,14 +468,14 @@ async function recipe() {
 }
 const sharp = createRequire(join(root, 'apps/desktop/package.json'))('sharp');
 const asar = createRequire(join(root, 'apps/desktop/package.json'))('@electron/asar');
-async function receiverInstalled() {
+async function receiverInstalled(version = config.version, digest = config.payload.sha256) {
   // Inspect package bytes without repeatedly starting the executable while NSIS
   // is waiting for old processes to release it.
-  if (process.platform === 'linux') return (await sha(installed)) === config.payload.sha256;
+  if (process.platform === 'linux') return (await sha(installed)) === digest;
   const archive = join(resources, 'app.asar');
   asar.uncache(archive);
   const packageInfo = JSON.parse(asar.extractFile(archive, 'package.json'));
-  return packageInfo.version === config.version;
+  return packageInfo.version === version;
 }
 async function exportPixels(name, sender = true) {
   const path = join(artwork, name);
@@ -443,7 +533,7 @@ async function checkpointObserver(prefix = 'update') {
     },
   };
 }
-async function manualMacReplacement() {
+async function manualMacReplacement(start = true) {
   const handoff = await poll(
     async () => ((await exists(config.revealFile)) ? load(config.revealFile) : null),
     'Finder handoff was not recorded.',
@@ -452,11 +542,13 @@ async function manualMacReplacement() {
   assert.equal(await sha(handoff.path), config.payload.sha256);
   assert.equal((await lstat(installed)).isSymbolicLink(), false);
   await rm('/Applications/GLEECH.app', { recursive: true });
-  const expanded = join(output, 'receiver-expanded');
+  const expanded = join(output, 'receiver-expanded-' + config.version);
   if (!(await exists(expanded))) await command('ditto', ['-x', '-k', handoff.path, expanded]);
   await command('ditto', [join(expanded, 'GLEECH.app'), installed]);
-  const child = spawn(executable, [], { env, stdio: 'ignore', detached: true });
-  child.unref();
+  if (start) {
+    const child = spawn(executable, [], { env, stdio: 'ignore', detached: true });
+    child.unref();
+  }
   if (bridgeMode) report.bridgeFinderHandoff = handoff;
   else report.finderHandoff = handoff;
 }
@@ -500,7 +592,7 @@ async function attachReceiver() {
   return receiver;
 }
 try {
-  await check('private-fixed-sender-installed-with-real-updater-enabled', async () => {
+  await check('release-candidate-installed-with-real-updater-enabled', async () => {
     await installBase();
     await launchSender();
   });
@@ -880,6 +972,93 @@ try {
       observer.stop();
     }
   });
+  await check('published-0.2.0-installs-exact-0.2.1-release-candidate', async () => {
+    await removeInstallation();
+    await rm(config.revealFile, { force: true });
+    assert.equal(await sha(config.candidatePayload.path), config.baseline.sha256);
+    config.version = config.senderVersion;
+    config.payload = config.candidatePayload;
+    fixture.state.kind = 'valid';
+    bridgeMode = true;
+    await installBase();
+    await launchSender();
+    const available = await discover();
+    assert.equal(available.phase, 'available');
+    assert.equal(available.release.version, config.senderVersion);
+    const downloaded = await page.evaluate(
+      async () => (await window.gleech.downloadUpdate()).value,
+    );
+    assert.equal(downloaded.phase, 'ready');
+    const observer = await checkpointObserver('release-candidate-first-hop');
+    try {
+      const closed =
+        process.platform === 'linux' ? null : app.waitForEvent('close', { timeout: 180000 });
+      await fileAction(page, 'Settings');
+      await page
+        .getByRole('dialog', { name: 'Settings', exact: true })
+        .getByRole('button', { name: 'Install & Update', exact: true })
+        .click();
+      report.candidateFirstHopCheckpoint = await observer.result;
+      if (closed) await closed;
+      else
+        await poll(() => {
+          try {
+            process.kill(report.bridgeSenderRuntime.pid, 0);
+            return false;
+          } catch (error) {
+            if (error.code === 'ESRCH') return true;
+            throw error;
+          }
+        }, 'The published sender did not exit for the candidate.');
+      app = null;
+      if (process.platform === 'darwin') await manualMacReplacement(false);
+      await poll(
+        () => receiverInstalled(config.senderVersion, config.baseline.sha256),
+        'The exact release candidate was not installed.',
+      );
+      if (process.platform !== 'darwin') {
+        await waitWindowsInstaller();
+        const pid = await poll(
+          candidateRelaunchPid,
+          'The uninstrumented release candidate did not relaunch.',
+        );
+        report.candidateAutomaticRelaunch = {
+          pid,
+          executable,
+          appImage: process.platform === 'linux' ? installed : null,
+          observedAfterSenderExit: true,
+        };
+        // Observe the native relaunch, then restart the same bytes under Playwright
+        // for version/profile verification. No receipt code enters the candidate.
+        receiver = {
+          pid,
+          executable,
+          appImage: installed,
+          version: config.senderVersion,
+          packaged: true,
+        };
+        await stopReceiver();
+      }
+      bridgeMode = false;
+      await launchSender();
+      assert.equal((await getState()).currentVersion, config.senderVersion);
+      assert.equal((await cli(['--version'])).stdout.trim(), config.senderVersion);
+      await page.screenshot({ path: join(output, 'release-candidate-first-hop.png') });
+      report.candidateFirstHop = {
+        sourceVersion: '0.2.0',
+        sourceSHA256: published.sha256,
+        receiverVersion: config.senderVersion,
+        receiverSHA256: config.baseline.sha256,
+        receiverInstrumentation: false,
+        method: 'desktop-updater',
+        runtime: report.senderRuntime,
+        passed: true,
+      };
+      await closeSender();
+    } finally {
+      observer.stop();
+    }
+  });
   assert.deepEqual(errors, []);
   report.complete = true;
   report.unqualifiedPass = report.knownIssues.length === 0;
@@ -897,6 +1076,7 @@ try {
   try {
     await closeSender();
     await stopReceiver();
+    await stopOwnedLinuxLaunches();
     await removeInstallation();
     if (profile && (await exists(join(profile, 'keep-updater-profile.txt'))))
       assert.equal(

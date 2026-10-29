@@ -7,6 +7,12 @@ on:
       - .github/workflows/updater-acceptance.yml
       - tooling/updater-acceptance-*.mjs
       - tooling/updater-package-check.mjs
+      - tooling/installed-package-check.mjs
+      - tooling/release-candidate-check.mjs
+      - tooling/linux-updater-processes*.mjs
+      - apps/desktop/package.json
+      - package.json
+      - pnpm-lock.yaml
       - tooling/prepare-appimage-runtime.mjs
       - apps/desktop/src/**
       - apps/desktop/resources/cli/**
@@ -24,7 +30,7 @@ jobs:
   native:
     name: Updater ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -51,24 +57,49 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prepare private sender from the current application source
+      - name: Install Linux desktop prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 xvfb libgtk-3-0 libnss3 libasound2
+      - name: Prepare unmodified release candidate from the current application source
         run: node tooling/updater-acceptance-build.mjs prepare-sender
-      - name: Build private sender (publishing disabled)
+      - name: Build release candidate (publishing disabled)
         run: pnpm ${{ matrix.package }}
+      - name: Verify native package, updater metadata and embedded runtime
+        run: node tooling/release-candidate-check.mjs
       - run: node tooling/updater-acceptance-build.mjs record-sender
+      - name: Install and exercise exact release candidate
+        if: runner.os != 'Linux'
+        env:
+          GLEECH_RELEASE_CANDIDATE: '1'
+        run: |
+          node tooling/installed-package-check.mjs install
+          node tooling/installed-package-check.mjs exercise
+          node tooling/installed-package-check.mjs uninstall
+      - name: Install and exercise exact Linux release candidate
+        if: runner.os == 'Linux'
+        env:
+          GLEECH_RELEASE_CANDIDATE: '1'
+        run: |
+          node tooling/installed-package-check.mjs install
+          xvfb-run -a node tooling/installed-package-check.mjs exercise
+          node tooling/installed-package-check.mjs uninstall
       - run: node tooling/updater-acceptance-build.mjs prepare-receiver
       - name: Build private next-version receiver (publishing disabled)
         run: pnpm ${{ matrix.package }}
       - run: node tooling/updater-acceptance-build.mjs record
-      - name: Install Linux desktop prerequisites
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libfuse2 xvfb libgtk-3-0 libnss3 libasound2
       - name: Verify installed update engines and recovery
         if: runner.os != 'Linux'
         run: node tooling/updater-package-check.mjs
       - name: Verify installed AppImage update engines and recovery
         if: runner.os == 'Linux'
         run: xvfb-run -a node tooling/updater-package-check.mjs
+      - name: Retain accepted release candidate (never publish automatically)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-candidate-${{ matrix.target }}-${{ github.sha }}
+          path: test-results/builtin-updater/${{ matrix.target }}/release-candidate/*
+          if-no-files-found: error
+          retention-days: 30
       - name: Retain reports only (never publish fixture installers)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -84,5 +115,9 @@ jobs:
             test-results/builtin-updater/${{ matrix.target }}/*.png
             test-results/builtin-updater/${{ matrix.target }}/*.log
             test-results/builtin-updater/${{ matrix.target }}/artwork/*
+            test-results/release-installed-acceptance/${{ matrix.target }}/report.json
+            test-results/release-installed-acceptance/${{ matrix.target }}/*.png
+            test-results/release-installed-acceptance/${{ matrix.target }}/*.log
+            test-results/release-installed-acceptance/${{ matrix.target }}/artwork/*
           if-no-files-found: error
           retention-days: 30

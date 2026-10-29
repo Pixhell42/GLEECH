@@ -1,12 +1,9 @@
 name: Installed 0.2.0 candidate acceptance
 
 on:
+  # Historical 0.2.0 inputs are immutable. Replay at their reviewed ref only;
+  # current candidates are checked by updater-acceptance.yml.
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/installed-acceptance.yml
-      - tooling/installed-acceptance-*.mjs
-      - tooling/installed-package-check.mjs
 
 permissions:
   contents: read

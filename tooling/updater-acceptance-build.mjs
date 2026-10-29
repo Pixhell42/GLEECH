@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve, join } from 'node:path';
 import { targets } from './installed-acceptance-plan.mjs';
@@ -51,7 +51,7 @@ if (mode === 'prepare-sender') {
     sourceInputs,
     senderVersion: '0.2.1',
     version: '0.2.2',
-    privateSenderOnly: true,
+    releaseCandidateSender: true,
     privateFixtureOnly: true,
     serverPort: await unusedPort(),
     receiverPort: await unusedPort(),
@@ -61,19 +61,104 @@ if (mode === 'prepare-sender') {
   assert.notEqual(config.serverPort, config.receiverPort);
   const packagePath = join(root, 'apps/desktop/package.json');
   const packageInfo = JSON.parse(await readFile(packagePath, 'utf8'));
-  assert.equal(packageInfo.version, '0.2.0');
-  packageInfo.version = config.senderVersion;
-  await writeFile(packagePath, JSON.stringify(packageInfo, null, 2) + '\n');
+  assert.equal(packageInfo.version, config.senderVersion);
+  assert.equal(
+    execFileSync('git', ['diff', '--name-only'], { cwd: root, encoding: 'utf8' }).trim(),
+    '',
+  );
   await save(config);
-  console.log(`Current ${key} source recorded; private 0.2.1 sender prepared.`);
+  console.log(`Current ${key} source recorded; unmodified 0.2.1 release candidate prepared.`);
 } else if (mode === 'record-sender') {
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   const archive = target.archive.replace('0.2.0', '0.2.1');
+  const app = join(
+    root,
+    'apps/desktop/release',
+    process.platform === 'darwin'
+      ? process.arch === 'arm64'
+        ? 'mac-arm64/GLEECH.app'
+        : 'mac/GLEECH.app'
+      : process.platform === 'linux'
+        ? 'linux-unpacked'
+        : 'win-unpacked',
+  );
+  const resources = join(app, process.platform === 'darwin' ? 'Contents/Resources' : 'resources');
   const path = join(output, 'sender', archive);
   await rename(join(root, 'apps/desktop/release', archive), path);
   config.baseline = { version: '0.2.1', archive, path, sha256: await hash(path) };
+  config.candidatePayload = {
+    ...config.baseline,
+    bytes: (await stat(path)).size,
+    sha512: await hash(path, 'sha512', 'base64'),
+  };
+  const candidateDirectory = join(output, 'release-candidate');
+  await mkdir(candidateDirectory, { recursive: true });
+  await copyFile(path, join(candidateDirectory, archive));
+  for (const probe of await readdir(join(root, 'test-results/runtime-security'), {
+    withFileTypes: true,
+  })) {
+    if (!probe.isDirectory() || !probe.name.startsWith('probe-')) continue;
+    const report = JSON.parse(
+      await readFile(
+        join(root, 'test-results/runtime-security', probe.name, 'report.json'),
+        'utf8',
+      ),
+    );
+    assert.equal(report.passed, true);
+    assert.equal(report.versions.electron, '45.1.0');
+    await writeFile(
+      join(candidateDirectory, 'runtime-security-' + key + '.json'),
+      JSON.stringify(report, null, 2) + '\n',
+    );
+  }
+  if (process.platform === 'linux') {
+    const runtimeNotices = join(resources, 'appimage-runtime-notices');
+    const provenance = JSON.parse(await readFile(join(runtimeNotices, 'provenance.json'), 'utf8'));
+    assert.equal(
+      await hash(join(runtimeNotices, 'source-and-relink.tar.gz')),
+      provenance.relinkSHA256,
+    );
+    await copyFile(
+      join(runtimeNotices, 'source-and-relink.tar.gz'),
+      join(candidateDirectory, 'GLEECH-0.2.1-appimage-runtime-source-and-relink.tar.gz'),
+    );
+    await copyFile(
+      join(runtimeNotices, 'provenance.json'),
+      join(candidateDirectory, 'appimage-runtime-provenance.json'),
+    );
+  }
+  for (const entry of await readdir(join(root, 'apps/desktop/release'), { withFileTypes: true })) {
+    if (
+      entry.isFile() &&
+      (/^latest-(?:arm64|x64)(?:-mac|-linux)?\.yml$/.test(entry.name) ||
+        entry.name === archive + '.blockmap' ||
+        /^(?:mac|linux)-build-(?:arm64|x64)\.json$/.test(entry.name) ||
+        /^SHA256SUMS-(?:mac|linux)-(?:arm64|x64)\.txt$/.test(entry.name))
+    )
+      await copyFile(
+        join(root, 'apps/desktop/release', entry.name),
+        join(candidateDirectory, entry.name),
+      );
+  }
+  await writeFile(
+    join(candidateDirectory, 'candidate-inputs.json'),
+    JSON.stringify(
+      {
+        version: config.senderVersion,
+        target: key,
+        commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+        sourceInputs: config.sourceInputs,
+        archive,
+        bytes: config.candidatePayload.bytes,
+        sha256: config.baseline.sha256,
+        privateInstrumentation: false,
+      },
+      null,
+      2,
+    ) + '\n',
+  );
   await save(config);
-  console.log(`Private sender retained: ${archive}, ${config.baseline.sha256}`);
+  console.log(`Release candidate retained: ${archive}, ${config.baseline.sha256}`);
 } else if (mode === 'prepare-receiver') {
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   const packagePath = join(root, 'apps/desktop/package.json');
