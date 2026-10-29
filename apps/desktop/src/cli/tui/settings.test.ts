@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createTuiSettings, terminalSettingsText } from './settings';
 import type { UpdateRelease } from '../../shared/updates';
+import { BUNDLED_RELEASE_NOTES } from '../../shared/release-notes';
 
 const folders: string[] = [];
 async function folder() {
@@ -81,7 +82,7 @@ describe('terminal Settings', () => {
     );
     const settings = createTuiSettings({ folder: root, version: '0.2.0' });
     await settings.ready;
-    expect(settings.snapshot().whatsNew).toContain('Timeline');
+    expect(settings.snapshot().whatsNew).toBe(BUNDLED_RELEASE_NOTES);
     await settings.acknowledgeNotes();
     settings.dispose();
     const reopened = createTuiSettings({ folder: root, version: '0.2.0' });
