@@ -553,10 +553,8 @@ try {
     const bytes = Buffer.from(
       await (await get(base + target.current.tag + '/' + manifestName)).arrayBuffer(),
     );
-    assert.equal(
-      'sha256:' + createHash('sha256').update(bytes).digest('hex'),
-      manifestAsset.digest,
-    );
+    const manifestSHA256 = 'sha256:' + createHash('sha256').update(bytes).digest('hex');
+    assert.equal(manifestSHA256, manifestAsset.digest);
     const manifest = yaml(bytes.toString('utf8'));
     assert.equal(manifest.version, '0.2.1');
     assert.equal(manifest.files.length, 1);
@@ -565,7 +563,7 @@ try {
     report.publicDiscovery = {
       release: state.release,
       manifest: manifestName,
-      manifestSHA256: manifestAsset.digest,
+      manifestSHA256,
     };
   });
   await check(
