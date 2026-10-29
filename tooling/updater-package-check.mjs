@@ -410,10 +410,11 @@ async function checkpointObserver(prefix = 'update') {
       try {
         const session = await load(join(folder, 'session.json'));
         assert.match(session.id, /^[a-f0-9-]{36}$/);
-        await copyFile(
-          join(folder, session.id + '.gleech'),
-          join(artwork, prefix + '-checkpoint.gleech'),
-        );
+        if (session.hasProject)
+          await copyFile(
+            join(folder, session.id + '.gleech'),
+            join(artwork, prefix + '-checkpoint.gleech'),
+          );
         await writeFile(
           join(output, prefix + '-checkpoint.json'),
           JSON.stringify(session, null, 2) + '\n',
@@ -680,6 +681,7 @@ try {
       const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
       await settings.getByRole('button', { name: 'Install & Update', exact: true }).click();
       const checkpoint = await observer.result;
+      assert.equal(checkpoint.hasProject, true);
       assert.equal(checkpoint.dirty, true);
       assert.equal(checkpoint.documentPath, original);
       assert.equal(checkpoint.mode, 'timeline');
