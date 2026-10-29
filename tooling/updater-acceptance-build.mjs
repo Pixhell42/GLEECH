@@ -83,27 +83,6 @@ if (mode === 'prepare-sender') {
         : 'win-unpacked',
   );
   const resources = join(app, process.platform === 'darwin' ? 'Contents/Resources' : 'resources');
-  const verify = (script, args = []) =>
-    execFileSync(process.execPath, [join(root, 'tooling', script), ...args], {
-      cwd: root,
-      stdio: 'inherit',
-      timeout: 180000,
-    });
-  if (process.platform === 'darwin') verify('mac-package-check.mjs');
-  else if (process.platform === 'linux') verify('linux-package-check.mjs');
-  else verify('native-release-check.mjs', [app]);
-  verify('ffmpeg-package-check.mjs', [resources]);
-  verify('update-package-check.mjs', [resources, join(root, 'apps/desktop/release')]);
-  verify('runtime-security-check.mjs', [
-    join(
-      app,
-      process.platform === 'darwin'
-        ? 'Contents/MacOS/GLEECH'
-        : process.platform === 'linux'
-          ? 'gleech-bin'
-          : 'GLEECH.exe',
-    ),
-  ]);
   const path = join(output, 'sender', archive);
   await rename(join(root, 'apps/desktop/release', archive), path);
   config.baseline = { version: '0.2.1', archive, path, sha256: await hash(path) };

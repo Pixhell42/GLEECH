@@ -34,7 +34,9 @@ const candidate = inputs
       lockBlob: inputs.sourceInputs['pnpm-lock.yaml'],
     }
   : historicalCandidate;
-const target = inputs ?? targets[key];
+const target = releaseCandidate
+  ? { archive: targets[key].archive.replace('0.2.0', '0.2.1'), sha256: inputs.sha256 }
+  : targets[key];
 const phase = process.argv[2];
 assert.ok(
   target && ['install', 'exercise', 'uninstall'].includes(phase),

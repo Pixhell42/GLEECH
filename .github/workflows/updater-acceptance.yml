@@ -8,6 +8,7 @@ on:
       - tooling/updater-acceptance-*.mjs
       - tooling/updater-package-check.mjs
       - tooling/installed-package-check.mjs
+      - tooling/release-candidate-check.mjs
       - apps/desktop/package.json
       - package.json
       - pnpm-lock.yaml
@@ -62,6 +63,8 @@ jobs:
         run: node tooling/updater-acceptance-build.mjs prepare-sender
       - name: Build release candidate (publishing disabled)
         run: pnpm ${{ matrix.package }}
+      - name: Verify native package, updater metadata and embedded runtime
+        run: node tooling/release-candidate-check.mjs
       - run: node tooling/updater-acceptance-build.mjs record-sender
       - name: Install and exercise exact release candidate
         if: runner.os != 'Linux'
