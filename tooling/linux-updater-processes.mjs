@@ -28,7 +28,10 @@ export function ownedImageDescendants(records, image) {
 
 export function findImageDesktop(records, image) {
   for (const record of records) {
-    if (!record.executable || basename(record.executable) !== 'gleech-bin') continue;
+    const mainExecutable = record.executable
+      ? basename(record.executable) === 'gleech-bin'
+      : /^(?:gleech(?:-bin)?|GLEECH)$/.test(record.name ?? '');
+    if (!mainExecutable) continue;
     const launcher = records.find((value) => value.pid === record.parent);
     if (launcher?.executable === image) return { ...record, launcher };
   }

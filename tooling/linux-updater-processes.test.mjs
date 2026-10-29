@@ -21,6 +21,11 @@ test('finds the owned desktop without depending on proc environment contents', (
     ...desktop,
     launcher,
   });
+  const protectedDesktop = { ...desktop, executable: null, name: 'GLEECH' };
+  assert.deepEqual(findImageDesktop([launcher, protectedDesktop], image), {
+    ...protectedDesktop,
+    launcher,
+  });
 });
 test('rejects other images and an obsolete deleted launcher for relaunch acceptance', () => {
   assert.equal(
@@ -32,6 +37,10 @@ test('rejects other images and an obsolete deleted launcher for relaunch accepta
     null,
   );
   assert.equal(findImageDesktop([desktop, renderer], image), null);
+  assert.equal(
+    findImageDesktop([launcher, { ...desktop, executable: null, name: 'AppRun' }], image),
+    null,
+  );
 });
 test('cleanup selects only descendants of the exact owned image, including deleted instances', () => {
   const unrelated = { pid: 200, parent: 1, start: '200', executable: desktop.executable };
