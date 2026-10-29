@@ -47,6 +47,7 @@ export async function prepareAppImageRuntime() {
     await Promise.all(files.map(async (f) => [f, await digest(join(inputs, f))])),
   );
   inputHashes.prepare = await digest(fileURLToPath(import.meta.url));
+  inputHashes['license/GLEECH'] = await digest(join(root, 'LICENSE'));
   for (const file of ['musl-COPYRIGHT.txt', 'zlib-LICENSE.txt', 'zstd-BSD.txt', 'mimalloc-MIT.txt'])
     inputHashes['license/' + file] = await digest(join(root, 'LICENSES/appimage-runtime', file));
   const output = join(
@@ -125,6 +126,7 @@ export async function prepareAppImageRuntime() {
     await copyFile(join(inputs, 'Dockerfile'), join(source, 'Dockerfile'));
     await copyFile(join(inputs, 'build.sh'), join(source, 'gleech-build.sh'));
     await copyFile(join(inputs, 'relink.sh'), join(source, 'gleech-relink.sh'));
+    await copyFile(join(root, 'LICENSE'), join(source, 'LICENSE.GLEECH.txt'));
     await cp(join(root, 'LICENSES/appimage-runtime'), join(source, 'gleech-notices'), {
       recursive: true,
     });

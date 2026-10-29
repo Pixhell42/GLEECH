@@ -88,6 +88,8 @@ Development packages use a source-built AppImage runtime that creates a private
 extraction directory per launch and removes it after that launch exits. They do
 not require `NO_CLEANUP=1`. Runtime provenance, original notices, modified source
 and relinking materials are included under `resources/appimage-runtime-notices`.
+After installing a fixed release, remove `NO_CLEANUP=1` from its launch environment
+so that these private extraction directories are removed automatically.
 The following workaround remains necessary for the unchanged public 0.2.0 image.
 
 The `APPIMAGE_EXTRACT_AND_RUN=1` fallback shares an extracted runtime between
