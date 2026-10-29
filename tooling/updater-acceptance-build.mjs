@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve, join } from 'node:path';
 import { targets } from './installed-acceptance-plan.mjs';
@@ -70,7 +70,7 @@ if (mode === 'prepare-sender') {
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   const archive = target.archive.replace('0.2.0', '0.2.1');
   const path = join(output, 'sender', archive);
-  await copyFile(join(root, 'apps/desktop/release', archive), path);
+  await rename(join(root, 'apps/desktop/release', archive), path);
   config.baseline = { version: '0.2.1', archive, path, sha256: await hash(path) };
   await save(config);
   console.log(`Private sender retained: ${archive}, ${config.baseline.sha256}`);

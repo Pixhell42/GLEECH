@@ -79,6 +79,8 @@ jobs:
             test-results/builtin-updater/${{ matrix.target }}/fixture.json
             test-results/builtin-updater/${{ matrix.target }}/receiver*.json
             test-results/builtin-updater/${{ matrix.target }}/finder*.json
+            test-results/builtin-updater/${{ matrix.target }}/runtime*.json
+            test-results/builtin-updater/${{ matrix.target }}/runtime*.txt
             test-results/builtin-updater/${{ matrix.target }}/*.png
             test-results/builtin-updater/${{ matrix.target }}/*.log
             test-results/builtin-updater/${{ matrix.target }}/artwork/*

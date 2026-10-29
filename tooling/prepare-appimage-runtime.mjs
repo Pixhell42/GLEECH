@@ -37,10 +37,15 @@ export async function prepareAppImageRuntime() {
     'relink.sh',
     'extraction-before.txt',
     'extraction-after.txt',
+    'cleanup-before.txt',
+    'cleanup-after.txt',
   ];
   const inputHashes = Object.fromEntries(
     await Promise.all(files.map(async (f) => [f, await digest(join(inputs, f))])),
   );
+  inputHashes.prepare = await digest(fileURLToPath(import.meta.url));
+  for (const file of ['musl-COPYRIGHT.txt', 'zlib-LICENSE.txt', 'zstd-BSD.txt', 'mimalloc-MIT.txt'])
+    inputHashes['license/' + file] = await digest(join(root, 'LICENSES/appimage-runtime', file));
   const output = join(
     staging,
     createHash('sha256').update(JSON.stringify(inputHashes)).digest('hex'),
@@ -77,11 +82,18 @@ export async function prepareAppImageRuntime() {
     await mkdir(source, { recursive: true });
     await command('tar', ['-xzf', archive, '--strip-components=1', '-C', source], root);
     const sourceFile = join(source, 'src/runtime/runtime.c');
-    const original = await readFile(sourceFile, 'utf8');
-    const before = await readFile(join(inputs, 'extraction-before.txt'), 'utf8');
-    const after = await readFile(join(inputs, 'extraction-after.txt'), 'utf8');
-    assert.equal(original.split(before).length, 2, 'The reviewed runtime patch must match once.');
-    await writeFile(sourceFile, original.replace(before, after));
+    let patched = await readFile(sourceFile, 'utf8');
+    for (const change of ['extraction', 'cleanup']) {
+      const before = await readFile(join(inputs, change + '-before.txt'), 'utf8');
+      const after = await readFile(join(inputs, change + '-after.txt'), 'utf8');
+      assert.equal(
+        patched.split(before).length,
+        2,
+        'The reviewed runtime patch must match once: ' + change,
+      );
+      patched = patched.replace(before, after);
+    }
+    await writeFile(sourceFile, patched);
     const dependencies = join(source, 'scripts/common/install-dependencies.sh');
     const installer = await readFile(dependencies, 'utf8');
     assert.ok(installer.includes('    rm -rf "$tmpdir"'));

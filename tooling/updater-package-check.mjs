@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { createReadStream, watch } from 'node:fs';
+import { createReadStream, createWriteStream, watch } from 'node:fs';
 import { access, chmod, copyFile, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { _electron as electron, chromium } from 'playwright';
 import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';
@@ -29,6 +31,8 @@ assert.equal(config.version, '0.2.2');
 assert.equal(config.privateSenderOnly, true);
 const senderArchive = published.archive.replace('0.2.0', '0.2.1');
 const baselinePath = join(output, 'sender', senderArchive);
+const publishedPath = join(output, 'published', published.archive);
+let bridgeMode = false;
 assert.match(config.baseline.sha256, /^[a-f0-9]{64}$/);
 assert.deepEqual(config.baseline, {
   version: '0.2.1',
@@ -168,18 +172,19 @@ let app,
   owned = false;
 const errors = [];
 async function installBase() {
-  assert.equal(await sha(baselinePath), config.baseline.sha256);
+  const packagePath = bridgeMode ? publishedPath : baselinePath;
+  assert.equal(await sha(packagePath), bridgeMode ? published.sha256 : config.baseline.sha256);
   await assert.rejects(access(installed), { code: 'ENOENT' });
   owned = true;
   await mkdir(dirname(installed), { recursive: true });
   if (process.platform === 'win32')
-    await command(baselinePath, ['/S', '/currentuser', '/D=' + installed]);
+    await command(packagePath, ['/S', '/currentuser', '/D=' + installed]);
   else if (process.platform === 'darwin') {
-    const expanded = join(output, 'base-expanded');
-    if (!(await exists(expanded))) await command('ditto', ['-x', '-k', baselinePath, expanded]);
+    const expanded = join(output, bridgeMode ? 'published-expanded' : 'base-expanded');
+    if (!(await exists(expanded))) await command('ditto', ['-x', '-k', packagePath, expanded]);
     await command('ditto', [join(expanded, 'GLEECH.app'), installed]);
   } else {
-    await copyFile(baselinePath, installed);
+    await copyFile(packagePath, installed);
     await chmod(installed, 0o755);
   }
 }
@@ -215,6 +220,7 @@ async function removeInstallation() {
   if (!owned || !(await exists(installed))) return;
   assert.equal((await lstat(installed)).isSymbolicLink(), false);
   if (process.platform === 'win32') {
+    await waitWindowsInstaller();
     await command(join(installed, 'Uninstall GLEECH.exe'), ['/S']);
     await poll(
       async () => !(await exists(executable)),
@@ -227,6 +233,22 @@ async function removeInstallation() {
     await rm(installed);
   }
   owned = false;
+}
+async function waitWindowsInstaller() {
+  if (process.platform !== 'win32') return;
+  await poll(async () => {
+    const { stdout } = await command('tasklist.exe', [
+      '/FI',
+      'IMAGENAME eq GLEECH-0.2.2-x64-setup.exe',
+      '/FO',
+      'CSV',
+      '/NH',
+    ]);
+    return (
+      !stdout.toLowerCase().includes('gleech-0.2.2-x64-setup.exe') &&
+      (await exists(join(installed, 'Uninstall GLEECH.exe')))
+    );
+  }, 'NSIS did not finish writing the installed package and uninstaller.');
 }
 async function closeSender() {
   if (app) {
@@ -267,23 +289,27 @@ async function launchSender() {
     resources: process.resourcesPath,
     pid: process.pid,
   }));
-  assert.equal(runtime.version, '0.2.1');
+  assert.equal(runtime.version, bridgeMode ? '0.2.0' : '0.2.1');
   assert.equal(runtime.packaged, true);
   assert.equal(runtime.platform + '-' + runtime.arch, key);
   assert.ok(!runtime.args.includes('--smoke-test'));
   if (profile) assert.equal(runtime.profile, profile);
   else profile = runtime.profile;
   await app.evaluate(installUpdateRouting, routing);
-  const init = await page.evaluate(async () => ({
-    preference: await window.gleech.setAutomaticUpdates(false),
-    notes: await window.gleech.acknowledgeReleaseNotes('0.2.1'),
-    state: await window.gleech.updateState(),
-  }));
+  const init = await page.evaluate(
+    async (version) => ({
+      preference: await window.gleech.setAutomaticUpdates(false),
+      notes: await window.gleech.acknowledgeReleaseNotes(version),
+      state: await window.gleech.updateState(),
+    }),
+    runtime.version,
+  );
   assert.equal(init.preference.ok, true);
   assert.equal(init.notes.ok, true);
   assert.equal(init.state.value.installMode, process.platform === 'darwin' ? 'finder' : 'native');
   await page.getByRole('dialog', { name: /What’s new/ }).waitFor({ state: 'hidden' });
-  report.senderRuntime = runtime;
+  if (bridgeMode) report.bridgeSenderRuntime = runtime;
+  else report.senderRuntime = runtime;
 }
 async function cli(args) {
   if (process.platform !== 'linux')
@@ -372,7 +398,7 @@ async function exportPixels(name, sender = true) {
 }
 const original = join(artwork, 'working-project.gleech');
 let savedHash, expectedRecipe, expectedPixels, timecode, presetId;
-async function checkpointObserver() {
+async function checkpointObserver(prefix = 'update') {
   const folder = join(profile, 'update-recovery');
   await mkdir(folder, { recursive: true });
   let watching, timer;
@@ -386,9 +412,12 @@ async function checkpointObserver() {
         assert.match(session.id, /^[a-f0-9-]{36}$/);
         await copyFile(
           join(folder, session.id + '.gleech'),
-          join(artwork, 'update-checkpoint.gleech'),
+          join(artwork, prefix + '-checkpoint.gleech'),
         );
-        await writeFile(join(output, 'checkpoint.json'), JSON.stringify(session, null, 2) + '\n');
+        await writeFile(
+          join(output, prefix + '-checkpoint.json'),
+          JSON.stringify(session, null, 2) + '\n',
+        );
         watching.close();
         clearTimeout(timer);
         accept(session);
@@ -427,7 +456,8 @@ async function manualMacReplacement() {
   await command('ditto', [join(expanded, 'GLEECH.app'), installed]);
   const child = spawn(executable, [], { env, stdio: 'ignore', detached: true });
   child.unref();
-  report.finderHandoff = handoff;
+  if (bridgeMode) report.bridgeFinderHandoff = handoff;
+  else report.finderHandoff = handoff;
 }
 async function attachReceiver() {
   receiver = await poll(
@@ -522,6 +552,14 @@ try {
       );
       assert.equal(runtime.extraction, 'mkdtemp-per-invocation');
       report.linuxRuntime = runtime;
+      await copyFile(
+        join(report.senderRuntime.resources, 'appimage-runtime-notices/provenance.json'),
+        join(output, 'runtime-provenance.json'),
+      );
+      await copyFile(
+        join(report.senderRuntime.resources, 'appimage-runtime-notices/build-packages.txt'),
+        join(output, 'runtime-build-packages.txt'),
+      );
       report.linuxWorkaroundEnabled = false;
     }
   });
@@ -724,6 +762,7 @@ try {
     if (process.platform === 'darwin') await manualMacReplacement();
     else {
       await poll(receiverInstalled, 'The real CLI updater did not install 0.2.2.');
+      await waitWindowsInstaller();
       assert.equal((await cli(['--version'])).stdout.trim(), '0.2.2');
       assert.equal(
         await exists(config.receiverFile),
@@ -769,6 +808,76 @@ try {
         passed: true,
       };
     });
+  await check('published-0.2.0-desktop-can-deliver-the-fixed-package', async () => {
+    await removeInstallation();
+    await rm(config.receiverFile, { force: true });
+    await rm(config.revealFile, { force: true });
+    await mkdir(dirname(publishedPath), { recursive: true });
+    const tag =
+      process.platform === 'darwin'
+        ? 'macos-alpha-0.2.0'
+        : process.platform === 'linux'
+          ? 'linux-omarchy-alpha-0.2.0'
+          : 'v0.2.0';
+    const response = await fetch(
+      `https://github.com/Pixhell42/GLEECH/releases/download/${tag}/${published.archive}`,
+      { signal: AbortSignal.timeout(180000) },
+    );
+    assert.equal(response.status, 200);
+    await pipeline(
+      Readable.fromWeb(response.body),
+      createWriteStream(publishedPath, { flags: 'wx' }),
+    );
+    assert.equal(await sha(publishedPath), published.sha256);
+    bridgeMode = true;
+    fixture.state.kind = 'valid';
+    await installBase();
+    await launchSender();
+    assert.equal((await discover()).phase, 'available');
+    const downloaded = await page.evaluate(
+      async () => (await window.gleech.downloadUpdate()).value,
+    );
+    assert.equal(downloaded.phase, 'ready');
+    const observer = await checkpointObserver('bridge-update');
+    try {
+      const closed =
+        process.platform === 'linux' ? null : app.waitForEvent('close', { timeout: 180000 });
+      await fileAction(page, 'Settings');
+      await page
+        .getByRole('dialog', { name: 'Settings', exact: true })
+        .getByRole('button', { name: 'Install & Update', exact: true })
+        .click();
+      report.bridgeCheckpoint = await observer.result;
+      if (closed) await closed;
+      else
+        await poll(() => {
+          try {
+            process.kill(report.bridgeSenderRuntime.pid, 0);
+            return false;
+          } catch (error) {
+            if (error.code === 'ESRCH') return true;
+            throw error;
+          }
+        }, 'The published sender did not exit for replacement.');
+      app = null;
+      if (process.platform === 'darwin') await manualMacReplacement();
+      report.bridgeReceiver = await attachReceiver();
+      assert.equal((await cli(['--version'])).stdout.trim(), '0.2.2');
+      await page.screenshot({ path: join(output, 'published-repair-path.png') });
+      await stopReceiver();
+      report.publishedRepairPath = {
+        version: '0.2.0',
+        sha256: published.sha256,
+        senderUnmodified: true,
+        method: 'desktop-updater',
+        receiverVersion: '0.2.2',
+        receiverSHA256: config.payload.sha256,
+        passed: true,
+      };
+    } finally {
+      observer.stop();
+    }
+  });
   assert.deepEqual(errors, []);
   report.complete = true;
   report.unqualifiedPass = report.knownIssues.length === 0;
