@@ -37,6 +37,15 @@ describe('terminal updater client', () => {
     const abort = new AbortController();
     const progress = vi.fn();
     const pending = prepareTerminalUpdate('0.2.1', abort.signal, progress);
+    expect(mocks.spawn).toHaveBeenCalledWith(
+      '/runtime/electron',
+      ['/app/main.js', '--gleech-terminal-update'],
+      expect.objectContaining({
+        detached: true,
+        windowsHide: true,
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      }),
+    );
     expect(child.send).not.toHaveBeenCalled();
     child.emit('message', { type: 'listening' });
     expect(child.send).toHaveBeenCalledWith(

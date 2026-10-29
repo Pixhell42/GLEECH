@@ -2,6 +2,8 @@ afterPack: build/after-pack.mjs
 beforePack: build/ffmpeg-before-pack.mjs
 appId: com.gleech.desktop
 productName: GLEECH
+toolsets:
+  appimage: '1.0.3'
 publish:
   provider: github
   owner: Pixhell42
@@ -89,6 +91,8 @@ linux:
   category: Graphics
   icon: resources/branding/icon-beta.png
   extraResources:
+    - from: out/appimage-runtime-notices
+      to: appimage-runtime-notices
     - from: out/linux-native-notices
       to: linux-native-notices
   files:

@@ -1,0 +1,31 @@
+        char* hexlified_digest = NULL;
+
+        // calculate MD5 hash of file, and use it to make extracted directory name "content-aware"
+        // see https://github.com/AppImage/AppImageKit/issues/841 for more information
+        {
+            FILE* f = fopen(appimage_path, "rb");
+            if (f == NULL) {
+                perror("Failed to open AppImage file");
+                exit(EXIT_EXECERROR);
+            }
+
+            Md5Context ctx;
+            Md5Initialise(&ctx);
+
+            char buf[4096];
+            size_t bytes_read;
+            while ((bytes_read = fread(buf, sizeof(char), sizeof(buf), f)) > 0) {
+                Md5Update(&ctx, buf, (uint32_t) bytes_read);
+            }
+
+            MD5_HASH digest;
+            Md5Finalise(&ctx, &digest);
+
+            hexlified_digest = appimage_hexlify((const char*)digest.bytes, sizeof(digest.bytes));
+        }
+
+        char* prefix = malloc(strlen(temp_base) + 20 + strlen(hexlified_digest) + 2);
+        strcpy(prefix, temp_base);
+        strcat(prefix, "/appimage_extracted_");
+        strcat(prefix, hexlified_digest);
+        free(hexlified_digest);

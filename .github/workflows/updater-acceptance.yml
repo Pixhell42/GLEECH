@@ -7,6 +7,11 @@ on:
       - .github/workflows/updater-acceptance.yml
       - tooling/updater-acceptance-*.mjs
       - tooling/updater-package-check.mjs
+      - tooling/prepare-appimage-runtime.mjs
+      - apps/desktop/src/**
+      - apps/desktop/resources/cli/**
+      - apps/desktop/build/**
+      - apps/desktop/electron-builder.yml
 
 permissions:
   contents: read
@@ -46,9 +51,12 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Verify the published sender and prepare a private receiver fixture
-        run: node tooling/updater-acceptance-build.mjs prepare
-      - run: pnpm build
+      - name: Prepare private sender from the current application source
+        run: node tooling/updater-acceptance-build.mjs prepare-sender
+      - name: Build private sender (publishing disabled)
+        run: pnpm ${{ matrix.package }}
+      - run: node tooling/updater-acceptance-build.mjs record-sender
+      - run: node tooling/updater-acceptance-build.mjs prepare-receiver
       - name: Build private next-version receiver (publishing disabled)
         run: pnpm ${{ matrix.package }}
       - run: node tooling/updater-acceptance-build.mjs record

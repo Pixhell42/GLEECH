@@ -5,10 +5,10 @@ import { writeFile } from 'node:fs/promises';
 
 export async function startUpdateFixture(config) {
   const state = { kind: 'valid', badDigest: false, slow: false, requests: [], bytesServed: 0 };
-  const base = 'https://github.com/Pixhell42/GLEECH/releases/download/v0.2.1/';
+  const base = 'https://github.com/Pixhell42/GLEECH/releases/download/v0.2.2/';
   const releases = () => {
-    const version = state.kind === 'same' ? '0.2.0' : state.kind === 'older' ? '0.1.2' : '0.2.1';
-    let archive = config.payload.archive.replace('0.2.1', version);
+    const version = state.kind === 'same' ? '0.2.1' : state.kind === 'older' ? '0.1.2' : '0.2.2';
+    let archive = config.payload.archive.replace('0.2.2', version);
     if (state.kind === 'wrong-arch')
       archive = archive.replace(
         /-(arm64|x64|x86_64)(\.zip|-setup\.exe|\.AppImage)$/,
@@ -24,7 +24,7 @@ export async function startUpdateFixture(config) {
           ...(state.kind === 'missing-manifest' ? [] : [{ name: config.manifest }]),
           {
             name: archive,
-            browser_download_url: base.replace('0.2.1', version) + archive,
+            browser_download_url: base.replace('0.2.2', version) + archive,
             size: config.payload.bytes,
             digest: `sha256:${state.badDigest ? '0'.repeat(64) : config.payload.sha256}`,
           },
@@ -40,15 +40,15 @@ export async function startUpdateFixture(config) {
       response.end(JSON.stringify(releases()));
       return;
     }
-    if (path === '/Pixhell42/GLEECH/releases/download/v0.2.1/' + config.manifest) {
+    if (path === '/Pixhell42/GLEECH/releases/download/v0.2.2/' + config.manifest) {
       const size = config.payload.bytes + (state.kind === 'invalid-manifest' ? 1 : 0);
       response.writeHead(200, { 'Content-Type': 'text/yaml' });
       response.end(
-        `version: 0.2.1\nfiles:\n  - url: ${config.payload.archive}\n    sha512: ${config.payload.sha512}\n    size: ${size}\npath: ${config.payload.archive}\nsha512: ${config.payload.sha512}\nreleaseDate: '2026-10-28T00:00:00.000Z'\n`,
+        `version: 0.2.2\nfiles:\n  - url: ${config.payload.archive}\n    sha512: ${config.payload.sha512}\n    size: ${size}\npath: ${config.payload.archive}\nsha512: ${config.payload.sha512}\nreleaseDate: '2026-10-28T00:00:00.000Z'\n`,
       );
       return;
     }
-    if (path !== '/Pixhell42/GLEECH/releases/download/v0.2.1/' + config.payload.archive) {
+    if (path !== '/Pixhell42/GLEECH/releases/download/v0.2.2/' + config.payload.archive) {
       response.writeHead(404);
       response.end();
       return;
@@ -113,7 +113,7 @@ export function installUpdateRouting(electron, config) {
     const url = String(input);
     if (url.startsWith('https://api.github.com/repos/Pixhell42/GLEECH/releases?'))
       return fetch(config.origin + '/releases', options);
-    if (url.startsWith('https://github.com/Pixhell42/GLEECH/releases/download/v0.2.1/'))
+    if (url.startsWith('https://github.com/Pixhell42/GLEECH/releases/download/v0.2.2/'))
       return fetch(config.origin + new URL(url).pathname + new URL(url).search, options);
     throw new Error('Unexpected network destination in updater acceptance.');
   };
@@ -122,7 +122,7 @@ export function installUpdateRouting(electron, config) {
       const append = process.getBuiltinModule('fs').appendFileSync;
       const trace = (event, details = {}) =>
         append(config.childLog, JSON.stringify({ event, pid: process.pid, ...details }) + '\n');
-      trace('helper-started');
+      trace('helper-started', { resources: process.resourcesPath });
       process.on('message', (message) => trace('ipc-request', { type: message?.type }));
       process.once('disconnect', () => trace('ipc-disconnected'));
       process.once('exit', (code) => trace('helper-exit', { code }));
@@ -146,7 +146,7 @@ export function installUpdateRouting(electron, config) {
             );
       if (
         url.hostname !== 'github.com' ||
-        !url.pathname.startsWith('/Pixhell42/GLEECH/releases/download/v0.2.1/')
+        !url.pathname.startsWith('/Pixhell42/GLEECH/releases/download/v0.2.2/')
       )
         throw new Error('Unexpected native updater destination.');
       const local = new URL(url.pathname + url.search, config.origin);
@@ -162,7 +162,7 @@ export function installUpdateRouting(electron, config) {
       });
     };
     electron.shell.showItemInFolder = (path) => {
-      if (!/GLEECH-0\.2\.1-mac-(arm64|x64)\.zip$/.test(path))
+      if (!/GLEECH-0\.2\.2-mac-(arm64|x64)\.zip$/.test(path))
         throw new Error('Unexpected Finder handoff.');
       // The path is recorded in memory; the driver writes the owned receipt.
       globalThis.__updaterFinderSelection = path;

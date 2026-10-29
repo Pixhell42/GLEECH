@@ -46,6 +46,9 @@ export async function prepareTerminalUpdate(
   const launch = terminalUpdaterLaunch();
   const child = spawn(launch.executable, launch.args, {
     env: terminalUpdaterEnvironment(process.env),
+    // On Windows unref() alone does not let the helper outlive this terminal.
+    // IPC still gates installation until the parent exits and releases its files.
+    detached: true,
     windowsHide: true,
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
   });
