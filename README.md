@@ -15,14 +15,11 @@ any effect control with keyframes, curves, audio and LFO modulators, and renders
 video, GIFs and loops, image sequences and flip books (see
 [Timeline, video and GIF](docs/TIMELINE.md)). Movie and loop export use ffmpeg.
 
-**GLEECH 0.2.0** brings timelines to desktop, CLI and TUI on all
-three platforms, with bundled FFmpeg. The terminal tools use the shared timeline
-runner for saved animation, external video and audio, MP4, GIF and PNG sequences.
-See the [0.2.0 release notes](docs/RELEASE-0.2.0.md) and
+**GLEECH 0.2.1** fixes Windows CLI updates and Linux AppImage extraction cleanup.
+It includes timeline animation across desktop, CLI and TUI, with bundled FFmpeg
+for saved animation, external video and audio, MP4, GIF and PNG sequences.
+See the [0.2.1 release notes](docs/RELEASE-0.2.1.md) and
 [CLI/TUI guide](docs/CLI.md).
-
-[0.2.1 is in preparation](docs/RELEASE-0.2.1.md), fixing Windows CLI updates and
-Linux AppImage extraction cleanup. Published downloads below remain at 0.2.0.
 
 The current library contains **109 built-in effects**, including **46 original
 shaders**, **29 starter presets**, **40 depth maps** and **40 vector maps**.
@@ -30,11 +27,11 @@ Imported shaders are additional library entries. See the [effect inventory](docs
 
 ## Run the app
 
-Download 0.2.0 for [Windows x64](https://github.com/Pixhell42/GLEECH/releases/tag/v0.2.0),
-[macOS Intel / Apple Silicon](https://github.com/Pixhell42/GLEECH/releases/tag/macos-alpha-0.2.0),
-or [Linux x64](https://github.com/Pixhell42/GLEECH/releases/tag/linux-omarchy-alpha-0.2.0).
+Download 0.2.1 for [Windows x64](https://github.com/Pixhell42/GLEECH/releases/tag/v0.2.1),
+[macOS Intel / Apple Silicon](https://github.com/Pixhell42/GLEECH/releases/tag/macos-alpha-0.2.1),
+or [Linux x64](https://github.com/Pixhell42/GLEECH/releases/tag/linux-omarchy-alpha-0.2.1).
 Windows is a beta; macOS and Linux are experimental alphas. Packages are unsigned,
-and macOS builds are not notarized. Read the [known security issue](docs/RELEASE-0.2.0.md#known-security-issue)
+and macOS builds are not notarized. Read the [known security issue](docs/RELEASE-0.2.1.md#known-security-issue)
 before using network features. An unpacked
 build can be run through `GLEECH.exe` with its accompanying folders intact.
 Packaged builds include their runtime; Node.js and pnpm are only needed to build

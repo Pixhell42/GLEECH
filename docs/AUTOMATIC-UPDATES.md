@@ -30,12 +30,12 @@ that version while leaving it accessible in Settings.
 ## Upgrading from 0.1.2
 
 0.1.2 does not contain the built-in desktop or terminal updater. Its first upgrade
-to 0.2.0 is manual; publishing update metadata cannot add the missing updater to
-an already installed 0.1.2 binary. The automatic-update behavior described here
+to a current release is manual; publishing update metadata cannot add the missing
+updater to an already installed 0.1.2 binary. The automatic-update behavior described here
 starts with 0.2.0.
 
 Save your work and close GLEECH and its terminal tools, then download the matching
-0.2.0 package from the [release pages](RELEASE-0.2.0.md).
+0.2.1 package from the [release pages](RELEASE-0.2.1.md).
 
 - **Windows:** run the new NSIS installer over the existing per-user installation
   at the same location. An uninstall is not needed for this upgrade.
@@ -43,7 +43,7 @@ Save your work and close GLEECH and its terminal tools, then download the matchi
   `GLEECH.app` at its existing location in Applications. Keep the same app path.
 - **Linux:** replace the old AppImage's contents at its existing path and make it
   executable. Keeping the old filename is supported, even if it includes `0.1.2`;
-  the running version will be 0.2.0. Without FUSE, retain the documented
+  the running version will be 0.2.1. Without FUSE, retain the documented
   `APPIMAGE_EXTRACT_AND_RUN=1` launch option.
 
 Keep the existing user-data folder, projects and source media. Existing terminal
@@ -68,7 +68,7 @@ See [terminal setup](CLI.md) for the platform commands.
 
 ### Windows CLI in 0.2.0
 
-The 0.2.1 candidate detaches the updater helper while retaining its IPC approval
+0.2.1 detaches the updater helper while retaining its IPC approval
 and terminal-exit gate. It requires a new package; it does not alter public 0.2.0.
 
 Installed acceptance found that `gleech update --yes` can report a verified
@@ -80,11 +80,11 @@ does not confirm that the new version is installed.
 
 Release metadata cannot repair the updater inside an existing binary. Use the
 desktop updater for the first hop from 0.2.0; the CLI fix takes effect after the
-replacement package is installed. See the [0.2.1 preparation notes](RELEASE-0.2.1.md).
+replacement package is installed. See the [0.2.1 release notes](RELEASE-0.2.1.md).
 
 ### Linux without FUSE
 
-The 0.2.1 candidate uses a source-built AppImage runtime that creates a private
+0.2.1 uses a source-built AppImage runtime that creates a private
 extraction directory per launch and removes it after that launch exits. It does
 not require `NO_CLEANUP=1`. Runtime provenance, original notices, modified source
 and relinking materials are included under `resources/appimage-runtime-notices`.
@@ -149,8 +149,9 @@ Update `shared/release-notes.ts` with each release for offline/manual installs.
 
 ## Publishing requirements
 
-0.2.0 is published with the disclosed, maintainer-accepted BoringSSL exception;
-see the [release notes](RELEASE-0.2.0.md#known-security-issue). Future releases still
+0.2.0 and 0.2.1 were published with separate, disclosed, maintainer-accepted
+BoringSSL exceptions; see the [0.2.0 notes](RELEASE-0.2.0.md#known-security-issue)
+and [0.2.1 notes](RELEASE-0.2.1.md#known-security-issue). Future releases still
 require their own review and final publication approval. Packaging commands
 explicitly use `--publish never`; building does not publish a release.
 
