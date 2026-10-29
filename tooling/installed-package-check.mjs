@@ -8,22 +8,50 @@ import { promisify } from 'node:util';
 import { _electron as electron } from './test-electron.mjs';
 import { closeTestApp } from './close-test-app.mjs';
 import { captureTestWindow } from './capture-test-window.mjs';
-import { candidate, targets } from './installed-acceptance-plan.mjs';
+import { candidate as historicalCandidate, targets } from './installed-acceptance-plan.mjs';
 
 const run = promisify(execFile);
 const key = `${process.platform}-${process.arch}`;
-const target = targets[key];
+const root = resolve(import.meta.dirname, '..');
+const releaseCandidate = process.env.GLEECH_RELEASE_CANDIDATE === '1';
+if (releaseCandidate) assert.equal(process.env.GITHUB_ACTIONS, 'true');
+const candidateDirectory = join(root, 'test-results/builtin-updater', key, 'release-candidate');
+const inputs = releaseCandidate
+  ? JSON.parse(await readFile(join(candidateDirectory, 'candidate-inputs.json'), 'utf8'))
+  : null;
+if (inputs) {
+  assert.equal(inputs.target, key);
+  assert.equal(inputs.version, '0.2.1');
+  assert.equal(inputs.privateInstrumentation, false);
+  assert.match(inputs.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(inputs.archive, targets[key].archive.replace('0.2.0', inputs.version));
+}
+const candidate = inputs
+  ? {
+      version: inputs.version,
+      appsTree: inputs.sourceInputs.apps,
+      packagesTree: inputs.sourceInputs.packages,
+      lockBlob: inputs.sourceInputs['pnpm-lock.yaml'],
+    }
+  : historicalCandidate;
+const target = inputs ?? targets[key];
 const phase = process.argv[2];
 assert.ok(
   target && ['install', 'exercise', 'uninstall'].includes(phase),
   'Usage: installed-package-check.mjs install|exercise|uninstall (native targets only)',
 );
-const root = resolve(import.meta.dirname, '..');
-const output = resolve(root, 'test-results/installed-acceptance', key);
+const output = resolve(
+  root,
+  releaseCandidate
+    ? 'test-results/release-installed-acceptance'
+    : 'test-results/installed-acceptance',
+  key,
+);
 await mkdir(output, { recursive: true });
 const reportPath = join(output, 'report.json');
-const artifact =
-  process.platform === 'win32'
+const artifact = releaseCandidate
+  ? join(candidateDirectory, target.archive)
+  : process.platform === 'win32'
     ? resolve(root, 'public-release/release-0.2.0-2026-10-28', target.archive)
     : join(output, 'download', target.archive);
 const installed =
@@ -47,7 +75,7 @@ const resources =
 const profile = join(output, 'profile');
 const artwork = join(output, 'artwork');
 const sentinel = join(artwork, 'keep-user-artwork.txt');
-const sentinelContents = 'GLEECH 0.2.0 installed acceptance: preserve user artwork\n';
+const sentinelContents = `GLEECH ${candidate.version} installed acceptance: preserve user artwork\n`;
 const profileSentinel = join(profile, 'keep-user-profile.txt');
 const env = { ...process.env, GLEECH_TEST_NATIVE_FRAMES: '1', GLEECH_NO_UPDATE_NOTIFIER: '1' };
 for (const variable of [

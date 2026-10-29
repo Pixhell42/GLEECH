@@ -68,7 +68,7 @@ See [terminal setup](CLI.md) for the platform commands.
 
 ### Windows CLI in 0.2.0
 
-The development fix detaches the updater helper while retaining its IPC approval
+The 0.2.1 candidate detaches the updater helper while retaining its IPC approval
 and terminal-exit gate. It requires a new package; it does not alter public 0.2.0.
 
 Installed acceptance found that `gleech update --yes` can report a verified
@@ -78,14 +78,14 @@ instead; the native desktop installation, relaunch and unsaved-session recovery
 passed. Check the version after reopening. A verified download message alone
 does not confirm that the new version is installed.
 
-Release metadata cannot repair the updater inside an existing binary. A future
-Windows package needs its own CLI handoff fix and installed acceptance; the
-desktop updater can deliver that replacement package.
+Release metadata cannot repair the updater inside an existing binary. Use the
+desktop updater for the first hop from 0.2.0; the CLI fix takes effect after the
+replacement package is installed. See the [0.2.1 preparation notes](RELEASE-0.2.1.md).
 
 ### Linux without FUSE
 
-Development packages use a source-built AppImage runtime that creates a private
-extraction directory per launch and removes it after that launch exits. They do
+The 0.2.1 candidate uses a source-built AppImage runtime that creates a private
+extraction directory per launch and removes it after that launch exits. It does
 not require `NO_CLEANUP=1`. Runtime provenance, original notices, modified source
 and relinking materials are included under `resources/appimage-runtime-notices`.
 After installing a fixed release, remove `NO_CLEANUP=1` from its launch environment
@@ -185,13 +185,15 @@ the user's normal data. Pass an unpacked executable to `tooling/updates-check.mj
 to run the same flow against packaged code. Native install/relaunch acceptance
 still requires real installed test machines before public release.
 
-The **Installed built-in updater acceptance** workflow exercises private sender
-and receiver packages from the current application source on Windows x64, Apple
-Silicon, Intel Mac and Linux x64 using normal default profiles. Private versions
-0.2.1 and 0.2.2 are test fixtures and are never published. The sender contains the
-real fixes without inspection code; the receiver adds inspection receipts and
-fixture discovery routing. The workflow also installs the unchanged public 0.2.0
-package and tests its desktop repair path to the fixed receiver.
+The **Installed built-in updater acceptance** workflow builds an unmodified 0.2.1
+release candidate on Windows x64, Apple Silicon, Intel Mac and Linux x64. It
+installs, exercises and uninstalls those exact bytes before testing future updates
+from the candidate to a private 0.2.2 receiver using normal default profiles.
+Only the receiver adds inspection receipts and fixture discovery routing; it is
+never published. The unchanged public 0.2.0 package is tested updating both to
+the instrumented receiver and to the exact uninstrumented 0.2.1 candidate.
+Accepted candidates are retained separately with their hashes, generated metadata
+and source inputs. They are not automatically published.
 Release discovery and downloads use loopback transport. The updater controllers,
 integrity checks, recovery checkpoints and native install/quit paths remain real.
 Mac replacement follows the manual ZIP flow above. Fixed Linux packages must

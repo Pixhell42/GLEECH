@@ -21,6 +21,9 @@ runner for saved animation, external video and audio, MP4, GIF and PNG sequences
 See the [0.2.0 release notes](docs/RELEASE-0.2.0.md) and
 [CLI/TUI guide](docs/CLI.md).
 
+[0.2.1 is in preparation](docs/RELEASE-0.2.1.md), fixing Windows CLI updates and
+Linux AppImage extraction cleanup. Published downloads below remain at 0.2.0.
+
 The current library contains **109 built-in effects**, including **46 original
 shaders**, **29 starter presets**, **40 depth maps** and **40 vector maps**.
 Imported shaders are additional library entries. See the [effect inventory](docs/EFFECTS.md).
