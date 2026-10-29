@@ -5,6 +5,20 @@ terms or establish rights for user-imported artwork/shaders/fonts.
 
 ## Runtime dependencies
 
+### Linux AppImage launcher runtime after 0.2.0
+
+New Linux builds compile the MIT-licensed AppImage type-2 runtime from pinned
+upstream commit `fedfad51acc2860b2916a1eef32ba4a500ff31ef`, with GLEECH's change
+to allocate a separate extraction directory per invocation. This is an AppImage
+launcher change; the Electron runtime is unchanged. Original notices for the
+statically linked musl, libfuse, squashfuse, zstd, zlib and mimalloc components,
+the modified source, libfuse source and patches, runtime object, link archives,
+relink instructions and build-package record accompany Linux packages under
+`resources/appimage-runtime-notices/`. Keep this material with redistributed
+packages. `source-and-relink.tar.gz` contains the modified runtime and relinking
+materials; the build uses the pinned Alpine image in
+`apps/desktop/build/appimage-runtime/Dockerfile`.
+
 ### FFmpeg executable
 
 Packaged apps include FFmpeg 9.0.2 from the pinned TAS-FFMPEG v9.0.2 release,

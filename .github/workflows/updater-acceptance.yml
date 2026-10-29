@@ -1,0 +1,88 @@
+name: Installed built-in updater acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/updater-acceptance.yml
+      - tooling/updater-acceptance-*.mjs
+      - tooling/updater-package-check.mjs
+      - tooling/prepare-appimage-runtime.mjs
+      - apps/desktop/src/**
+      - apps/desktop/resources/cli/**
+      - apps/desktop/build/**
+      - apps/desktop/electron-builder.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: updater-acceptance-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native:
+    name: Updater ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: win32-x64
+            runner: windows-latest
+            package: dist:win
+          - target: darwin-arm64
+            runner: macos-15
+            package: dist:mac
+          - target: darwin-x64
+            runner: macos-15-intel
+            package: dist:mac
+          - target: linux-x64
+            runner: ubuntu-22.04
+            package: dist:linux
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare private sender from the current application source
+        run: node tooling/updater-acceptance-build.mjs prepare-sender
+      - name: Build private sender (publishing disabled)
+        run: pnpm ${{ matrix.package }}
+      - run: node tooling/updater-acceptance-build.mjs record-sender
+      - run: node tooling/updater-acceptance-build.mjs prepare-receiver
+      - name: Build private next-version receiver (publishing disabled)
+        run: pnpm ${{ matrix.package }}
+      - run: node tooling/updater-acceptance-build.mjs record
+      - name: Install Linux desktop prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 xvfb libgtk-3-0 libnss3 libasound2
+      - name: Verify installed update engines and recovery
+        if: runner.os != 'Linux'
+        run: node tooling/updater-package-check.mjs
+      - name: Verify installed AppImage update engines and recovery
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node tooling/updater-package-check.mjs
+      - name: Retain reports only (never publish fixture installers)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: updater-acceptance-${{ matrix.target }}-${{ github.sha }}
+          path: |
+            test-results/builtin-updater/${{ matrix.target }}/report.json
+            test-results/builtin-updater/${{ matrix.target }}/fixture.json
+            test-results/builtin-updater/${{ matrix.target }}/receiver*.json
+            test-results/builtin-updater/${{ matrix.target }}/finder*.json
+            test-results/builtin-updater/${{ matrix.target }}/runtime*.json
+            test-results/builtin-updater/${{ matrix.target }}/runtime*.txt
+            test-results/builtin-updater/${{ matrix.target }}/*.png
+            test-results/builtin-updater/${{ matrix.target }}/*.log
+            test-results/builtin-updater/${{ matrix.target }}/artwork/*
+          if-no-files-found: error
+          retention-days: 30

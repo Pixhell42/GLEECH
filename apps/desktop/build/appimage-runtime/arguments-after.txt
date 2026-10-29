@@ -1,0 +1,9 @@
+            char* new_argv[argc + 1];
+            int new_argc = 0;
+            new_argv[new_argc++] = strdup(apprun_path);
+            for (int i = 1; i < argc; ++i) {
+                if (strcmp(argv[i], "--appimage-extract-and-run") != 0) {
+                    new_argv[new_argc++] = strdup(argv[i]);
+                }
+            }
+            new_argv[new_argc] = NULL;

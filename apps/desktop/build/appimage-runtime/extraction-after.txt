@@ -1,0 +1,13 @@
+        /* GLEECH: each invocation owns its extraction and cleanup. A sibling
+         * process must never remove a running desktop or updater's files. */
+        char* prefix = malloc(strlen(temp_base) + sizeof("/appimage_extracted_XXXXXX"));
+        if (prefix == NULL) {
+            perror("malloc");
+            exit(EXIT_EXECERROR);
+        }
+        sprintf(prefix, "%s/appimage_extracted_XXXXXX", temp_base);
+        if (mkdtemp(prefix) == NULL) {
+            perror("mkdtemp");
+            free(prefix);
+            exit(EXIT_EXECERROR);
+        }

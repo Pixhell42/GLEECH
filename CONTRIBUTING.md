@@ -28,3 +28,16 @@ in the public checkout. Disclose new assets/dependencies and retain license noti
 Project-owned changes are contributed under [MIT](LICENSE). You must have the
 rights to contribute your code/assets; third-party content keeps its own terms.
 Report security issues privately through [SECURITY.md](SECURITY.md).
+
+## Linux AppImage packaging
+
+Build Linux x64 AppImages on a native Linux x64 host with Docker available to the
+build user, including a running Docker daemon. The before-pack hook builds the
+pinned AppImage launcher in an isolated Alpine container and caches it under
+`test-results/appimage-runtime/`. Docker is a build dependency; running GLEECH
+does not require Docker.
+
+The runtime build checks argument forwarding and retains original notices,
+modified source and relinking materials in `resources/appimage-runtime-notices/`.
+It verifies that the source archive contains the files needed by its Docker build
+and relink script. Preserve that directory when redistributing Linux packages.

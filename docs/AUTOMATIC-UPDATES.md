@@ -66,6 +66,52 @@ See [terminal setup](CLI.md) for the platform commands.
   it, replace GLEECH.app at the same location, then reopen. Fully automatic macOS
   installation requires signed application bundles; signing checks are not bypassed.
 
+### Windows CLI in 0.2.0
+
+The development fix detaches the updater helper while retaining its IPC approval
+and terminal-exit gate. It requires a new package; it does not alter public 0.2.0.
+
+Installed acceptance found that `gleech update --yes` can report a verified
+download without completing installation after the terminal exits. For the
+published Windows 0.2.0 package, use **Settings > Updates > Install & Update**
+instead; the native desktop installation, relaunch and unsaved-session recovery
+passed. Check the version after reopening. A verified download message alone
+does not confirm that the new version is installed.
+
+Release metadata cannot repair the updater inside an existing binary. A future
+Windows package needs its own CLI handoff fix and installed acceptance; the
+desktop updater can deliver that replacement package.
+
+### Linux without FUSE
+
+Development packages use a source-built AppImage runtime that creates a private
+extraction directory per launch and removes it after that launch exits. They do
+not require `NO_CLEANUP=1`. Runtime provenance, original notices, modified source
+and relinking materials are included under `resources/appimage-runtime-notices`.
+After installing a fixed release, remove `NO_CLEANUP=1` from its launch environment
+so that these private extraction directories are removed automatically.
+The following workaround remains necessary for the unchanged public 0.2.0 image.
+
+The `APPIMAGE_EXTRACT_AND_RUN=1` fallback shares an extracted runtime between
+launches of the same AppImage. In the published 0.2.0 package, running the CLI
+while the desktop is open can remove that runtime on CLI exit, including the
+desktop's `app-update.yml`. This can prevent the desktop updater from downloading
+an update. This mode does not have an unconditional updater acceptance pass.
+
+For extraction-mode desktop **and** terminal launches, set both environment
+variables before starting GLEECH:
+
+```sh
+export APPIMAGE_EXTRACT_AND_RUN=1
+export NO_CLEANUP=1
+```
+
+Close GLEECH and restart it with these variables if another launch has already
+removed its runtime. The [AppImage documentation](https://docs.appimage.org/user-guide/troubleshooting/fuse.html#extract-and-run-type-2-appimages)
+describes `NO_CLEANUP=1`: it retains the extraction cache, so it uses temporary disk
+space until you remove the cache while all related processes are closed. This
+workaround does not certify FUSE mounts or an Omarchy/Wayland desktop session.
+
 Development and smoke-test processes never download or install real updates.
 Automatic checks only select newer versions, the matching platform/architecture,
 and releases that include that architecture's update metadata and GitHub asset
@@ -138,3 +184,26 @@ Its network and installer are fixtures; it never installs a release or changes
 the user's normal data. Pass an unpacked executable to `tooling/updates-check.mjs`
 to run the same flow against packaged code. Native install/relaunch acceptance
 still requires real installed test machines before public release.
+
+The **Installed built-in updater acceptance** workflow exercises private sender
+and receiver packages from the current application source on Windows x64, Apple
+Silicon, Intel Mac and Linux x64 using normal default profiles. Private versions
+0.2.1 and 0.2.2 are test fixtures and are never published. The sender contains the
+real fixes without inspection code; the receiver adds inspection receipts and
+fixture discovery routing. The workflow also installs the unchanged public 0.2.0
+package and tests its desktop repair path to the fixed receiver.
+Release discovery and downloads use loopback transport. The updater controllers,
+integrity checks, recovery checkpoints and native install/quit paths remain real.
+Mac replacement follows the manual ZIP flow above. Fixed Linux packages must
+retain the desktop's files during CLI and duplicate desktop launches, complete
+desktop and terminal updates, and clean up their private extraction directories
+with `NO_CLEANUP` unset. The historical 0.2.0 failure reports remain separate.
+
+The checks cover invalid release/manifest rejection, interrupted automatic
+downloads, digest failure and retry, desktop and CLI installation, unsaved timeline
+recovery, presets/preferences, original Save binding and matching exported pixels.
+Reports retain sender/receiver hashes and known issues. CPU rendering, recorded
+Finder selection and full downloads are used; physical GPUs, OS download prompts,
+FUSE/Wayland and differential-download optimization require separate checks.
+Every future release must still pass its package and metadata checks; this test
+does not certify an unbuilt future version.
