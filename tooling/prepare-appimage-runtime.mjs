@@ -39,6 +39,9 @@ export async function prepareAppImageRuntime() {
     'extraction-after.txt',
     'cleanup-before.txt',
     'cleanup-after.txt',
+    'arguments-before.txt',
+    'arguments-after.txt',
+    'arguments-check.c',
   ];
   const inputHashes = Object.fromEntries(
     await Promise.all(files.map(async (f) => [f, await digest(join(inputs, f))])),
@@ -83,7 +86,7 @@ export async function prepareAppImageRuntime() {
     await command('tar', ['-xzf', archive, '--strip-components=1', '-C', source], root);
     const sourceFile = join(source, 'src/runtime/runtime.c');
     let patched = await readFile(sourceFile, 'utf8');
-    for (const change of ['extraction', 'cleanup']) {
+    for (const change of ['extraction', 'cleanup', 'arguments']) {
       const before = await readFile(join(inputs, change + '-before.txt'), 'utf8');
       const after = await readFile(join(inputs, change + '-after.txt'), 'utf8');
       assert.equal(
@@ -94,6 +97,21 @@ export async function prepareAppImageRuntime() {
       patched = patched.replace(before, after);
     }
     await writeFile(sourceFile, patched);
+    const argumentCheck = await readFile(join(inputs, 'arguments-check.c'), 'utf8');
+    const argumentMarker = '/* GLEECH_RUNTIME_ARGUMENT_COPY */';
+    assert.equal(argumentCheck.split(argumentMarker).length, 2);
+    for (const variant of ['before', 'after']) {
+      const block = await readFile(join(inputs, 'arguments-' + variant + '.txt'), 'utf8');
+      const checked = block.replace(
+        /(char\* new_argv\[[^\]]+\];)/,
+        '$1\n            assert(sizeof(new_argv) / sizeof(new_argv[0]) >= (size_t)argc + 1);',
+      );
+      assert.notEqual(checked, block);
+      await writeFile(
+        join(source, 'gleech-arguments-' + variant + '.c'),
+        argumentCheck.replace(argumentMarker, checked),
+      );
+    }
     const dependencies = join(source, 'scripts/common/install-dependencies.sh');
     const installer = await readFile(dependencies, 'utf8');
     assert.ok(installer.includes('    rm -rf "$tmpdir"'));
