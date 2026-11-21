@@ -2,19 +2,19 @@
 
 ## Current checkpoint
 
-Version 0.2.2 was published November 21, 2026 for Windows x64 beta, macOS
+Version 0.2.3 is published for Windows x64 beta, macOS
 Apple Silicon and Intel experimental alpha, and Linux x64 experimental alpha.
 Each package includes the CLI, TUI and FFmpeg. See the
-[0.2.2 downloads and source materials](RELEASE-0.2.2.md#downloads).
+[0.2.3 downloads and source materials](RELEASE-0.2.3.md#downloads).
 
-Electron 45.4.1 with Node.js 24.22.3 passed all six embedded-runtime probe groups
+Electron 46.0.0-alpha.12 with Node.js 26.13.1 passed all six embedded-runtime probe groups
 on each target. The release passed 28 installed lifecycle checks, 55 updater
 checks, 291 hosted Windows checks and 24 physical Windows GPU checks. The live
 update feeds were verified for all four targets.
 
-Electron 45.4.1 still carries BoringSSL CVE-2026-35189. The maintainer approved the
-disclosed risk for 0.2.2. Reassess it before the next release or when an official
-compatible Electron includes the fix. See the [0.2.2 security disclosure](RELEASE-0.2.2.md#known-security-issue).
+The bundled BoringSSL revision fixes CVE-2026-35189. Electron 46.0.0-alpha.12
+is a prerelease and may have compatibility or stability issues. See the
+[0.2.3 security and runtime notes](RELEASE-0.2.3.md#security-and-runtime).
 
 Release validation uses the intended source commit, a frozen dependency install,
 code checks, hosted Windows CI and packaged startup, image/export and MCP checks.
