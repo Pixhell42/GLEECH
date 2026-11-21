@@ -35,7 +35,7 @@ updater to an already installed 0.1.2 binary. The automatic-update behavior desc
 starts with 0.2.0.
 
 Save your work and close GLEECH and its terminal tools, then download the matching
-0.2.1 package from the [release pages](RELEASE-0.2.1.md).
+0.2.2 package from the [release downloads](RELEASE-0.2.2.md#downloads).
 
 - **Windows:** run the new NSIS installer over the existing per-user installation
   at the same location. An uninstall is not needed for this upgrade.
@@ -43,7 +43,7 @@ Save your work and close GLEECH and its terminal tools, then download the matchi
   `GLEECH.app` at its existing location in Applications. Keep the same app path.
 - **Linux:** replace the old AppImage's contents at its existing path and make it
   executable. Keeping the old filename is supported, even if it includes `0.1.2`;
-  the running version will be 0.2.1. Without FUSE, retain the documented
+  the running version will be 0.2.2. Without FUSE, retain the documented
   `APPIMAGE_EXTRACT_AND_RUN=1` launch option.
 
 Keep the existing user-data folder, projects and source media. Existing terminal
@@ -149,11 +149,12 @@ Update `shared/release-notes.ts` with each release for offline/manual installs.
 
 ## Publishing requirements
 
-0.2.0 and 0.2.1 were published with separate, disclosed, maintainer-accepted
-BoringSSL exceptions; see the [0.2.0 notes](RELEASE-0.2.0.md#known-security-issue)
-and [0.2.1 notes](RELEASE-0.2.1.md#known-security-issue). Future releases still
-require their own review and final publication approval. Packaging commands
-explicitly use `--publish never`; building does not publish a release.
+The maintainer accepted the disclosed BoringSSL issue separately for 0.2.0,
+0.2.1 and 0.2.2. Future releases require their own review and publication
+approval. See the [0.2.2 security disclosure](RELEASE-0.2.2.md#known-security-issue)
+and the [0.2.1](RELEASE-0.2.1.md#known-security-issue) and
+[0.2.0](RELEASE-0.2.0.md#known-security-issue) release notes.
+Packaging commands use `--publish never`.
 
 Each platform's release must attach the binary and its generated update manifest:
 

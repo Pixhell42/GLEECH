@@ -15,10 +15,11 @@ any effect control with keyframes, curves, audio and LFO modulators, and renders
 video, GIFs and loops, image sequences and flip books (see
 [Timeline, video and GIF](docs/TIMELINE.md)). Movie and loop export use ffmpeg.
 
-**GLEECH 0.2.1** fixes Windows CLI updates and Linux AppImage extraction cleanup.
+**GLEECH 0.2.2** updates Electron, Chromium and Node.js with November security
+fixes, patches local MCP dependencies and improves updater cache validation.
 It includes timeline animation across desktop, CLI and TUI, with bundled FFmpeg
 for saved animation, external video and audio, MP4, GIF and PNG sequences.
-See the [0.2.1 release notes](docs/RELEASE-0.2.1.md) and
+See the [0.2.2 release notes](docs/RELEASE-0.2.2.md) and
 [CLI/TUI guide](docs/CLI.md).
 
 The current library contains **109 built-in effects**, including **46 original
@@ -27,13 +28,19 @@ Imported shaders are additional library entries. See the [effect inventory](docs
 
 ## Run the app
 
-Download 0.2.1 for [Windows x64](https://github.com/Pixhell42/GLEECH/releases/tag/v0.2.1),
-[macOS Intel / Apple Silicon](https://github.com/Pixhell42/GLEECH/releases/tag/macos-alpha-0.2.1),
-or [Linux x64](https://github.com/Pixhell42/GLEECH/releases/tag/linux-omarchy-alpha-0.2.1).
-Windows is a beta; macOS and Linux are experimental alphas. Packages are unsigned,
-and macOS builds are not notarized. Read the [known security issue](docs/RELEASE-0.2.1.md#known-security-issue)
-before using network features. An unpacked
-build can be run through `GLEECH.exe` with its accompanying folders intact.
+Download GLEECH 0.2.2 for your platform.
+
+- [Windows x64 installer](https://github.com/Pixhell42/GLEECH/releases/download/v0.2.2/GLEECH-0.2.2-x64-setup.exe)
+- [macOS Apple Silicon ZIP](https://github.com/Pixhell42/GLEECH/releases/download/macos-alpha-0.2.2/GLEECH-0.2.2-mac-arm64.zip)
+- [macOS Intel ZIP](https://github.com/Pixhell42/GLEECH/releases/download/macos-alpha-0.2.2/GLEECH-0.2.2-mac-x64.zip)
+- [Linux x64 AppImage](https://github.com/Pixhell42/GLEECH/releases/download/linux-omarchy-alpha-0.2.2/GLEECH-0.2.2-linux-x86_64.AppImage)
+
+Windows is a beta. macOS and Linux are experimental alphas. Packages are unsigned,
+and macOS builds lack notarization. The known BoringSSL issue can terminate GLEECH
+during update checks or remote shader imports and cause loss of unsaved work.
+See [BoringSSL CVE-2026-35189](docs/RELEASE-0.2.2.md#known-security-issue).
+
+An unpacked build can be run through `GLEECH.exe` with its accompanying folders intact.
 Packaged builds include their runtime; Node.js and pnpm are only needed to build
 from source. GPU features depend on your graphics hardware and driver.
 
