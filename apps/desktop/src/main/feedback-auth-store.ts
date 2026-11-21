@@ -16,15 +16,15 @@ export interface FeedbackAuthStore {
 export function createFeedbackAuthStore(
   path: string,
   encryption: {
-    isEncryptionAvailable(): boolean;
-    encryptString(value: string): Buffer;
-    decryptString(value: Buffer): string;
+    isAsyncEncryptionAvailable(): Promise<boolean>;
+    encryptStringAsync(value: string): Promise<Buffer>;
+    decryptStringAsync(value: Buffer): Promise<{ result: string }>;
     getSelectedStorageBackend?(): string;
   },
   platform: NodeJS.Platform = process.platform,
 ): FeedbackAuthStore {
-  const secureEncryptionAvailable = () =>
-    encryption.isEncryptionAvailable() &&
+  const secureEncryptionAvailable = async () =>
+    (await encryption.isAsyncEncryptionAvailable()) &&
     (platform !== 'linux' ||
       ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(
         encryption.getSelectedStorageBackend?.() ?? '',
@@ -32,10 +32,11 @@ export function createFeedbackAuthStore(
   return {
     async load() {
       try {
-        if (!secureEncryptionAvailable()) return null;
+        if (!(await secureEncryptionAvailable())) return null;
         const bytes = await readFile(path);
         if (bytes.length > 16384) return null;
-        const data = JSON.parse(encryption.decryptString(bytes)) as Partial<FeedbackAuth>;
+        const { result } = await encryption.decryptStringAsync(bytes);
+        const data = JSON.parse(result) as Partial<FeedbackAuth>;
         if (
           typeof data.token !== 'string' ||
           !data.token ||
@@ -52,7 +53,7 @@ export function createFeedbackAuthStore(
       }
     },
     async save(value) {
-      if (!secureEncryptionAvailable())
+      if (!(await secureEncryptionAvailable()))
         throw new Error(
           platform === 'linux'
             ? 'Secure credential encryption is unavailable. Enable a desktop keyring before signing in to GitHub.'
@@ -61,7 +62,7 @@ export function createFeedbackAuthStore(
       await mkdir(dirname(path), { recursive: true });
       const temporary = `${path}.${randomUUID()}.tmp`;
       try {
-        await writeFile(temporary, encryption.encryptString(JSON.stringify(value)), {
+        await writeFile(temporary, await encryption.encryptStringAsync(JSON.stringify(value)), {
           mode: 0o600,
         });
         await rename(temporary, path);
