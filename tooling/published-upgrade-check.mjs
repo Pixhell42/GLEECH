@@ -153,13 +153,14 @@ const get = async (url) => {
     },
     signal: AbortSignal.timeout(600000),
   });
-  assert.equal(response.status, 200, `Public request failed: ${url}`);
+  assert.equal(response.status, 200, `Public request failed (${response.status}): ${url}`);
   return response;
 };
 async function publishedReleases() {
   const releases = [];
   for (let page = 1; ; page++) {
-    const response = await get(`${releasesApi}?per_page=100&page=${page}`);
+    const pageParameter = page === 1 ? '' : `&page=${page}`;
+    const response = await get(`${releasesApi}?per_page=100${pageParameter}`);
     const entries = await response.json();
     assert.ok(Array.isArray(entries), 'GitHub returned an invalid release list.');
     releases.push(...entries);
