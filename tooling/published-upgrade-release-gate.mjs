@@ -5,6 +5,9 @@ import {
   readyPublishedRelease,
   targets,
 } from './published-upgrade-plan.mjs';
+import { createGitHubRateLimitRetry } from './published-upgrade-retry.mjs';
+
+const retryGitHubApi = createGitHubRateLimitRetry({ maxWaitMs: 150000 });
 
 const version = /^(?:v|macos-alpha-|linux-omarchy-alpha-)(\d+\.\d+\.\d+)$/.exec(
   process.env.PUBLISHED_RELEASE_TAG,
@@ -22,16 +25,16 @@ else console.error('No publication to test from the frozen 0.2.0 packages.');
 
 async function fetchRelease(tag) {
   const token = process.env.GITHUB_TOKEN;
-  const response = await fetch(
-    `https://api.github.com/repos/Pixhell42/GLEECH/releases/tags/${encodeURIComponent(tag)}`,
-    {
+  const url = `https://api.github.com/repos/Pixhell42/GLEECH/releases/tags/${encodeURIComponent(tag)}`;
+  const response = await retryGitHubApi(`release metadata for ${tag}`, () =>
+    fetch(url, {
       headers: {
         Accept: 'application/vnd.github+json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
       redirect: 'error',
       signal: AbortSignal.timeout(15000),
-    },
+    }),
   );
   if (response.status === 404) return null;
   if (!response.ok)
@@ -44,7 +47,9 @@ async function checkPublication(version, eventReleaseId) {
   const tags = [...new Set(expected.map(({ tag }) => tag))];
   let ready;
   for (let attempt = 0; attempt < 12; attempt++) {
-    ready = readyPublishedRelease(expected, await Promise.all(tags.map(fetchRelease)));
+    const releases = [];
+    for (const tag of tags) releases.push(await fetchRelease(tag));
+    ready = readyPublishedRelease(expected, releases);
     if (ready) {
       // Only one of the platform publication events should start the native jobs.
       if (ready.releaseId !== eventReleaseId) {
