@@ -6,6 +6,7 @@ import {
   selectPublishedUpgrade,
   targets,
 } from './published-upgrade-plan.mjs';
+import { createGitHubRateLimitRetry } from './published-upgrade-retry.mjs';
 
 const sha256 = 'a'.repeat(64);
 const release = (tag, archives, fields = {}) => ({
@@ -116,4 +117,86 @@ test('the last platform publication owns the complete matrix regardless of publi
     );
   }
   assert.equal(readyPublishedRelease(expected, [...releases].reverse()).releaseId, 3);
+});
+
+const quotaResponse = (status, headers = {}, message = 'Forbidden') =>
+  Response.json({ message }, { status, headers });
+
+test('waits for GitHub retry and reset headers, then returns the real successful response', async () => {
+  const waits = [];
+  const retry = createGitHubRateLimitRetry({
+    maxWaitMs: 180000,
+    now: () => 100000,
+    wait: async (delay) => waits.push(delay),
+    log: () => {},
+  });
+  const success = Response.json({ assets: [] });
+  const responses = [
+    quotaResponse(403, {
+      'retry-after': '15',
+      'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': '130',
+    }),
+    quotaResponse(429, { 'retry-after': '5' }),
+    success,
+  ];
+  assert.equal(await retry('release metadata', async () => responses.shift()), success);
+  assert.deepEqual(waits, [31000, 6000]);
+});
+
+test('backs off for an observed updater rate limit and stops after three retries', async () => {
+  const waits = [];
+  const retry = createGitHubRateLimitRetry({
+    maxWaitMs: 900000,
+    wait: async (delay) => waits.push(delay),
+    log: () => {},
+  });
+  const rejected = { phase: 'error' };
+  const observed = {
+    status: 403,
+    retryAfter: null,
+    remaining: '55',
+    reset: null,
+    message: 'You have exceeded a secondary rate limit.',
+  };
+  let checks = 0;
+  await assert.rejects(
+    retry(
+      'installed updater',
+      async () => {
+        checks++;
+        return rejected;
+      },
+      (result) => (result === rejected ? observed : null),
+    ),
+    /HTTP 403.*exceeded the retry budget/,
+  );
+  assert.equal(checks, 4);
+  assert.deepEqual(waits, [60000, 120000, 240000]);
+});
+
+test('shares a bounded wait budget and leaves ordinary API and test failures alone', async () => {
+  const waits = [];
+  const retry = createGitHubRateLimitRetry({
+    maxWaitMs: 60000,
+    wait: async (delay) => waits.push(delay),
+    log: () => {},
+  });
+  const responses = [quotaResponse(429, { 'retry-after': '40' }), Response.json({})];
+  await retry('first release request', async () => responses.shift());
+  await assert.rejects(
+    retry('later release request', async () => quotaResponse(429, { 'retry-after': '30' })),
+    /next retry would need to wait 31s/,
+  );
+  const forbidden = quotaResponse(403);
+  assert.equal(await retry('forbidden release metadata', async () => forbidden), forbidden);
+  assert.deepEqual(await forbidden.json(), { message: 'Forbidden' });
+  const failure = new Error('SHA-256 mismatch');
+  await assert.rejects(
+    retry('check failure', async () => {
+      throw failure;
+    }),
+    failure,
+  );
+  assert.deepEqual(waits, [41000]);
 });

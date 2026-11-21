@@ -34,6 +34,7 @@ import {
   targets,
   updateManifestName,
 } from './published-upgrade-plan.mjs';
+import { createGitHubRateLimitRetry } from './published-upgrade-retry.mjs';
 
 // This deliberately uses the default profile and native installation paths.
 assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Use disposable native CI runners.');
@@ -146,19 +147,24 @@ async function check(name, fn) {
 }
 const base = 'https://github.com/Pixhell42/GLEECH/releases/download/';
 const releasesApi = 'https://api.github.com/repos/Pixhell42/GLEECH/releases';
+const retryGitHubApi = createGitHubRateLimitRetry({ maxWaitMs: 15 * 60000 });
 const get = async (url) => {
   const isReleaseMetadata =
     url === releasesApi || url.startsWith(releasesApi + '?') || url.startsWith(releasesApi + '/');
   const token = isReleaseMetadata ? process.env.GITHUB_TOKEN : undefined;
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'GLEECH-Published-Upgrade-Acceptance',
-      Accept: 'application/vnd.github+json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-    },
-    redirect: isReleaseMetadata ? 'error' : 'follow',
-    signal: AbortSignal.timeout(600000),
-  });
+  const request = () =>
+    fetch(url, {
+      headers: {
+        'User-Agent': 'GLEECH-Published-Upgrade-Acceptance',
+        Accept: 'application/vnd.github+json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      redirect: isReleaseMetadata ? 'error' : 'follow',
+      signal: AbortSignal.timeout(isReleaseMetadata ? 30000 : 600000),
+    });
+  const response = isReleaseMetadata
+    ? await retryGitHubApi('release metadata', request)
+    : await request();
   assert.equal(response.status, 200, `Public request failed (${response.status}): ${url}`);
   return response;
 };
@@ -239,16 +245,20 @@ async function launch(version) {
   else profile = runtime.profile;
   // Observe requests, passing original arguments and responses through unchanged.
   // Only Finder's selection boundary is recorded instead of opening an OS window.
-  await app.evaluate(({ net, shell }) => {
+  await app.evaluate(({ net, shell }, releasesApi) => {
     globalThis.__publicUpgradeRequests = [];
     const observe = (url) => {
       if (/^https:\/\/(?:api\.github\.com|github\.com)\//.test(url))
         globalThis.__publicUpgradeRequests.push(url);
     };
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (input, options) => {
-      observe(String(input));
-      return originalFetch(input, options);
+    globalThis.fetch = async (input, options) => {
+      const url = String(input);
+      observe(url);
+      const response = await originalFetch(input, options);
+      if (url.startsWith(releasesApi + '?') && (response.status === 403 || response.status === 429))
+        globalThis.__publicUpgradeRateLimit = response.clone();
+      return response;
     };
     const originalRequest = net.request.bind(net);
     net.request = (options) => {
@@ -263,7 +273,7 @@ async function launch(version) {
     shell.showItemInFolder = (path) => {
       globalThis.__publicUpgradeFinderSelection = path;
     };
-  });
+  }, releasesApi);
   if (version === current.version) {
     const beforeChanges = await page.evaluate(() => window.gleech.updateState());
     assert.equal(beforeChanges.ok, true);
@@ -286,6 +296,32 @@ async function launch(version) {
   assert.equal(init.notes.ok, true);
   assert.equal(init.state.value.installMode, process.platform === 'darwin' ? 'finder' : 'native');
   await page.getByRole('dialog', { name: /What’s new/ }).waitFor({ state: 'hidden' });
+}
+function checkForPublishedUpdates(label) {
+  return retryGitHubApi(
+    label,
+    async () => {
+      await app.evaluate(() => {
+        globalThis.__publicUpgradeRateLimit = null;
+      });
+      return page.evaluate(() => window.gleech.checkForUpdates());
+    },
+    (result) =>
+      result.ok && result.value.phase === 'error'
+        ? app.evaluate(async () => {
+            const response = globalThis.__publicUpgradeRateLimit;
+            if (!response) return null;
+            const retryAfter = response.headers.get('retry-after');
+            const remaining = response.headers.get('x-ratelimit-remaining');
+            const reset = response.headers.get('x-ratelimit-reset');
+            const message =
+              response.status === 403 && retryAfter === null && remaining !== '0'
+                ? (await response.json().catch(() => null))?.message
+                : undefined;
+            return { status: response.status, retryAfter, remaining, reset, message };
+          })
+        : null,
+  );
 }
 async function choose(kind, path) {
   await app.evaluate(
@@ -567,7 +603,7 @@ try {
     );
   });
   await check('installed-sender-selects-the-public-release-and-manifest', async () => {
-    const result = await page.evaluate(() => window.gleech.checkForUpdates());
+    const result = await checkForPublishedUpdates('installed 0.2.0 updater discovery');
     assert.equal(result.ok, true);
     const state = result.value;
     assert.equal(state.phase, 'available', JSON.stringify(state));
@@ -731,7 +767,7 @@ try {
     },
   );
   await check('installed-upgrade-does-not-offer-itself-again', async () => {
-    const result = await page.evaluate(() => window.gleech.checkForUpdates());
+    const result = await checkForPublishedUpdates('updated installation discovery');
     assert.equal(result.ok, true);
     const state = result.value;
     assert.equal(state.error, null);
