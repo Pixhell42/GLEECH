@@ -2,27 +2,19 @@
 
 ## Current checkpoint
 
-Version 0.2.0 is published for Windows x64 beta, macOS arm64/x64 experimental
-alpha and Linux x64 experimental alpha, including the bundled CLI/TUI and FFmpeg.
-The [release notes](RELEASE-0.2.0.md) link the packages, source materials and
-known security issue. Official Electron 45.1.0 with Node.js 24.22.1 passes all six
-retained runtime probe groups on every packaged target. The complete release
-plan passed 291 hosted and 24 physical Windows GPU commands. Installed acceptance
-passed seven lifecycle groups per target plus eight Windows normal-mode checks;
-hosted macOS/Linux coverage limits remain documented in the release notes.
-The temporary custom Electron backport is retired.
+Version 0.2.2 was published November 21, 2026 for Windows x64 beta, macOS
+Apple Silicon and Intel experimental alpha, and Linux x64 experimental alpha.
+Each package includes the CLI, TUI and FFmpeg. See the
+[0.2.2 downloads and source materials](RELEASE-0.2.2.md#downloads).
 
-The maintainer accepted the disclosed BoringSSL CVE-2026-35189 exception for
-0.2.0 only, then approved publication on October 28, 2026. The runtime remains
-affected. Reassess the exception before the next release or when an official
-compatible Electron includes the fix. The checklist below remains the reusable
-process for future releases.
+Electron 45.4.1 with Node.js 24.22.3 passed all six embedded-runtime probe groups
+on each target. The release passed 28 installed lifecycle checks, 55 updater
+checks, 291 hosted Windows checks and 24 physical Windows GPU checks. The live
+update feeds were verified for all four targets.
 
-Windows x64 app/NSIS installer builds and packaged GPU/CPU image/mask workflows,
-menus, version metadata, MCP profiles and bundled assets have passed. The user
-confirmed installation and uninstallation on 2026-10-14. The refreshed support
-panel has also passed packaged link/layout checks. These are development checks,
-not a public release announcement.
+Electron 45.4.1 still carries BoringSSL CVE-2026-35189. The maintainer approved the
+disclosed risk for 0.2.2. Reassess it before the next release or when an official
+compatible Electron includes the fix. See the [0.2.2 security disclosure](RELEASE-0.2.2.md#known-security-issue).
 
 Release validation uses the intended source commit, a frozen dependency install,
 code checks, hosted Windows CI and packaged startup, image/export and MCP checks.
@@ -79,7 +71,7 @@ Passing development checks does not publish a release.
       masks, local MCP and uninstall without deleting artwork/projects unexpectedly.
 - [ ] Publish source and binaries only after final review/approval.
 
-## Official Electron runtime — 2026-10-28
+## Historical Electron runtime review — 2026-10-28
 
 The shared desktop dependency and lockfile pin official
 [Electron 45.1.0](https://releases.electronjs.org/release/v45.1.0): Node.js 24.22.1,
