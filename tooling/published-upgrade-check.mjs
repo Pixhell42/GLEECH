@@ -28,14 +28,18 @@ import {
   ownedImageDescendants,
   parseLinuxProcessStat,
 } from './linux-updater-processes.mjs';
-import { targets } from './published-upgrade-plan.mjs';
+import {
+  comparePublishedVersions,
+  selectPublishedUpgrade,
+  targets,
+} from './published-upgrade-plan.mjs';
 
 // This deliberately uses the default profile and native installation paths.
 assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Use disposable native CI runners.');
 const key = `${process.platform}-${process.arch}`;
 assert.equal(process.env.EXPECTED_TARGET, key);
-const target = targets[key];
-assert.ok(target);
+const previous = targets[key];
+assert.ok(previous);
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'test-results/published-upgrade', key);
 const artwork = join(output, 'artwork');
@@ -43,7 +47,7 @@ await mkdir(artwork, { recursive: true });
 const installed =
   process.platform === 'darwin'
     ? '/Applications/GLEECH.app'
-    : join(output, 'installed', process.platform === 'win32' ? 'GLEECH' : target.previous.archive);
+    : join(output, 'installed', process.platform === 'win32' ? 'GLEECH' : previous.archive);
 const executable =
   process.platform === 'darwin'
     ? join(installed, 'Contents/MacOS/GLEECH')
@@ -103,9 +107,9 @@ async function poll(fn, message, timeout = 180000) {
 }
 const report = {
   target: key,
-  from: target.previous.version,
-  to: target.current.version,
-  packages: target,
+  from: previous.version,
+  to: null,
+  packages: { previous },
   startedAt: new Date().toISOString(),
   transport:
     'Unmodified public GitHub release API and asset downloads; no network fixtures, routing changes, private receiver or rebuild.',
@@ -140,6 +144,7 @@ async function check(name, fn) {
   console.log('PASS', name);
 }
 const base = 'https://github.com/Pixhell42/GLEECH/releases/download/';
+const releasesApi = 'https://api.github.com/repos/Pixhell42/GLEECH/releases';
 const get = async (url) => {
   const response = await fetch(url, {
     headers: {
@@ -148,13 +153,25 @@ const get = async (url) => {
     },
     signal: AbortSignal.timeout(600000),
   });
-  assert.equal(response.status, 200, `Public request failed: ${url}`);
+  assert.equal(response.status, 200, `Public request failed (${response.status}): ${url}`);
   return response;
 };
+async function publishedReleases() {
+  const releases = [];
+  for (let page = 1; ; page++) {
+    const pageParameter = page === 1 ? '' : `&page=${page}`;
+    const response = await get(`${releasesApi}?per_page=100${pageParameter}`);
+    const entries = await response.json();
+    assert.ok(Array.isArray(entries), 'GitHub returned an invalid release list.');
+    releases.push(...entries);
+    if (!response.headers.get('link')?.includes('rel="next"')) return releases;
+  }
+}
 let app,
   page,
   profile,
   runtime,
+  current,
   currentAsset,
   currentRelease,
   owned = false,
@@ -241,7 +258,7 @@ async function launch(version) {
       globalThis.__publicUpgradeFinderSelection = path;
     };
   });
-  if (version === target.current.version) {
+  if (version === current.version) {
     const beforeChanges = await page.evaluate(() => window.gleech.updateState());
     assert.equal(beforeChanges.ok, true);
     assert.equal(
@@ -356,7 +373,7 @@ async function stopNativeRelaunch() {
 async function waitWindowsInstaller() {
   if (process.platform !== 'win32') return;
   await poll(async () => {
-    for (const name of [target.previous.archive, target.current.archive]) {
+    for (const name of [previous.archive, current.archive]) {
       const { stdout } = await command('tasklist.exe', [
         '/FI',
         'IMAGENAME eq ' + name,
@@ -370,10 +387,10 @@ async function waitWindowsInstaller() {
   }, 'NSIS did not finish writing the owned installation.');
 }
 async function installedVersion() {
-  if (process.platform === 'linux') return (await hash(installed)) === target.current.sha256;
+  if (process.platform === 'linux') return (await hash(installed)) === current.sha256;
   const archive = join(resources(), 'app.asar');
   asar.uncache(archive);
-  return JSON.parse(asar.extractFile(archive, 'package.json')).version === target.current.version;
+  return JSON.parse(asar.extractFile(archive, 'package.json')).version === current.version;
 }
 async function observeCheckpoint() {
   const folder = join(profile, 'update-recovery');
@@ -442,35 +459,36 @@ async function stopOwnedLinuxLaunches() {
   }
 }
 try {
-  await check('published-metadata-and-original-0.2.0-package-match-pinned-hashes', async () => {
-    for (const release of Object.values(target)) {
-      const data = await (
-        await get('https://api.github.com/repos/Pixhell42/GLEECH/releases/tags/' + release.tag)
-      ).json();
+  await check('resolve-latest-published-package-and-verify-pinned-0.2.0-package', async () => {
+    current = selectPublishedUpgrade(await publishedReleases(), previous);
+    report.to = current.version;
+    report.packages.current = current;
+    for (const release of [previous, current]) {
+      const data = await (await get(`${releasesApi}/tags/${release.tag}`)).json();
       assert.equal(data.draft, false);
       assert.equal(data.tag_name, release.tag);
       const asset = data.assets.find((value) => value.name === release.archive);
       assert.ok(asset);
       assert.equal(asset.digest, 'sha256:' + release.sha256);
       assert.equal(asset.browser_download_url, base + release.tag + '/' + release.archive);
-      if (release === target.current) {
+      if (release === current) {
         currentAsset = asset;
         currentRelease = data;
       }
     }
     const download = join(output, 'download');
     await mkdir(download);
-    const path = join(download, target.previous.archive);
-    const response = await get(base + target.previous.tag + '/' + target.previous.archive);
+    const path = join(download, previous.archive);
+    const response = await get(base + previous.tag + '/' + previous.archive);
     await pipeline(Readable.fromWeb(response.body), createWriteStream(path, { flags: 'wx' }));
-    assert.equal(await hash(path), target.previous.sha256);
+    assert.equal(await hash(path), previous.sha256);
     report.originalPackageVerified = true;
   });
   await check('install-unmodified-0.2.0-with-default-profile-and-real-updater', async () => {
     await assert.rejects(access(installed), { code: 'ENOENT' });
     owned = true;
     await mkdir(dirname(installed), { recursive: true });
-    const path = join(output, 'download', target.previous.archive);
+    const path = join(output, 'download', previous.archive);
     if (process.platform === 'win32')
       await command(path, ['/S', '/currentuser', '/D=' + installed]);
     else if (process.platform === 'darwin') {
@@ -481,7 +499,7 @@ try {
       await copyFile(path, installed);
       await chmod(installed, 0o755);
     }
-    await launch(target.previous.version);
+    await launch(previous.version);
     report.originalRuntime = runtime;
   });
   await check('existing-project-preset-and-preference-persisted-before-upgrade', async () => {
@@ -541,24 +559,24 @@ try {
     assert.equal(result.ok, true);
     const state = result.value;
     assert.equal(state.phase, 'available', JSON.stringify(state));
-    assert.equal(state.release.version, target.current.version);
-    assert.equal(state.release.tag, target.current.tag);
-    assert.equal(state.release.asset, target.current.archive);
-    assert.equal(state.release.sha256, target.current.sha256);
+    assert.equal(state.release.version, current.version);
+    assert.equal(state.release.tag, current.tag);
+    assert.equal(state.release.asset, current.archive);
+    assert.equal(state.release.sha256, current.sha256);
     assert.equal(state.release.bytes, currentAsset.size);
     assert.equal(state.release.downloadUrl, currentAsset.browser_download_url);
     const manifestName = `latest-${process.arch}${process.platform === 'darwin' ? '-mac' : process.platform === 'linux' ? '-linux' : ''}.yml`;
     const manifestAsset = currentRelease.assets.find((asset) => asset.name === manifestName);
     assert.ok(manifestAsset);
     const bytes = Buffer.from(
-      await (await get(base + target.current.tag + '/' + manifestName)).arrayBuffer(),
+      await (await get(base + current.tag + '/' + manifestName)).arrayBuffer(),
     );
     const manifestSHA256 = 'sha256:' + createHash('sha256').update(bytes).digest('hex');
     assert.equal(manifestSHA256, manifestAsset.digest);
     const manifest = yaml(bytes.toString('utf8'));
-    assert.equal(manifest.version, target.current.version);
+    assert.equal(manifest.version, current.version);
     assert.equal(manifest.files.length, 1);
-    assert.equal(manifest.files[0].url, target.current.archive);
+    assert.equal(manifest.files[0].url, current.archive);
     assert.equal(manifest.files[0].size, currentAsset.size);
     report.publicDiscovery = {
       release: state.release,
@@ -571,14 +589,10 @@ try {
     async () => {
       const result = await page.evaluate(async () => (await window.gleech.downloadUpdate()).value);
       assert.equal(result.phase, 'ready', JSON.stringify(result));
-      assert.equal(result.release.sha256, target.current.sha256);
+      assert.equal(result.release.sha256, current.sha256);
       report.readyState = result;
       report.publicRequests = await app.evaluate(() => globalThis.__publicUpgradeRequests);
-      assert.ok(
-        report.publicRequests.some((url) =>
-          url.startsWith('https://api.github.com/repos/Pixhell42/GLEECH/releases?'),
-        ),
-      );
+      assert.ok(report.publicRequests.some((url) => url.startsWith(`${releasesApi}?`)));
       assert.ok(report.publicRequests.some((url) => url === currentAsset.browser_download_url));
     },
   );
@@ -622,8 +636,8 @@ try {
       app = null;
       if (process.platform === 'darwin') {
         const handoff = JSON.parse(await readFile(join(output, 'finder-handoff.json'), 'utf8'));
-        assert.equal(basename(handoff.path), target.current.archive);
-        assert.equal(await hash(handoff.path), target.current.sha256);
+        assert.equal(basename(handoff.path), current.archive);
+        assert.equal(await hash(handoff.path), current.sha256);
         assert.equal((await lstat(installed)).isSymbolicLink(), false);
         await rm('/Applications/GLEECH.app', { recursive: true });
         const expanded = join(output, 'current-expanded');
@@ -631,14 +645,11 @@ try {
         await command('ditto', [join(expanded, 'GLEECH.app'), installed]);
         report.finderHandoff = {
           ...handoff,
-          sha256: target.current.sha256,
+          sha256: current.sha256,
           manualSamePathReplacement: true,
         };
       }
-      await poll(
-        installedVersion,
-        `The published ${target.current.version} package was not installed.`,
-      );
+      await poll(installedVersion, `The published ${current.version} package was not installed.`);
       await waitWindowsInstaller();
       if (process.platform !== 'darwin') {
         relaunch = await poll(async () => {
@@ -662,7 +673,7 @@ try {
     'published-upgrade-retains-default-profile-project-preset-and-preferences',
     async () => {
       delete env.NO_CLEANUP;
-      await launch(target.current.version);
+      await launch(current.version);
       report.currentRuntime = runtime;
       assert.equal(runtime.profile, report.originalRuntime.profile);
       assert.equal(
@@ -676,7 +687,7 @@ try {
       }));
       assert.equal(values.color, '#80baff');
       assert.ok(values.presets.value.some((preset) => preset.id === presetId));
-      assert.equal(values.state.value.currentVersion, target.current.version);
+      assert.equal(values.state.value.currentVersion, current.version);
       assert.equal(values.state.value.automatic, false);
       if (process.platform !== 'linux') {
         const result = await run(
@@ -689,7 +700,7 @@ try {
             timeout: 60000,
           },
         );
-        assert.equal(result.stdout.trim(), target.current.version);
+        assert.equal(result.stdout.trim(), current.version);
         report.embeddedCliVersion = result.stdout.trim();
       }
       await choose('open', project);
@@ -710,9 +721,15 @@ try {
   await check('installed-upgrade-does-not-offer-itself-again', async () => {
     const result = await page.evaluate(() => window.gleech.checkForUpdates());
     assert.equal(result.ok, true);
-    assert.equal(result.value.phase, 'idle', JSON.stringify(result.value));
-    assert.equal(result.value.release, null);
-    assert.equal(result.value.error, null);
+    const state = result.value;
+    assert.equal(state.error, null);
+    if (state.phase === 'available') {
+      assert.ok(comparePublishedVersions(state.release.version, current.version) > 0);
+      report.newerReleaseAfterUpgrade = state.release;
+    } else {
+      assert.equal(state.phase, 'idle', JSON.stringify(state));
+      assert.equal(state.release, null);
+    }
   });
   if (process.platform === 'linux')
     await check(
@@ -722,7 +739,7 @@ try {
         const path = join(runtime.resources, 'app-update.yml');
         assert.equal(await exists(path), true);
         const result = await command(installed, ['--cli', '--version']);
-        assert.equal(result.stdout.trim(), target.current.version);
+        assert.equal(result.stdout.trim(), current.version);
         assert.equal(await exists(path), true);
         const provenance = JSON.parse(
           await readFile(
@@ -773,7 +790,7 @@ try {
       } else if (process.platform === 'darwin')
         await rm('/Applications/GLEECH.app', { recursive: true });
       else {
-        assert.equal(installed, join(output, 'installed', target.previous.archive));
+        assert.equal(installed, join(output, 'installed', previous.archive));
         await rm(installed);
       }
     }

@@ -1,13 +1,8 @@
 // Frozen public packages. Acceptance must download these bytes, never rebuild them.
+import assert from 'node:assert/strict';
 import { targets as previous } from './installed-acceptance-plan.mjs';
 
-const liveVersion = '0.2.3';
-const liveHashes = {
-  'win32-x64': 'e962da9a5d95b8d83fc72285a8dc07863aeee665cb89f7236e38186baa91f790',
-  'darwin-arm64': '5ddc62f4d596e033f4e1c9cf01f73b6dd75f84c7b4da8740e47cc9f9de3360c8',
-  'darwin-x64': '212ee29b3abfc606cb9f7d671ce079652838258315bf0b8b593c03fdcf1b4ef2',
-  'linux-x64': 'b1db26146a75c365fb7d1c198db5d8c91b6896ddba4c8d65cf93e5b58feb6e18',
-};
+const sourceVersion = '0.2.0';
 export const targets = Object.fromEntries(
   Object.entries(previous).map(([key, value]) => {
     const prefix = key.startsWith('darwin')
@@ -18,22 +13,52 @@ export const targets = Object.fromEntries(
     return [
       key,
       {
-        previous: {
-          version: '0.2.0',
-          tag: prefix + '0.2.0',
-          archive: value.archive,
-          sha256: value.sha256,
-        },
-        current: {
-          version: liveVersion,
-          tag: prefix + liveVersion,
-          archive: value.archive.replace('0.2.0', liveVersion),
-          sha256: liveHashes[key],
-        },
+        version: sourceVersion,
+        tag: prefix + sourceVersion,
+        archive: value.archive,
+        sha256: value.sha256,
       },
     ];
   }),
 );
+
+export function comparePublishedVersions(a, b) {
+  return a.localeCompare(b, 'en', { numeric: true });
+}
+
+export function selectPublishedUpgrade(releases, source) {
+  const [prefix, suffix] = source.archive.split(source.version);
+  let latest;
+  for (const release of releases) {
+    if (
+      release?.draft !== false ||
+      !release.published_at ||
+      typeof release.tag_name !== 'string' ||
+      !/^\w[\w.-]*$/.test(release.tag_name) ||
+      !Array.isArray(release.assets)
+    )
+      continue;
+    for (const asset of release.assets) {
+      const archive = asset?.name;
+      if (typeof archive !== 'string' || !archive.startsWith(prefix) || !archive.endsWith(suffix))
+        continue;
+      const version = archive.slice(prefix.length, -suffix.length);
+      if (
+        !/^\d+\.\d+\.\d+$/.test(version) ||
+        comparePublishedVersions(version, latest?.version ?? source.version) <= 0
+      )
+        continue;
+      latest = { version, tag: release.tag_name, archive, digest: asset.digest };
+    }
+  }
+  assert.ok(latest, `No newer published package matching ${source.archive}.`);
+  assert.ok(
+    typeof latest.digest === 'string' && /^sha256:[a-f0-9]{64}$/.test(latest.digest),
+    `${latest.archive} has no valid SHA-256 digest.`,
+  );
+  const { version, tag, archive, digest } = latest;
+  return { version, tag, archive, sha256: digest.slice(7) };
+}
 
 // The 0.2.3 candidate acceptance suite starts from the exact public 0.2.2 artifacts.
 const release022Hashes = {
@@ -44,12 +69,12 @@ const release022Hashes = {
 };
 const candidateSourceVersion = '0.2.2';
 export const candidateSources = Object.fromEntries(
-  Object.entries(targets).map(([key, { current }]) => [
+  Object.entries(targets).map(([key, source]) => [
     key,
     {
       version: candidateSourceVersion,
-      tag: current.tag.replace(current.version, candidateSourceVersion),
-      archive: current.archive.replace(current.version, candidateSourceVersion),
+      tag: source.tag.replace(source.version, candidateSourceVersion),
+      archive: source.archive.replace(source.version, candidateSourceVersion),
       sha256: release022Hashes[key],
     },
   ]),
