@@ -43,11 +43,14 @@ const output = join(root, 'test-results/builtin-updater', key);
 const config = JSON.parse(await readFile(join(output, 'fixture.json'), 'utf8'));
 assert.equal(config.target, key);
 assert.equal(config.privateFixtureOnly, true);
-const { version: senderVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+// Keep the installed executable path anchored to the reviewed release name.
+const senderVersion = '0.2.2';
+const { version: sourceVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const { version: receiverVersion } = JSON.parse(
   await readFile(join(root, 'apps/desktop/package.json'), 'utf8'),
 );
 assert.equal(config.senderVersion, senderVersion);
+assert.equal(sourceVersion, senderVersion);
 assert.equal(config.version, receiverVersion);
 assert.notEqual(senderVersion, receiverVersion);
 assert.equal(config.releaseCandidateSender, true);
