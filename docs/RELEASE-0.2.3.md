@@ -55,4 +55,4 @@ passed six embedded runtime check groups. macOS uses manual app replacement.
 The Linux runner used AppImage extraction under Xvfb and verified that GitHub
 sign-in requires a keyring. The Windows release checks also included a full
 hosted suite and testing on a physical GPU.
-[Native package and updater validation](https://github.com/Pixhell42/GLEECH/actions/runs/44945398612) · [Hosted Windows validation](https://github.com/Pixhell42/GLEECH/actions/runs/44945397048)
+[Native package and updater validation](https://github.com/Pixhell42/GLEECH/actions/runs/44945398612) · [Hosted Windows shards 1–11](https://github.com/Pixhell42/GLEECH/actions/runs/44945397048) · [Hosted Windows shard 12 retry](https://github.com/Pixhell42/GLEECH/actions/runs/44953250695)
