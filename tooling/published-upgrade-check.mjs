@@ -32,6 +32,7 @@ import {
   comparePublishedVersions,
   selectPublishedUpgrade,
   targets,
+  updateManifestName,
 } from './published-upgrade-plan.mjs';
 
 // This deliberately uses the default profile and native installation paths.
@@ -463,6 +464,12 @@ try {
     current = selectPublishedUpgrade(await publishedReleases(), previous);
     report.to = current.version;
     report.packages.current = current;
+    if (process.env.EXPECTED_RELEASE_VERSION)
+      assert.equal(
+        current.version,
+        process.env.EXPECTED_RELEASE_VERSION,
+        `The release that triggered acceptance must be the live update for ${key}.`,
+      );
     for (const release of [previous, current]) {
       const data = await (await get(`${releasesApi}/tags/${release.tag}`)).json();
       assert.equal(data.draft, false);
@@ -565,7 +572,7 @@ try {
     assert.equal(state.release.sha256, current.sha256);
     assert.equal(state.release.bytes, currentAsset.size);
     assert.equal(state.release.downloadUrl, currentAsset.browser_download_url);
-    const manifestName = `latest-${process.arch}${process.platform === 'darwin' ? '-mac' : process.platform === 'linux' ? '-linux' : ''}.yml`;
+    const manifestName = updateManifestName(key);
     const manifestAsset = currentRelease.assets.find((asset) => asset.name === manifestName);
     assert.ok(manifestAsset);
     const bytes = Buffer.from(

@@ -26,6 +26,61 @@ export function comparePublishedVersions(a, b) {
   return a.localeCompare(b, 'en', { numeric: true });
 }
 
+export function updateManifestName(target) {
+  const [platform, arch] = target.split('-');
+  return `latest-${arch}${platform === 'darwin' ? '-mac' : platform === 'linux' ? '-linux' : ''}.yml`;
+}
+
+export function publishedReleaseTargets(version) {
+  return Object.entries(targets).map(([target, source]) => ({
+    tag: source.tag.replace(source.version, version),
+    archive: source.archive.replace(source.version, version),
+    manifest: updateManifestName(target),
+  }));
+}
+
+export function readyPublishedRelease(expected, releases) {
+  const published = new Map(
+    releases
+      .filter(
+        (release) =>
+          release?.draft === false &&
+          Number.isSafeInteger(release.id) &&
+          Number.isFinite(Date.parse(release.published_at)) &&
+          Array.isArray(release.assets),
+      )
+      .map((release) => [release.tag_name, release]),
+  );
+  const downloads = [];
+  let owner;
+  for (const { tag, archive, manifest } of expected) {
+    const release = published.get(tag);
+    if (!release) return null;
+    const base = `https://github.com/Pixhell42/GLEECH/releases/download/${tag}/`;
+    if (
+      ![archive, manifest].every((name) =>
+        release.assets.some(
+          (asset) =>
+            asset?.name === name &&
+            asset.state === 'uploaded' &&
+            Number.isSafeInteger(asset.size) &&
+            asset.size > 0 &&
+            typeof asset.digest === 'string' &&
+            /^sha256:[a-f0-9]{64}$/.test(asset.digest) &&
+            asset.browser_download_url === base + name,
+        ),
+      )
+    )
+      return null;
+    downloads.push(base + archive);
+    const time = Date.parse(release.published_at);
+    // GitHub publishes timestamps to the second, so break ties consistently.
+    if (!owner || time > owner.time || (time === owner.time && release.id > owner.id))
+      owner = { id: release.id, time };
+  }
+  return { releaseId: owner.id, downloads };
+}
+
 export function selectPublishedUpgrade(releases, source) {
   const [prefix, suffix] = source.archive.split(source.version);
   let latest;

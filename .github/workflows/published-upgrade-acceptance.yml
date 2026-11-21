@@ -2,6 +2,8 @@ name: Published 0.2.0 to latest updater acceptance
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
   pull_request:
     paths:
       - .github/workflows/published-upgrade-acceptance.yml
@@ -11,14 +13,39 @@ permissions:
   contents: read
 
 concurrency:
-  group: published-upgrade-${{ github.ref }}
+  group: published-upgrade-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  release-ready:
+    name: Check published release assets
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.ready.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - name: Verify all four release downloads are live
+        id: ready
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tooling/published-upgrade-release-gate.mjs
+
   native:
     name: Published upgrade ${{ matrix.target }}
+    needs: release-ready
+    if: ${{ !cancelled() && (github.event_name != 'release' || (needs.release-ready.result == 'success' && needs.release-ready.outputs.version != '')) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    env:
+      EXPECTED_RELEASE_VERSION: ${{ needs.release-ready.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
