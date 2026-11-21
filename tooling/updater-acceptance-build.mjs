@@ -5,7 +5,7 @@ import { createReadStream } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve, join } from 'node:path';
-import { targets } from './installed-acceptance-plan.mjs';
+import { targets } from './published-upgrade-plan.mjs';
 
 assert.equal(
   process.env.GITHUB_ACTIONS,
@@ -13,9 +13,13 @@ assert.equal(
   'Private receiver builds belong on disposable CI runners.',
 );
 const key = `${process.platform}-${process.arch}`;
-const target = targets[key];
+const target = targets[key]?.current;
 assert.ok(target);
 const root = resolve(import.meta.dirname, '..');
+const { version: senderVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+const versionParts = /^(\d+\.\d+\.)(\d+)$/.exec(senderVersion);
+assert.ok(versionParts, 'The release candidate requires a numeric major, minor and patch.');
+const receiverVersion = versionParts[1] + (Number(versionParts[2]) + 1);
 const output = join(root, 'test-results/builtin-updater', key);
 const configPath = join(output, 'fixture.json');
 const mode = process.argv[2];
@@ -49,8 +53,8 @@ if (mode === 'prepare-sender') {
   const config = {
     target: key,
     sourceInputs,
-    senderVersion: '0.2.1',
-    version: '0.2.2',
+    senderVersion,
+    version: receiverVersion,
     releaseCandidateSender: true,
     privateFixtureOnly: true,
     serverPort: await unusedPort(),
@@ -67,10 +71,10 @@ if (mode === 'prepare-sender') {
     '',
   );
   await save(config);
-  console.log(`Current ${key} source recorded; unmodified 0.2.1 release candidate prepared.`);
+  console.log(`Current ${key} source recorded; unmodified ${senderVersion} candidate prepared.`);
 } else if (mode === 'record-sender') {
   const config = JSON.parse(await readFile(configPath, 'utf8'));
-  const archive = target.archive.replace('0.2.0', '0.2.1');
+  const archive = target.archive.replace(target.version, senderVersion);
   const app = join(
     root,
     'apps/desktop/release',
@@ -85,7 +89,7 @@ if (mode === 'prepare-sender') {
   const resources = join(app, process.platform === 'darwin' ? 'Contents/Resources' : 'resources');
   const path = join(output, 'sender', archive);
   await rename(join(root, 'apps/desktop/release', archive), path);
-  config.baseline = { version: '0.2.1', archive, path, sha256: await hash(path) };
+  config.baseline = { version: senderVersion, archive, path, sha256: await hash(path) };
   config.candidatePayload = {
     ...config.baseline,
     bytes: (await stat(path)).size,
@@ -105,7 +109,7 @@ if (mode === 'prepare-sender') {
       ),
     );
     assert.equal(report.passed, true);
-    assert.equal(report.versions.electron, '45.1.0');
+    assert.equal(report.versions.electron, '45.4.1');
     await writeFile(
       join(candidateDirectory, 'runtime-security-' + key + '.json'),
       JSON.stringify(report, null, 2) + '\n',
@@ -120,7 +124,7 @@ if (mode === 'prepare-sender') {
     );
     await copyFile(
       join(runtimeNotices, 'source-and-relink.tar.gz'),
-      join(candidateDirectory, 'GLEECH-0.2.1-appimage-runtime-source-and-relink.tar.gz'),
+      join(candidateDirectory, `GLEECH-${senderVersion}-appimage-runtime-source-and-relink.tar.gz`),
     );
     await copyFile(
       join(runtimeNotices, 'provenance.json'),
@@ -163,7 +167,7 @@ if (mode === 'prepare-sender') {
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   const packagePath = join(root, 'apps/desktop/package.json');
   const packageInfo = JSON.parse(await readFile(packagePath, 'utf8'));
-  assert.equal(packageInfo.version, '0.2.1');
+  assert.equal(packageInfo.version, senderVersion);
   packageInfo.version = config.version;
   await writeFile(packagePath, JSON.stringify(packageInfo, null, 2) + '\n');
   // Instrument only the private receiver: no updater/controller/recovery code changes.
@@ -190,10 +194,10 @@ void acceptanceReceiver.whenReady().then(() => acceptanceWrite(${JSON.stringify(
     'fixture release-list transport',
   ];
   await save(config);
-  console.log(`Private ${key} 0.2.2 receiver prepared.`);
+  console.log(`Private ${key} ${receiverVersion} receiver prepared.`);
 } else {
   const config = JSON.parse(await readFile(configPath, 'utf8'));
-  const archive = target.archive.replace('0.2.0', config.version);
+  const archive = target.archive.replace(target.version, config.version);
   const path = join(root, 'apps/desktop/release', archive);
   config.payload = {
     archive,

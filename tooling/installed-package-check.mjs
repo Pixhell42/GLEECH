@@ -20,8 +20,9 @@ const inputs = releaseCandidate
   ? JSON.parse(await readFile(join(candidateDirectory, 'candidate-inputs.json'), 'utf8'))
   : null;
 if (inputs) {
+  const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
   assert.equal(inputs.target, key);
-  assert.equal(inputs.version, '0.2.1');
+  assert.equal(inputs.version, version);
   assert.equal(inputs.privateInstrumentation, false);
   assert.match(inputs.sha256, /^[a-f0-9]{64}$/);
   assert.equal(inputs.archive, targets[key].archive.replace('0.2.0', inputs.version));
@@ -34,9 +35,7 @@ const candidate = inputs
       lockBlob: inputs.sourceInputs['pnpm-lock.yaml'],
     }
   : historicalCandidate;
-const target = releaseCandidate
-  ? { archive: targets[key].archive.replace('0.2.0', '0.2.1'), sha256: inputs.sha256 }
-  : targets[key];
+const target = releaseCandidate ? { archive: inputs.archive, sha256: inputs.sha256 } : targets[key];
 const phase = process.argv[2];
 assert.ok(
   target && ['install', 'exercise', 'uninstall'].includes(phase),

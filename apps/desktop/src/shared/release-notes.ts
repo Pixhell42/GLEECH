@@ -1,6 +1,6 @@
 // Update this with each published version. In-app updates retain GitHub's exact notes too.
-export const BUNDLED_RELEASE_NOTES = `Windows terminal updates now finish installing after the CLI exits. If you are upgrading from Windows 0.2.0, use Settings > Updates > Install & Update for this first update.
+export const BUNDLED_RELEASE_NOTES = `This update brings newer Electron, Chromium and Node.js security fixes, updates local MCP dependencies, and fixes a desktop startup warning. The app also rejects invalid cached installer filenames.
 
-Linux AppImages now keep a separate extraction directory for each launch, so using the terminal alongside the desktop no longer removes the desktop's runtime. Extraction mode still uses APPIMAGE_EXTRACT_AND_RUN=1; remove the old NO_CLEANUP=1 workaround after updating.
+The documented BoringSSL certificate-processing issue (CVE-2026-35189) remains in this Electron build. It can terminate GLEECH and lose unsaved work. Save your work before checking for updates or importing shaders from a URL.
 
-Existing projects, presets, shaders and terminal paths are preserved. Unsigned macOS builds continue to download a verified ZIP for manual replacement through Finder.`;
+Windows and Linux can update from Settings or the terminal. macOS downloads a verified ZIP for manual replacement through Finder.`;
