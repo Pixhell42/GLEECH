@@ -103,8 +103,8 @@ async function poll(fn, message, timeout = 180000) {
 }
 const report = {
   target: key,
-  from: '0.2.0',
-  to: '0.2.1',
+  from: target.previous.version,
+  to: target.current.version,
   packages: target,
   startedAt: new Date().toISOString(),
   transport:
@@ -241,7 +241,7 @@ async function launch(version) {
       globalThis.__publicUpgradeFinderSelection = path;
     };
   });
-  if (version === '0.2.1') {
+  if (version === target.current.version) {
     const beforeChanges = await page.evaluate(() => window.gleech.updateState());
     assert.equal(beforeChanges.ok, true);
     assert.equal(
@@ -373,7 +373,7 @@ async function installedVersion() {
   if (process.platform === 'linux') return (await hash(installed)) === target.current.sha256;
   const archive = join(resources(), 'app.asar');
   asar.uncache(archive);
-  return JSON.parse(asar.extractFile(archive, 'package.json')).version === '0.2.1';
+  return JSON.parse(asar.extractFile(archive, 'package.json')).version === target.current.version;
 }
 async function observeCheckpoint() {
   const folder = join(profile, 'update-recovery');
@@ -453,7 +453,7 @@ try {
       assert.ok(asset);
       assert.equal(asset.digest, 'sha256:' + release.sha256);
       assert.equal(asset.browser_download_url, base + release.tag + '/' + release.archive);
-      if (release.version === '0.2.1') {
+      if (release === target.current) {
         currentAsset = asset;
         currentRelease = data;
       }
@@ -481,7 +481,7 @@ try {
       await copyFile(path, installed);
       await chmod(installed, 0o755);
     }
-    await launch('0.2.0');
+    await launch(target.previous.version);
     report.originalRuntime = runtime;
   });
   await check('existing-project-preset-and-preference-persisted-before-upgrade', async () => {
@@ -536,12 +536,12 @@ try {
       { flag: 'wx' },
     );
   });
-  await check('installed-0.2.0-selects-the-real-public-0.2.1-release-and-manifest', async () => {
+  await check('installed-sender-selects-the-public-release-and-manifest', async () => {
     const result = await page.evaluate(() => window.gleech.checkForUpdates());
     assert.equal(result.ok, true);
     const state = result.value;
     assert.equal(state.phase, 'available', JSON.stringify(state));
-    assert.equal(state.release.version, '0.2.1');
+    assert.equal(state.release.version, target.current.version);
     assert.equal(state.release.tag, target.current.tag);
     assert.equal(state.release.asset, target.current.archive);
     assert.equal(state.release.sha256, target.current.sha256);
@@ -556,7 +556,7 @@ try {
     const manifestSHA256 = 'sha256:' + createHash('sha256').update(bytes).digest('hex');
     assert.equal(manifestSHA256, manifestAsset.digest);
     const manifest = yaml(bytes.toString('utf8'));
-    assert.equal(manifest.version, '0.2.1');
+    assert.equal(manifest.version, target.current.version);
     assert.equal(manifest.files.length, 1);
     assert.equal(manifest.files[0].url, target.current.archive);
     assert.equal(manifest.files[0].size, currentAsset.size);
@@ -635,7 +635,10 @@ try {
           manualSamePathReplacement: true,
         };
       }
-      await poll(installedVersion, 'The published 0.2.1 package was not installed.');
+      await poll(
+        installedVersion,
+        `The published ${target.current.version} package was not installed.`,
+      );
       await waitWindowsInstaller();
       if (process.platform !== 'darwin') {
         relaunch = await poll(async () => {
@@ -656,10 +659,10 @@ try {
     },
   );
   await check(
-    'published-0.2.1-retains-default-profile-project-preset-and-preferences',
+    'published-upgrade-retains-default-profile-project-preset-and-preferences',
     async () => {
       delete env.NO_CLEANUP;
-      await launch('0.2.1');
+      await launch(target.current.version);
       report.currentRuntime = runtime;
       assert.equal(runtime.profile, report.originalRuntime.profile);
       assert.equal(
@@ -673,7 +676,7 @@ try {
       }));
       assert.equal(values.color, '#80baff');
       assert.ok(values.presets.value.some((preset) => preset.id === presetId));
-      assert.equal(values.state.value.currentVersion, '0.2.1');
+      assert.equal(values.state.value.currentVersion, target.current.version);
       assert.equal(values.state.value.automatic, false);
       if (process.platform !== 'linux') {
         const result = await run(
@@ -686,7 +689,7 @@ try {
             timeout: 60000,
           },
         );
-        assert.equal(result.stdout.trim(), '0.2.1');
+        assert.equal(result.stdout.trim(), target.current.version);
         report.embeddedCliVersion = result.stdout.trim();
       }
       await choose('open', project);
@@ -704,7 +707,7 @@ try {
       await page.screenshot({ path: join(output, 'published-upgrade.png') });
     },
   );
-  await check('published-0.2.1-does-not-offer-itself-again', async () => {
+  await check('installed-upgrade-does-not-offer-itself-again', async () => {
     const result = await page.evaluate(() => window.gleech.checkForUpdates());
     assert.equal(result.ok, true);
     assert.equal(result.value.phase, 'idle', JSON.stringify(result.value));
@@ -719,7 +722,7 @@ try {
         const path = join(runtime.resources, 'app-update.yml');
         assert.equal(await exists(path), true);
         const result = await command(installed, ['--cli', '--version']);
-        assert.equal(result.stdout.trim(), '0.2.1');
+        assert.equal(result.stdout.trim(), target.current.version);
         assert.equal(await exists(path), true);
         const provenance = JSON.parse(
           await readFile(
