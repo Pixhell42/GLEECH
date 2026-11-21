@@ -22,7 +22,7 @@ import { pipeline } from 'node:stream/promises';
 import { _electron as electron, chromium } from 'playwright';
 import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';
-import { targets as publishedTargets } from './published-upgrade-plan.mjs';
+import { candidateSources } from './published-upgrade-plan.mjs';
 import {
   findImageDesktop,
   ownedImageDescendants,
@@ -36,7 +36,7 @@ import {
 
 assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Use disposable native CI runners.');
 const key = `${process.platform}-${process.arch}`;
-const published = publishedTargets[key]?.current;
+const published = candidateSources[key];
 assert.ok(published);
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'test-results/builtin-updater', key);
@@ -44,7 +44,7 @@ const config = JSON.parse(await readFile(join(output, 'fixture.json'), 'utf8'));
 assert.equal(config.target, key);
 assert.equal(config.privateFixtureOnly, true);
 // Keep the installed executable path anchored to the reviewed release name.
-const senderVersion = '0.2.2';
+const senderVersion = '0.2.3';
 const { version: sourceVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const { version: receiverVersion } = JSON.parse(
   await readFile(join(root, 'apps/desktop/package.json'), 'utf8'),

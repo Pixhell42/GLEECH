@@ -5,7 +5,7 @@ import { createReadStream } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve, join } from 'node:path';
-import { targets } from './published-upgrade-plan.mjs';
+import { candidateSources } from './published-upgrade-plan.mjs';
 
 assert.equal(
   process.env.GITHUB_ACTIONS,
@@ -13,9 +13,12 @@ assert.equal(
   'Private receiver builds belong on disposable CI runners.',
 );
 const key = `${process.platform}-${process.arch}`;
-const target = targets[key]?.current;
+const target = candidateSources[key];
 assert.ok(target);
 const root = resolve(import.meta.dirname, '..');
+const { devDependencies } = JSON.parse(
+  await readFile(join(root, 'apps/desktop/package.json'), 'utf8'),
+);
 const { version: senderVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const versionParts = /^(\d+\.\d+\.)(\d+)$/.exec(senderVersion);
 assert.ok(versionParts, 'The release candidate requires a numeric major, minor and patch.');
@@ -109,7 +112,7 @@ if (mode === 'prepare-sender') {
       ),
     );
     assert.equal(report.passed, true);
-    assert.equal(report.versions.electron, '45.4.1');
+    assert.equal(report.versions.electron, devDependencies.electron);
     await writeFile(
       join(candidateDirectory, 'runtime-security-' + key + '.json'),
       JSON.stringify(report, null, 2) + '\n',
