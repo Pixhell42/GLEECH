@@ -147,11 +147,16 @@ async function check(name, fn) {
 const base = 'https://github.com/Pixhell42/GLEECH/releases/download/';
 const releasesApi = 'https://api.github.com/repos/Pixhell42/GLEECH/releases';
 const get = async (url) => {
+  const isReleaseMetadata =
+    url === releasesApi || url.startsWith(releasesApi + '?') || url.startsWith(releasesApi + '/');
+  const token = isReleaseMetadata ? process.env.GITHUB_TOKEN : undefined;
   const response = await fetch(url, {
     headers: {
       'User-Agent': 'GLEECH-Published-Upgrade-Acceptance',
       Accept: 'application/vnd.github+json',
+      ...(token && { Authorization: `Bearer ${token}` }),
     },
+    redirect: isReleaseMetadata ? 'error' : 'follow',
     signal: AbortSignal.timeout(600000),
   });
   assert.equal(response.status, 200, `Public request failed (${response.status}): ${url}`);

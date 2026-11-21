@@ -56,7 +56,7 @@ export function readyPublishedRelease(expected, releases) {
   for (const { tag, archive, manifest } of expected) {
     const release = published.get(tag);
     if (!release) return null;
-    const base = `https://github.com/Pixhell42/GLEECH/releases/download/${tag}/`;
+    const base = `https://github.com/Pixhell42/GLEECH/releases/download/${encodeURIComponent(tag)}/`;
     if (
       ![archive, manifest].every((name) =>
         release.assets.some(
@@ -67,12 +67,12 @@ export function readyPublishedRelease(expected, releases) {
             asset.size > 0 &&
             typeof asset.digest === 'string' &&
             /^sha256:[a-f0-9]{64}$/.test(asset.digest) &&
-            asset.browser_download_url === base + name,
+            asset.browser_download_url === base + encodeURIComponent(name),
         ),
       )
     )
       return null;
-    downloads.push(base + archive);
+    downloads.push(base + encodeURIComponent(archive));
     const time = Date.parse(release.published_at);
     // GitHub publishes timestamps to the second, so break ties consistently.
     if (!owner || time > owner.time || (time === owner.time && release.id > owner.id))

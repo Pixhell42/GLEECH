@@ -1,4 +1,3 @@
-import { appendFile, readFile } from 'node:fs/promises';
 import { setTimeout } from 'node:timers/promises';
 import {
   comparePublishedVersions,
@@ -7,24 +6,30 @@ import {
   targets,
 } from './published-upgrade-plan.mjs';
 
-const { release } = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8'));
 const version = /^(?:v|macos-alpha-|linux-omarchy-alpha-)(\d+\.\d+\.\d+)$/.exec(
-  release?.tag_name,
+  process.env.PUBLISHED_RELEASE_TAG,
 )?.[1];
+const releaseId = Number(process.env.PUBLISHED_RELEASE_ID);
 
-if (version && comparePublishedVersions(version, targets['win32-x64'].version) > 0)
-  await checkPublication(version, release.id);
-else console.log('No publication to test from the frozen 0.2.0 packages.');
+if (
+  version &&
+  Number.isSafeInteger(releaseId) &&
+  releaseId > 0 &&
+  comparePublishedVersions(version, targets['win32-x64'].version) > 0
+)
+  await checkPublication(version, releaseId);
+else console.error('No publication to test from the frozen 0.2.0 packages.');
 
 async function fetchRelease(tag) {
   const token = process.env.GITHUB_TOKEN;
   const response = await fetch(
-    `https://api.github.com/repos/Pixhell42/GLEECH/releases/tags/${tag}`,
+    `https://api.github.com/repos/Pixhell42/GLEECH/releases/tags/${encodeURIComponent(tag)}`,
     {
       headers: {
         Accept: 'application/vnd.github+json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
+      redirect: 'error',
       signal: AbortSignal.timeout(15000),
     },
   );
@@ -43,7 +48,7 @@ async function checkPublication(version, eventReleaseId) {
     if (ready) {
       // Only one of the platform publication events should start the native jobs.
       if (ready.releaseId !== eventReleaseId) {
-        console.log(`The final platform publication for ${version} owns this test.`);
+        console.error(`The final platform publication for ${version} owns this test.`);
         return;
       }
       const live = await Promise.all(
@@ -56,13 +61,13 @@ async function checkPublication(version, eventReleaseId) {
         }),
       );
       if (live.every(Boolean)) {
-        await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\n`);
-        console.log(`All four ${version} downloads are published and reachable.`);
+        console.log(`version=${version}`);
+        console.error(`All four ${version} downloads are published and reachable.`);
         return;
       }
     }
     if (attempt < 11) await setTimeout(5000);
   }
   if (ready) throw new Error(`The published ${version} downloads did not become reachable.`);
-  console.log(`The four-platform publication for ${version} is still incomplete.`);
+  console.error(`The four-platform publication for ${version} is still incomplete.`);
 }
