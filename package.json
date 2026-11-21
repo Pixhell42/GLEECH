@@ -1,6 +1,6 @@
 {
   "name": "gleech-workspace",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "GLEECH desktop, CLI and TUI development workspace",
   "type": "module",

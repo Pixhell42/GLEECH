@@ -40,7 +40,7 @@ async function launch() {
   await page.getByRole('heading', { name: 'GLEECH.', exact: true }).waitFor();
   if (process.argv.includes('--fixture-no-keyring'))
     await app.evaluate(({ safeStorage }) => {
-      safeStorage.isEncryptionAvailable = () => false;
+      safeStorage.isAsyncEncryptionAvailable = async () => false;
     });
   await app.evaluate(({ shell, clipboard, BrowserWindow }, expectedClientId) => {
     globalThis.__feedbackLinks = [];
@@ -149,8 +149,8 @@ async function checkFeedback() {
     assert.deepEqual(await app.evaluate(() => globalThis.__feedbackClipboard), ['ABCD-EFGH']);
     await captureTestWindow(app, resolve(output, `${mode}-sign-in.png`));
     const secureStorage = await app.evaluate(
-      ({ safeStorage }) =>
-        safeStorage.isEncryptionAvailable() &&
+      async ({ safeStorage }) =>
+        (await safeStorage.isAsyncEncryptionAvailable()) &&
         (process.platform !== 'linux' ||
           ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(
             safeStorage.getSelectedStorageBackend(),

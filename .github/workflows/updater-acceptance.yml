@@ -2,6 +2,11 @@ name: Installed built-in updater acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      upload_candidate:
+        description: 'Retain candidate installers as workflow artifacts'
+        type: boolean
+        default: true
   pull_request:
     paths:
       - .github/workflows/updater-acceptance.yml
@@ -39,15 +44,19 @@ jobs:
           - target: win32-x64
             runner: windows-latest
             package: dist:win
+            executable: apps/desktop/release/win-unpacked/GLEECH.exe
           - target: darwin-arm64
             runner: macos-15
             package: dist:mac
+            executable: apps/desktop/release/mac-arm64/GLEECH.app/Contents/MacOS/GLEECH
           - target: darwin-x64
             runner: macos-15-intel
             package: dist:mac
+            executable: apps/desktop/release/mac/GLEECH.app/Contents/MacOS/GLEECH
           - target: linux-x64
             runner: ubuntu-22.04
             package: dist:linux
+            executable: apps/desktop/release/linux-unpacked/gleech-bin
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -68,6 +77,12 @@ jobs:
       - name: Verify native package, updater metadata and embedded runtime
         run: node tooling/release-candidate-check.mjs
       - run: node tooling/updater-acceptance-build.mjs record-sender
+      - name: Verify packaged GitHub feedback credential storage
+        if: runner.os != 'Linux'
+        run: node tooling/github-feedback-check.mjs "${{ matrix.executable }}" --cpu --allow-unavailable-keyring
+      - name: Verify packaged GitHub feedback credential storage on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node tooling/github-feedback-check.mjs "${{ matrix.executable }}" --cpu --allow-unavailable-keyring
       - name: Install and exercise exact release candidate
         if: runner.os != 'Linux'
         env:
@@ -95,6 +110,7 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a node tooling/updater-package-check.mjs
       - name: Retain accepted release candidate (never publish automatically)
+        if: github.event_name == 'pull_request' || inputs.upload_candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-candidate-${{ matrix.target }}-${{ github.sha }}
@@ -116,6 +132,9 @@ jobs:
             test-results/builtin-updater/${{ matrix.target }}/*.png
             test-results/builtin-updater/${{ matrix.target }}/*.log
             test-results/builtin-updater/${{ matrix.target }}/artwork/*
+            test-results/runtime-security/probe-*/report.json
+            test-results/builtin-updater/${{ matrix.target }}/release-candidate/candidate-inputs.json
+            test-results/github-feedback/*-result.json
             test-results/release-installed-acceptance/${{ matrix.target }}/report.json
             test-results/release-installed-acceptance/${{ matrix.target }}/*.png
             test-results/release-installed-acceptance/${{ matrix.target }}/*.log

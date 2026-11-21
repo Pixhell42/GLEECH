@@ -16,13 +16,15 @@ async function fixture() {
   const path = join(folder, 'auth.bin');
   // Simulated encryption tests storage behavior; native tests exercise Electron safeStorage.
   const encryption = {
-    isEncryptionAvailable: vi.fn(() => true),
+    isAsyncEncryptionAvailable: vi.fn(async () => true),
     getSelectedStorageBackend: vi.fn(() => 'gnome_libsecret'),
-    encryptString: (text: string) => Buffer.from(Buffer.from(text).map((byte) => byte ^ 0xa5)),
-    decryptString: (bytes: Buffer) =>
-      Buffer.from(bytes)
+    encryptStringAsync: async (text: string) =>
+      Buffer.from(Buffer.from(text).map((byte) => byte ^ 0xa5)),
+    decryptStringAsync: async (bytes: Buffer) => ({
+      result: Buffer.from(bytes)
         .map((byte) => byte ^ 0xa5)
         .toString(),
+    }),
   };
   return { folder, path, encryption, store: createFeedbackAuthStore(path, encryption) };
 }
@@ -49,7 +51,7 @@ describe('encrypted feedback credentials', () => {
       JSON.stringify({ ...auth, token: '' }),
       JSON.stringify({ ...auth, expiresAt: 'bad' }),
     ]) {
-      await writeFile(f.path, f.encryption.encryptString(value));
+      await writeFile(f.path, await f.encryption.encryptStringAsync(value));
       expect(await f.store.load()).toBeNull();
     }
     await writeFile(f.path, Buffer.alloc(17000));
@@ -57,7 +59,7 @@ describe('encrypted feedback credentials', () => {
   });
   it('never falls back to plaintext when native encryption is unavailable', async () => {
     const f = await fixture();
-    f.encryption.isEncryptionAvailable.mockReturnValue(false);
+    f.encryption.isAsyncEncryptionAvailable.mockResolvedValue(false);
     await expect(f.store.save(auth)).rejects.toThrow('encryption is unavailable');
     expect(await readdir(f.folder)).toEqual([]);
     expect(await f.store.load()).toBeNull();

@@ -33,3 +33,23 @@ export const targets = Object.fromEntries(
     ];
   }),
 );
+
+// The candidate acceptance suite starts from the exact latest public artifacts.
+const release022Hashes = {
+  'win32-x64': '1de1d58cf4c496a3db86e1c073c7ebe9996025c3820aa0e22d1956e2363ffcdb',
+  'darwin-arm64': '7ea53fff71367790632357df6433fffa8a27aa1965befa71011f5df65aac8515',
+  'darwin-x64': '5e11fd12b7ae4b8c5ac10c4972d8e159a7d13eee80a62310c17f319f03bfa4b5',
+  'linux-x64': '37ca0cecf768ba8d04437c754e1efd4f996b96b0e711e8602c10a032c86b67d4',
+};
+const candidateSourceVersion = '0.2.2';
+export const candidateSources = Object.fromEntries(
+  Object.entries(targets).map(([key, { current }]) => [
+    key,
+    {
+      version: candidateSourceVersion,
+      tag: current.tag.replace(current.version, candidateSourceVersion),
+      archive: current.archive.replace(current.version, candidateSourceVersion),
+      sha256: release022Hashes[key],
+    },
+  ]),
+);
