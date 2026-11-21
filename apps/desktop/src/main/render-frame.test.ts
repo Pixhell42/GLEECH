@@ -254,7 +254,7 @@ describe('external upscalers', () => {
 
   it('runs a custom command per frame and mixes in crisp pixels', async () => {
     // A tiny "upscaler": node copying {in} to {out} (sharp then resizes to the target).
-    const script = join(dir, 'copy.js');
+    const script = join(dir, 'copy.cjs');
     await writeFile(
       script,
       "const fs = require('fs'); fs.copyFileSync(process.argv[2], process.argv[3]); fs.chmodSync(process.argv[3], 0o644);",

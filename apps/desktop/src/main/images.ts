@@ -92,7 +92,6 @@ export function registerImageHandlers(
       safeStorage,
     ),
   });
-  window.once('closed', feedback.cancelSignIn);
   const statuePath = app.isPackaged
     ? join(process.resourcesPath, 'presets', 'statue.png')
     : join(__dirname, '../../resources/presets/statue.png');
@@ -1353,6 +1352,7 @@ export function registerImageHandlers(
   });
 
   return () => {
+    feedback.cancelSignIn();
     channels.forEach((channel) => ipcMain.removeHandler(channel));
     failPending(new Error('The workspace closed.'));
     void worker.terminate();

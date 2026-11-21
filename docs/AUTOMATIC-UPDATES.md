@@ -186,13 +186,13 @@ the user's normal data. Pass an unpacked executable to `tooling/updates-check.mj
 to run the same flow against packaged code. Native install/relaunch acceptance
 still requires real installed test machines before public release.
 
-The **Installed built-in updater acceptance** workflow builds an unmodified 0.2.1
-release candidate on Windows x64, Apple Silicon, Intel Mac and Linux x64. It
-installs, exercises and uninstalls those exact bytes before testing future updates
-from the candidate to a private 0.2.2 receiver using normal default profiles.
-Only the receiver adds inspection receipts and fixture discovery routing; it is
-never published. The unchanged public 0.2.0 package is tested updating both to
-the instrumented receiver and to the exact uninstrumented 0.2.1 candidate.
+The **Installed built-in updater acceptance** workflow builds an unmodified release
+candidate on Windows x64, Apple Silicon, Intel Mac and Linux x64. It installs,
+exercises and uninstalls those exact bytes before testing future updates to a
+private receiver at the next patch version using normal default profiles. Only
+the receiver adds inspection receipts and fixture discovery routing. The
+workflow downloads the unchanged public 0.2.1 package and tests updates to both
+the private receiver and the exact release candidate.
 Accepted candidates are retained separately with their hashes, generated metadata
 and source inputs. They are not automatically published.
 Release discovery and downloads use loopback transport. The updater controllers,

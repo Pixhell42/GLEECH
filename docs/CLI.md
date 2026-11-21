@@ -8,7 +8,7 @@ with the app. GPU output can vary slightly across devices and drivers.
 
 ## Run it
 
-From a source checkout (Node.js 22.23.4, pnpm 10.11.1):
+From a source checkout (Node.js 22.23.5, pnpm 10.34.9):
 
 ```sh
 pnpm install --frozen-lockfile

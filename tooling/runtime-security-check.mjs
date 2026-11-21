@@ -61,12 +61,12 @@ report.executableSHA256 = createHash('sha256')
 report.stderr = result.stderr;
 await writeFile(resolve(scratch, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
 const expected = {
-  electron: '45.1.0',
-  node: '24.22.1',
-  chrome: '156.0.8078.49',
+  electron: '45.4.1',
+  node: '24.22.3',
+  chrome: '156.0.8078.100',
   modules: '150',
   ares: '1.34.9',
-  undici: '7.30.1',
+  undici: '7.30.2',
 };
 for (const [name, version] of Object.entries(expected))
   assert.equal(report.versions[name], version, `Unexpected embedded ${name} version.`);

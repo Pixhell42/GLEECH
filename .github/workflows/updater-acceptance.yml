@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/updater-acceptance.yml
       - tooling/updater-acceptance-*.mjs
+      - tooling/published-upgrade-plan.mjs
       - tooling/updater-package-check.mjs
       - tooling/installed-package-check.mjs
       - tooling/release-candidate-check.mjs

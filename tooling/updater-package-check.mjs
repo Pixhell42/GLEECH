@@ -22,7 +22,7 @@ import { pipeline } from 'node:stream/promises';
 import { _electron as electron, chromium } from 'playwright';
 import { closeTestApp } from './close-test-app.mjs';
 import { fileAction } from './file-action.mjs';
-import { targets as publishedTargets } from './installed-acceptance-plan.mjs';
+import { targets as publishedTargets } from './published-upgrade-plan.mjs';
 import {
   findImageDesktop,
   ownedImageDescendants,
@@ -36,22 +36,28 @@ import {
 
 assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Use disposable native CI runners.');
 const key = `${process.platform}-${process.arch}`;
-const published = publishedTargets[key];
+const published = publishedTargets[key]?.current;
 assert.ok(published);
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'test-results/builtin-updater', key);
 const config = JSON.parse(await readFile(join(output, 'fixture.json'), 'utf8'));
 assert.equal(config.target, key);
 assert.equal(config.privateFixtureOnly, true);
-assert.equal(config.version, '0.2.2');
+const { version: senderVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+const { version: receiverVersion } = JSON.parse(
+  await readFile(join(root, 'apps/desktop/package.json'), 'utf8'),
+);
+assert.equal(config.senderVersion, senderVersion);
+assert.equal(config.version, receiverVersion);
+assert.notEqual(senderVersion, receiverVersion);
 assert.equal(config.releaseCandidateSender, true);
-const senderArchive = published.archive.replace('0.2.0', '0.2.1');
+const senderArchive = published.archive.replace(published.version, senderVersion);
 const baselinePath = join(output, 'sender', senderArchive);
 const publishedPath = join(output, 'published', published.archive);
 let bridgeMode = false;
 assert.match(config.baseline.sha256, /^[a-f0-9]{64}$/);
 assert.deepEqual(config.baseline, {
-  version: '0.2.1',
+  version: senderVersion,
   archive: senderArchive,
   path: baselinePath,
   sha256: config.baseline.sha256,
@@ -143,7 +149,7 @@ const report = {
   knownIssues: [],
   limitations: [
     'Release-list and download transport use a loopback fixture; updater IPC, checksum verification, recovery, installers and shutdown remain real.',
-    'The private 0.2.2 receiver adds only inspection/startup receipts and fixture discovery routing, in addition to its version bump.',
+    `The private ${receiverVersion} receiver adds only inspection/startup receipts and fixture discovery routing, in addition to its version bump.`,
     'CPU rendering and file-picker fixtures are used; physical GPUs and unsigned-download OS prompts are not certified.',
     'Full download fallback is exercised; differential-download optimization is not certified.',
     ...(process.platform === 'darwin'
@@ -379,7 +385,7 @@ async function launchSender() {
     resources: process.resourcesPath,
     pid: process.pid,
   }));
-  assert.equal(runtime.version, bridgeMode ? '0.2.0' : '0.2.1');
+  assert.equal(runtime.version, bridgeMode ? published.version : senderVersion);
   assert.equal(runtime.packaged, true);
   assert.equal(runtime.platform + '-' + runtime.arch, key);
   assert.ok(!runtime.args.includes('--smoke-test'));
@@ -558,7 +564,7 @@ async function attachReceiver() {
     'The installed receiver did not start.',
     180000,
   );
-  assert.equal(receiver.version, '0.2.2');
+  assert.equal(receiver.version, receiverVersion);
   assert.equal(receiver.packaged, true);
   assert.equal(receiver.profile, profile);
   if (process.platform === 'linux') {
@@ -580,7 +586,10 @@ async function attachReceiver() {
   );
   page.setDefaultTimeout(60000);
   await page.getByRole('heading', { name: 'GLEECH.', exact: true }).waitFor();
-  const notes = page.getByRole('dialog', { name: 'What’s new in GLEECH 0.2.2', exact: true });
+  const notes = page.getByRole('dialog', {
+    name: `What’s new in GLEECH ${receiverVersion}`,
+    exact: true,
+  });
   await notes.getByText('Private updater acceptance fixture notes.', { exact: true }).waitFor();
   await notes.getByRole('button', { name: 'Let’s create', exact: true }).click();
   const result = await page.evaluate(async () => ({
@@ -588,7 +597,7 @@ async function attachReceiver() {
     state: await window.gleech.updateState(),
   }));
   assert.equal(result.preference.ok, true);
-  assert.equal(result.state.value.currentVersion, '0.2.2');
+  assert.equal(result.state.value.currentVersion, receiverVersion);
   return receiver;
 }
 try {
@@ -625,13 +634,13 @@ try {
       'The installed sender must include its updater configuration.',
     );
     const value = JSON.parse((await cli(['update', '--check', '--json'])).stdout);
-    assert.equal(value.currentVersion, '0.2.1');
-    assert.equal(value.version, '0.2.2');
+    assert.equal(value.currentVersion, senderVersion);
+    assert.equal(value.version, receiverVersion);
     assert.equal(value.available, true);
     await assert.rejects(cli(['update', '--yes']), (error) =>
       /Save and close the GLEECH desktop/.test(error.stderr ?? error.message),
     );
-    assert.equal((await getState()).currentVersion, '0.2.1');
+    assert.equal((await getState()).currentVersion, senderVersion);
     if (process.platform === 'linux') {
       const resourcesAfter = await exists(join(report.senderRuntime.resources, 'app-update.yml'));
       report.linuxExtractionConcurrency = { resourcesBefore, resourcesAfter };
@@ -688,7 +697,7 @@ try {
     );
     assert.equal(downloaded.phase, 'error');
     assert.match(downloaded.error, /integrity check/);
-    assert.equal((await getState()).currentVersion, '0.2.1');
+    assert.equal((await getState()).currentVersion, senderVersion);
     assert.equal(await exists(config.receiverFile), false);
     fixture.state.badDigest = false;
   });
@@ -706,7 +715,7 @@ try {
     await notice.waitFor();
     await notice.getByRole('button', { name: 'Dismiss update notification' }).click();
     await notice.waitFor({ state: 'hidden' });
-    assert.equal((await getState()).dismissedVersion, '0.2.2');
+    assert.equal((await getState()).dismissedVersion, receiverVersion);
   });
   await check('real-unsaved-project-and-timeline-prepared-for-update', async () => {
     const input = join(artwork, 'input.png');
@@ -844,20 +853,20 @@ try {
       JSON.stringify({
         automatic: false,
         dismissedVersion: null,
-        lastSeenVersion: '0.2.1',
+        lastSeenVersion: senderVersion,
         pendingNotes: null,
       }),
     );
-    assert.equal((await cli(['--version'])).stdout.trim(), '0.2.1');
+    assert.equal((await cli(['--version'])).stdout.trim(), senderVersion);
     const result = await cli(['update', '--yes']);
     report.terminalCommand = { stdout: result.stdout, stderr: result.stderr };
     assert.match(result.stdout, /Download verified/);
-    assert.match(result.stderr, /Downloading and verifying GLEECH 0.2.2/);
+    assert.ok(result.stderr.includes(`Downloading and verifying GLEECH ${receiverVersion}`));
     if (process.platform === 'darwin') await manualMacReplacement();
     else {
-      await poll(receiverInstalled, 'The real CLI updater did not install 0.2.2.');
+      await poll(receiverInstalled, `The real CLI updater did not install ${receiverVersion}.`);
       await waitWindowsInstaller();
-      assert.equal((await cli(['--version'])).stdout.trim(), '0.2.2');
+      assert.equal((await cli(['--version'])).stdout.trim(), receiverVersion);
       assert.equal(
         await exists(config.receiverFile),
         false,
@@ -867,7 +876,7 @@ try {
       child.unref();
     }
     report.terminalReceiver = await attachReceiver();
-    assert.equal((await cli(['--version'])).stdout.trim(), '0.2.2');
+    assert.equal((await cli(['--version'])).stdout.trim(), receiverVersion);
     await copyFile(config.receiverFile, join(output, 'receiver-terminal.json'));
     await page.screenshot({ path: join(output, 'terminal-installed.png') });
     await stopReceiver();
@@ -902,19 +911,13 @@ try {
         passed: true,
       };
     });
-  await check('published-0.2.0-desktop-can-deliver-the-fixed-package', async () => {
+  await check(`published-desktop-installs-private-receiver`, async () => {
     await removeInstallation();
     await rm(config.receiverFile, { force: true });
     await rm(config.revealFile, { force: true });
     await mkdir(dirname(publishedPath), { recursive: true });
-    const tag =
-      process.platform === 'darwin'
-        ? 'macos-alpha-0.2.0'
-        : process.platform === 'linux'
-          ? 'linux-omarchy-alpha-0.2.0'
-          : 'v0.2.0';
     const response = await fetch(
-      `https://github.com/Pixhell42/GLEECH/releases/download/${tag}/${published.archive}`,
+      `https://github.com/Pixhell42/GLEECH/releases/download/${published.tag}/${published.archive}`,
       { signal: AbortSignal.timeout(180000) },
     );
     assert.equal(response.status, 200);
@@ -956,15 +959,15 @@ try {
       app = null;
       if (process.platform === 'darwin') await manualMacReplacement();
       report.bridgeReceiver = await attachReceiver();
-      assert.equal((await cli(['--version'])).stdout.trim(), '0.2.2');
+      assert.equal((await cli(['--version'])).stdout.trim(), receiverVersion);
       await page.screenshot({ path: join(output, 'published-repair-path.png') });
       await stopReceiver();
       report.publishedRepairPath = {
-        version: '0.2.0',
+        version: published.version,
         sha256: published.sha256,
         senderUnmodified: true,
         method: 'desktop-updater',
-        receiverVersion: '0.2.2',
+        receiverVersion,
         receiverSHA256: config.payload.sha256,
         passed: true,
       };
@@ -972,7 +975,7 @@ try {
       observer.stop();
     }
   });
-  await check('published-0.2.0-installs-exact-0.2.1-release-candidate', async () => {
+  await check(`published-desktop-installs-exact-candidate`, async () => {
     await removeInstallation();
     await rm(config.revealFile, { force: true });
     assert.equal(await sha(config.candidatePayload.path), config.baseline.sha256);
@@ -1045,7 +1048,7 @@ try {
       assert.equal((await cli(['--version'])).stdout.trim(), config.senderVersion);
       await page.screenshot({ path: join(output, 'release-candidate-first-hop.png') });
       report.candidateFirstHop = {
-        sourceVersion: '0.2.0',
+        sourceVersion: published.version,
         sourceSHA256: published.sha256,
         receiverVersion: config.senderVersion,
         receiverSHA256: config.baseline.sha256,
