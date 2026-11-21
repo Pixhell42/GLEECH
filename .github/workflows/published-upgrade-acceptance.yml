@@ -1,4 +1,4 @@
-name: Published 0.2.0 to 0.2.1 updater acceptance
+name: Published 0.2.0 to 0.2.3 updater acceptance
 
 on:
   workflow_dispatch:
