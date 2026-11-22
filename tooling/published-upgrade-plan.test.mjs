@@ -7,6 +7,7 @@ import {
   targets,
 } from './published-upgrade-plan.mjs';
 import { createGitHubRateLimitRetry } from './published-upgrade-retry.mjs';
+import { formatPublishedUpgradeSummary } from './published-upgrade-summary.mjs';
 
 const sha256 = 'a'.repeat(64);
 const release = (tag, archives, fields = {}) => ({
@@ -124,11 +125,13 @@ const quotaResponse = (status, headers = {}, message = 'Forbidden') =>
 
 test('waits for GitHub retry and reset headers, then returns the real successful response', async () => {
   const waits = [];
+  const retries = [];
   const retry = createGitHubRateLimitRetry({
     maxWaitMs: 180000,
     now: () => 100000,
     wait: async (delay) => waits.push(delay),
     log: () => {},
+    onRetry: (event) => retries.push(event),
   });
   const success = Response.json({ assets: [] });
   const responses = [
@@ -142,6 +145,10 @@ test('waits for GitHub retry and reset headers, then returns the real successful
   ];
   assert.equal(await retry('release metadata', async () => responses.shift()), success);
   assert.deepEqual(waits, [31000, 6000]);
+  assert.deepEqual(retries, [
+    { label: 'release metadata', status: 403, delayMs: 31000, attempt: 1 },
+    { label: 'release metadata', status: 429, delayMs: 6000, attempt: 2 },
+  ]);
 });
 
 test('backs off for an observed updater rate limit and stops after three retries', async () => {
@@ -199,4 +206,60 @@ test('shares a bounded wait budget and leaves ordinary API and test failures alo
     failure,
   );
   assert.deepEqual(waits, [41000]);
+});
+
+test('summarizes tested versions, verified SHA-256 digests and recorded retries', () => {
+  const manifestDigest = 'b'.repeat(64);
+  const upgradeDigest = 'c'.repeat(64);
+  const summary = formatPublishedUpgradeSummary('darwin-arm64', {
+    target: 'darwin-arm64',
+    originalRuntime: { version: '0.2.0' },
+    currentRuntime: { version: '0.2.3' },
+    complete: true,
+    checks: Array(8).fill({ passed: true }),
+    checksums: {
+      originalInstaller: { actual: sha256, expected: sha256 },
+      manifest: { actual: `sha256:${manifestDigest}`, expected: `sha256:${manifestDigest}` },
+      upgradeInstaller: { actual: upgradeDigest, expected: upgradeDigest },
+    },
+    rateLimitRetries: [
+      { label: 'installed 0.2.0 updater discovery', status: 403, delayMs: 358000, attempt: 1 },
+    ],
+  });
+  assert.ok(summary.includes('**Result** Passed · 8 checks passed'));
+  assert.ok(summary.includes('**Versions tested** `0.2.0` → `0.2.3`'));
+  assert.ok(summary.includes(`| Starting installer | Passed | \`${sha256}\` |`));
+  assert.ok(summary.includes(`| Updater manifest | Passed | \`${manifestDigest}\` |`));
+  assert.ok(
+    summary.includes(
+      `| Upgrade installer (verified by the updater) | Passed | \`${upgradeDigest}\` |`,
+    ),
+  );
+  assert.ok(summary.includes('**GitHub API rate-limit retries** 1'));
+  assert.ok(
+    summary.includes('installed 0.2.0 updater discovery · HTTP 403 · 358 s wait · retry 1/3'),
+  );
+});
+
+test('distinguishes failed and unverified checks and handles missing native reports', () => {
+  const summary = formatPublishedUpgradeSummary('linux-x64', {
+    target: 'linux-x64',
+    originalRuntime: { version: '0.2.0' },
+    to: '0.2.3',
+    complete: false,
+    finishedAt: '2026-11-21T00:00:00Z',
+    checks: [],
+    checksums: { manifest: { actual: 'b'.repeat(64), expected: sha256 } },
+    rateLimitRetries: [],
+  });
+  assert.ok(summary.includes('**Result** Failed · 0 checks passed'));
+  assert.ok(summary.includes('**Versions tested** `0.2.0` → Not reached'));
+  assert.ok(summary.includes('**Selected upgrade** `0.2.3`'));
+  assert.ok(summary.includes('| Updater manifest | Failed |'));
+  assert.ok(summary.includes('| Upgrade installer (verified by the updater) | Not verified |'));
+  assert.ok(summary.includes('**GitHub API rate-limit retries** 0'));
+  assert.match(
+    formatPublishedUpgradeSummary('win32-x64', null),
+    /No native test report was produced/,
+  );
 });

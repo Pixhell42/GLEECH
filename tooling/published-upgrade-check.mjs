@@ -116,6 +116,8 @@ const report = {
   transport:
     'Unmodified public GitHub release API and asset downloads; no network fixtures, routing changes, private receiver or rebuild.',
   checks: [],
+  checksums: {},
+  rateLimitRetries: [],
   complete: false,
   limitations: [
     'CPU rendering and file-selection fixtures are used; physical GPUs and OS download-trust prompts are not certified.',
@@ -134,6 +136,10 @@ const report = {
   ],
 };
 const save = () => writeFile(join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+function assertChecksum(name, actual, expected) {
+  report.checksums[name] = { actual, expected };
+  assert.equal(actual, expected);
+}
 async function check(name, fn) {
   console.log('START', name);
   report.activeCheck = name;
@@ -147,7 +153,13 @@ async function check(name, fn) {
 }
 const base = 'https://github.com/Pixhell42/GLEECH/releases/download/';
 const releasesApi = 'https://api.github.com/repos/Pixhell42/GLEECH/releases';
-const retryGitHubApi = createGitHubRateLimitRetry({ maxWaitMs: 15 * 60000 });
+const retryGitHubApi = createGitHubRateLimitRetry({
+  maxWaitMs: 15 * 60000,
+  async onRetry(retry) {
+    report.rateLimitRetries.push(retry);
+    await save();
+  },
+});
 const get = async (url) => {
   const isReleaseMetadata =
     url === releasesApi || url.startsWith(releasesApi + '?') || url.startsWith(releasesApi + '/');
@@ -529,7 +541,7 @@ try {
     const path = join(download, previous.archive);
     const response = await get(base + previous.tag + '/' + previous.archive);
     await pipeline(Readable.fromWeb(response.body), createWriteStream(path, { flags: 'wx' }));
-    assert.equal(await hash(path), previous.sha256);
+    assertChecksum('originalInstaller', await hash(path), previous.sha256);
     report.originalPackageVerified = true;
   });
   await check('install-unmodified-0.2.0-with-default-profile-and-real-updater', async () => {
@@ -620,7 +632,7 @@ try {
       await (await get(base + current.tag + '/' + manifestName)).arrayBuffer(),
     );
     const manifestSHA256 = 'sha256:' + createHash('sha256').update(bytes).digest('hex');
-    assert.equal(manifestSHA256, manifestAsset.digest);
+    assertChecksum('manifest', manifestSHA256, manifestAsset.digest);
     const manifest = yaml(bytes.toString('utf8'));
     assert.equal(manifest.version, current.version);
     assert.equal(manifest.files.length, 1);
@@ -637,7 +649,7 @@ try {
     async () => {
       const result = await page.evaluate(async () => (await window.gleech.downloadUpdate()).value);
       assert.equal(result.phase, 'ready', JSON.stringify(result));
-      assert.equal(result.release.sha256, current.sha256);
+      assertChecksum('upgradeInstaller', result.release.sha256, current.sha256);
       report.readyState = result;
       report.publicRequests = await app.evaluate(() => globalThis.__publicUpgradeRequests);
       assert.ok(report.publicRequests.some((url) => url.startsWith(`${releasesApi}?`)));

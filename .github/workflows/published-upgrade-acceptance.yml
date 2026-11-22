@@ -86,6 +86,17 @@ jobs:
           EXPECTED_TARGET: ${{ matrix.target }}
           GITHUB_TOKEN: ${{ github.token }}
         run: xvfb-run -a node tooling/published-upgrade-check.mjs
+      - name: Summarize live updater results
+        if: always()
+        shell: bash
+        env:
+          EXPECTED_TARGET: ${{ matrix.target }}
+        run: |
+          output="test-results/published-upgrade/$EXPECTED_TARGET"
+          mkdir -p "$output"
+          report="$output/report.json"
+          if [[ ! -f "$report" ]]; then report=/dev/null; fi
+          node tooling/published-upgrade-summary.mjs < "$report" | tee "$output/summary.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain public upgrade evidence (no installers or user profiles)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -93,6 +104,7 @@ jobs:
           name: published-upgrade-${{ matrix.target }}-${{ github.sha }}-${{ github.run_attempt }}
           path: |
             test-results/published-upgrade/${{ matrix.target }}/report.json
+            test-results/published-upgrade/${{ matrix.target }}/summary.md
             test-results/published-upgrade/${{ matrix.target }}/*.png
             test-results/published-upgrade/${{ matrix.target }}/*.log
             test-results/published-upgrade/${{ matrix.target }}/artwork/*
