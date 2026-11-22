@@ -38,6 +38,7 @@ export function createGitHubRateLimitRetry({
   wait = setTimeout,
   now = Date.now,
   log = console.error,
+  onRetry,
 }) {
   let remaining = maxWaitMs;
   return async (label, request, readLimit = readGitHubRateLimit) => {
@@ -54,6 +55,7 @@ export function createGitHubRateLimitRetry({
       log(
         `GitHub API rate limit (HTTP ${limit.status}) for ${label}. Retrying in ${Math.ceil(delay / 1000)}s (${retries + 1}/3).`,
       );
+      await onRetry?.({ label, status: limit.status, delayMs: delay, attempt: retries + 1 });
       await wait(delay);
     }
   };
